@@ -318,6 +318,19 @@ function correctionPanel(){
     </div>
   </section>`;
 }
+function x01AdvicePanel(game){
+  const advice = game.advice;
+  if(game.game_type !== 'x01' || !advice || !advice.primary) return '';
+  const sequence = (advice.sequence || []).map(dart => `<b>${escapeHtml(dart.label)}</b>`).join('<span>→</span>');
+  const follow = advice.setup?.remaining_checkout?.length ? advice.setup.remaining_checkout.map(dart => dart.label).join(' → ') : '';
+  const title = advice.status === 'checkout' ? 'Finish möglich' : advice.status === 'setup' ? 'Clever stellen' : 'Runterspielen';
+  return `<aside class="x01-advice ${escapeHtml(advice.status)}">
+    <div><span class="kicker">X01 ADVISOR · ${advice.darts_left} DARTS</span><h2>${title}: ${escapeHtml(advice.primary.label)}</h2><p>${escapeHtml(advice.message || '')}</p></div>
+    ${sequence ? `<div class="checkout-sequence">${sequence}</div>` : ''}
+    ${follow ? `<small>Danach: ${escapeHtml(follow)}</small>` : ''}
+  </aside>`;
+}
+
 function controlPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -326,6 +339,7 @@ function controlPlaying(){
     <div><div class="kicker">${escapeHtml(mode?.title || game.game_type)} · RUNDE ${game.round_number}</div><h1>${game.status==='hold'?'Aufnahme beendet':`${escapeHtml(currentPlayer(game)?.name || '')} ist dran`}</h1></div>
       <div class="turn-counter"><span>${game.darts_in_turn}</span><small>/ 3 DARTS</small><b>${game.turn_score} PTS</b></div>
     </div>
+    ${x01AdvicePanel(game)}
     <div class="turn-darts">${turnDartCards(game)}</div>
     ${correctionPanel()}
     <div class="scoreboard">${scoreboard(game)}</div>
@@ -439,6 +453,14 @@ function projectorCountdown(){
 function boardSvg(){
   return `<svg id="dartboardSvg" class="dartboard-svg" viewBox="0 0 500 500" aria-label="Kalibrierte Dartboard-Projektion"></svg>`;
 }
+function projectorAdvice(game){
+  const advice = game.advice;
+  if(game.game_type !== 'x01' || !advice || !advice.primary || game.status === 'hold') return '';
+  const headline = advice.status === 'checkout' ? 'FINISH' : advice.status === 'setup' ? 'STELLEN' : 'NÄCHSTER WURF';
+  const sequence = (advice.sequence || []).map(dart => dart.label).join(' → ');
+  return `<aside class="projector-advice ${escapeHtml(advice.status)}"><span>${headline}</span><b>${escapeHtml(advice.primary.label)}</b><small>${escapeHtml(sequence || advice.message || '')}</small></aside>`;
+}
+
 function projectorPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -451,6 +473,7 @@ function projectorPlaying(){
       <div class="throw-callout">${game.status==='hold'?'DARTS ZIEHEN':escapeHtml(appState.projectedEvent?.label || 'BEREIT')}</div>
       <div>${game.darts_in_turn}/3 DARTS · ${game.turn_score} PTS</div>
     </footer>
+    ${projectorAdvice(game)}
     <aside class="projection-roster">${game.players.map(item=>`<span class="${item.id===game.current_player_id?'active':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
     ${testMode?'<div class="projector-test-tools"><b>TESTMODUS</b><span>Scheibensegment anklicken</span><button data-action="test-miss">MISS</button></div>':''}
   </section>`;
@@ -502,7 +525,13 @@ function ringToZone(ring){
   return ({double:'double',triple:'triple',single_inner:'singleInner',single_outer:'singleOuter',single_bull:'singleBull',double_bull:'doubleBull'})[ring];
 }
 function renderBoardEvent(event){
-  document.querySelectorAll('.seg.hit,.seg.miss-zone').forEach(element=>element.classList.remove('hit','miss-zone'));
+  document.querySelectorAll('.seg.hit,.seg.miss-zone,.seg.advice-target').forEach(element=>element.classList.remove('hit','miss-zone','advice-target'));
+  const advice = appState.experience?.game?.advice;
+  if(advice?.primary && appState.experience?.game?.status === 'running'){
+    const target = advice.primary;
+    const segment = $(boardSegmentId(ringToZone(target.ring), target.field));
+    if(segment) segment.classList.add('advice-target');
+  }
   const pulse=$('boardPulse');
   if(pulse) pulse.className='board-pulse';
   if(!event) return;

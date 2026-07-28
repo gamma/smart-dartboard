@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from .games import registry
 from .games.cricket import CRICKET_TARGETS
+from .games.x01_advisor import x01_advice
 
 
 @dataclass
@@ -95,6 +96,15 @@ class GameState:
         self.turn_start_values = dict(snap.get("turn_start_values", {}))
         self.round_number = int(snap.get("round_number", 1))
 
+    def advice(self) -> Optional[Dict[str, Any]]:
+        if self.game_type != "x01" or self.status not in ("running", "hold"):
+            return None
+        player = self.current_player()
+        if not player:
+            return None
+        darts_left = max(0, 3 - self.darts_in_turn)
+        return x01_advice(player.score, darts_left, str(self.options.get("out_rule", "straight")))
+
     def as_dict(self) -> Dict[str, Any]:
         return {
             "game_type": self.game_type,
@@ -122,6 +132,7 @@ class GameState:
             "options": self.options,
             "mode": registry.get(self.game_type).metadata.as_dict() if self.status != "idle" else None,
             "cricket_targets": CRICKET_TARGETS,
+            "advice": self.advice(),
             "throws": [
                 {
                     "seq": throw.seq,
