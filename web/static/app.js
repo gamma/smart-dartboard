@@ -5,9 +5,12 @@ const appState = {
   audio: null,
   countdownTimer: null,
   lastCueKey: null,
+  projectedEvent: null,
+  boardResetTimer: null,
 };
 
 const BOARD_ORDER = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+const BOARD_EVENT_VISIBLE_MS = 4000;
 const AVATARS = [
   {id:'comet', emoji:'☄️', label:'Komet'},
   {id:'nova', emoji:'🌟', label:'Stern'},
@@ -87,7 +90,20 @@ function connectWs(){
 function updateExperience(experience, event){
   const previous = appState.experience;
   appState.experience = experience;
-  if(event) playEventCue(event, experience);
+  if(event){
+    const isThrow=event.type==='hit' || event.type==='miss';
+    const lastThrow=experience.game?.throws?.at(-1);
+    const throwWasCounted=!isThrow || (lastThrow && Number(lastThrow.seq)===Number(event.seq));
+    if(throwWasCounted) playEventCue(event, experience);
+    if(isThrow && throwWasCounted){
+      appState.projectedEvent=event;
+      clearTimeout(appState.boardResetTimer);
+      appState.boardResetTimer=setTimeout(()=>{
+        appState.projectedEvent=null;
+        if(isProjector() && appState.experience?.screen==='playing') renderProjector();
+      },BOARD_EVENT_VISIBLE_MS);
+    }
+  }
   if(previous?.screen !== experience.screen && experience.screen === 'countdown'){
     startCountdown();
   }
@@ -353,7 +369,7 @@ function renderProjector(){
   if(screen === 'playing' || screen === 'calibration'){
     buildBoard();
     applyCalibration();
-    if(screen === 'playing') renderBoardEvent(appState.experience.game.last_event);
+    if(screen === 'playing') renderBoardEvent(appState.projectedEvent);
   }
 }
 function projectorBackdrop(mode, inner, className=''){
@@ -393,7 +409,7 @@ function projectorPlaying(){
     <div id="projectionPlane" class="projection-plane">${boardSvg()}<div id="boardPulse" class="board-pulse"></div></div>
     <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong>${player.score ?? 0}</strong></header>
     <footer class="projection-bottom">
-      <div class="throw-callout">${game.status==='hold'?'DARTS ZIEHEN':escapeHtml(game.last_event?.label || 'BEREIT')}</div>
+      <div class="throw-callout">${game.status==='hold'?'DARTS ZIEHEN':escapeHtml(appState.projectedEvent?.label || 'BEREIT')}</div>
       <div>${game.darts_in_turn}/3 DARTS · ${game.turn_score} PTS</div>
     </footer>
     <aside class="projection-roster">${game.players.map(item=>`<span class="${item.id===game.current_player_id?'active':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
