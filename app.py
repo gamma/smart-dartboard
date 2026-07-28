@@ -111,6 +111,11 @@ class GamePrepareRequest(BaseModel):
     options: Dict[str, Any] = Field(default_factory=dict)
 
 
+class GameActionRequest(BaseModel):
+    action: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
 class ScreenRequest(BaseModel):
     screen: str
 
@@ -232,6 +237,13 @@ async def start_game():
 async def game_live():
     controller.set_screen("playing")
     await publish_state({"type": "game_live"})
+    return controller.public_state()
+
+
+@app.post("/api/game/action")
+async def game_action(req: GameActionRequest):
+    controller.game_action(req.action, req.payload)
+    await publish_state({"type": "game_action", "action": req.action, "payload": req.payload})
     return controller.public_state()
 
 

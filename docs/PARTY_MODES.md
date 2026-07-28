@@ -1049,6 +1049,8 @@ Die erste Party-Version ist implementiert:
 target_rush
 avoid_bomb
 color_clash
+risk_it
+king_of_board
 ```
 
 Zusätzlich wurde ein generisches Overlay-Feld im Game-State eingeführt:
@@ -1078,6 +1080,8 @@ sdb_dartboard/games/arcade.py
 sdb_dartboard/games/target_rush.py
 sdb_dartboard/games/avoid_bomb.py
 sdb_dartboard/games/color_clash.py
+sdb_dartboard/games/risk_it.py
+sdb_dartboard/games/king_of_board.py
 ```
 
 ### Tests
@@ -1088,6 +1092,8 @@ Die Party-Modes sind in `tests/test_games.py` abgedeckt:
 - Target-Rush-Overlay
 - Avoid-Bomb-Danger-Overlay
 - Color-Clash-Farbwertung
+- Risk-It-Bank-Action
+- King-of-the-Board-Owned-Overlay
 
 ### Nächste sinnvolle Ergänzungen
 

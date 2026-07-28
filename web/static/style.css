@@ -15,3 +15,5 @@ button,input{font:inherit}.control-body{min-height:100vh;background:radial-gradi
 .seg.overlay-bonus{fill:rgba(255,207,51,.9)!important;stroke:#fff7c7;stroke-width:1.9;filter:url(#glow);animation:bonus-shimmer 1.4s ease-in-out infinite alternate}
 .seg.overlay-target.hit,.seg.overlay-danger.hit,.seg.overlay-bonus.hit{fill:var(--accent)!important}
 .projector-advice.arcade b{font-size:clamp(26px,3.2vw,64px);line-height:1.02;letter-spacing:-.04em}.projector-advice.arcade small{min-height:1.1em;color:var(--accent);font-weight:950}@keyframes danger-flicker{from{opacity:.62}to{opacity:1}}@keyframes bonus-shimmer{from{opacity:.76}to{opacity:1}}
+
+.seg.overlay-owned{fill:color-mix(in srgb,var(--owner-color,#28e7ff) 72%,#05070b)!important;stroke:var(--owner-color,#28e7ff);stroke-width:1.7;filter:drop-shadow(0 0 8px var(--owner-color,#28e7ff))}

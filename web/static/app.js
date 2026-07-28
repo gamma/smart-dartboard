@@ -333,6 +333,11 @@ function x01AdvicePanel(game){
   </aside>`;
 }
 
+function overlayActionButtons(game){
+  const actions = game.overlay?.actions || [];
+  if(!actions.length) return '';
+  return actions.map(item => `<button class="action-button primary" data-action="game-action" data-game-action="${escapeHtml(item.id)}" ${item.enabled===false?'disabled':''}>${escapeHtml(item.label || item.id)}</button>`).join('');
+}
 function controlPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -346,6 +351,7 @@ function controlPlaying(){
     ${correctionPanel()}
     <div class="scoreboard">${scoreboard(game)}</div>
     <div class="operator-panel">
+      ${overlayActionButtons(game)}
       ${game.status==='hold' ? actionButton('Weiter zum nächsten Spieler','continue','primary') : actionButton('Spieler wechseln','next-player','secondary')}
       ${actionButton('Letzten Wurf zurück','undo','danger')}
     </div>
@@ -534,16 +540,21 @@ function ringToZone(ring){
   return ({double:'double',triple:'triple',single_inner:'singleInner',single_outer:'singleOuter',single_bull:'singleBull',double_bull:'doubleBull'})[ring];
 }
 function renderBoardEvent(event){
-  document.querySelectorAll('.seg.hit,.seg.miss-zone,.seg.advice-target,.seg.overlay-target,.seg.overlay-danger,.seg.overlay-bonus').forEach(element=>element.classList.remove('hit','miss-zone','advice-target','overlay-target','overlay-danger','overlay-bonus'));
+  document.querySelectorAll('.seg.hit,.seg.miss-zone,.seg.advice-target,.seg.overlay-target,.seg.overlay-danger,.seg.overlay-bonus,.seg.overlay-owned').forEach(element=>{element.classList.remove('hit','miss-zone','advice-target','overlay-target','overlay-danger','overlay-bonus','overlay-owned'); element.style.removeProperty('--owner-color');});
   const overlay = appState.experience?.game?.overlay;
   const paint = (items, cls) => (items || []).forEach(item => {
     const segment = $(boardSegmentId(ringToZone(item.ring), item.field));
     if(segment) segment.classList.add(cls);
   });
+  const paintOwned = (items) => (items || []).forEach(item => {
+    const segment = $(boardSegmentId(ringToZone(item.ring), item.field));
+    if(segment){ segment.classList.add('overlay-owned'); segment.style.setProperty('--owner-color', item.color || '#28e7ff'); }
+  });
   if(appState.experience?.game?.status === 'running'){
     paint(overlay?.targets, 'overlay-target');
     paint(overlay?.danger, 'overlay-danger');
     paint(overlay?.bonus, 'overlay-bonus');
+    paintOwned(overlay?.owned);
   }
   const advice = appState.experience?.game?.advice;
   if(advice?.primary && appState.experience?.game?.status === 'running'){
@@ -716,6 +727,9 @@ document.addEventListener('click',async event=>{
   if(name==='continue'){ await action('/api/continue'); return; }
   if(name==='next-player'){ await action('/api/next-player'); return; }
   if(name==='undo'){ await action('/api/undo'); return; }
+  if(name==='game-action'){
+    await action('/api/game/action',{action:target.dataset.gameAction,payload:{}}); return;
+  }
   if(name==='select-correction'){
     appState.selectedCorrectionIndex=Number(target.dataset.index);
     renderControl(); return;

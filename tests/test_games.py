@@ -20,7 +20,7 @@ def hit(score: int, seq: int = 1, field: int = 20, multiplier: int = 1, label: s
 class GameRegistryTests(unittest.TestCase):
     def test_builtin_modes_are_discovered(self):
         self.assertEqual(
-            {"countup", "cricket", "x01", "target_rush", "avoid_bomb", "color_clash"},
+            {"countup", "cricket", "x01", "target_rush", "avoid_bomb", "color_clash", "risk_it", "king_of_board"},
             {mode.metadata.slug for mode in registry.all()},
         )
         for mode in registry.all():
@@ -151,6 +151,25 @@ class GameEngineTests(unittest.TestCase):
         event["ring"] = ring
         engine.handle_event(event)
         self.assertEqual({"gold": 50, "cyan": 25, "green": 10, "red": -25}[color], engine.state.players[0].score)
+    def test_risk_it_banks_pot_via_action(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada"])
+        engine.handle_event(hit(60, 1, multiplier=3, label="T20"))
+        self.assertEqual(0, engine.state.players[0].score)
+        self.assertEqual(60, engine.state.mode_state["pot"][engine.state.players[0].id])
+        engine.handle_action("bank", {})
+        self.assertEqual(60, engine.state.players[0].score)
+        self.assertEqual("hold", engine.state.status)
+
+    def test_king_of_board_tracks_owned_segments(self):
+        engine = GameEngine()
+        engine.reset("king_of_board", ["Ada", "Bob"])
+        event = hit(60, 1, multiplier=3, label="T20")
+        event["ring"] = "triple"
+        engine.handle_event(event)
+        self.assertEqual(1, engine.state.players[0].score)
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertEqual(1, len(overlay["owned"]))
 
 
 if __name__ == "__main__":

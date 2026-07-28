@@ -224,6 +224,10 @@ class SessionController:
                 self.screen = "playing"
         self._persist()
 
+    def game_action(self, action: str, payload: Dict[str, Any] | None = None) -> None:
+        self.engine.handle_action(action, payload or {})
+        self._persist()
+
     def next_game(self) -> None:
         self.game_id = None
         self.selected_mode = None

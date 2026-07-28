@@ -324,6 +324,15 @@ class GameEngine:
             self.handle_event(replay)
         return self.state
 
+    def handle_action(self, action: str, payload: Dict[str, Any] | None = None) -> GameState:
+        self.state.last_event = {"type": "game_action", "action": action, "payload": payload or {}}
+        mode = registry.get(self.state.game_type)
+        handler = getattr(mode, "handle_action", None)
+        if handler is None:
+            raise ValueError(f"Game mode {self.state.game_type} does not support actions")
+        handler(self.state, action, payload or {})
+        return self.state
+
     def handle_event(self, event: Dict[str, Any]) -> GameState:
         self.state.last_event = event
         event_type = event.get("type")
