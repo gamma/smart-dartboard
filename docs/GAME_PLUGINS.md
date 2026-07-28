@@ -40,8 +40,8 @@ GAME_MODE = ExampleMode()
 3. Spieler in `initialize_player` initialisieren.
 4. Würfe in `apply_throw` verarbeiten.
 5. Ein `ThrowOutcome` mit Turnwert, Meldung und optionalem Gewinner liefern.
-6. Optional ein Cover unter `web/static/assets/modes/mein_spiel.webp` ablegen
-   und in `MODE_ASSETS` registrieren.
+6. Ein Cover unter `web/static/assets/modes/mein_spiel.webp` ablegen. Der
+   Dateiname wird automatisch aus dem Slug abgeleitet.
 7. Regeltests in `tests/test_games.py` ergänzen.
 
 ## Verfügbare Zustandsdaten

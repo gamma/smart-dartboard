@@ -8,11 +8,6 @@ const appState = {
 };
 
 const BOARD_ORDER = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
-const MODE_ASSETS = {
-  countup: '/static/assets/modes/countup.webp',
-  x01: '/static/assets/modes/x01.webp',
-  cricket: '/static/assets/modes/cricket.webp',
-};
 const AVATARS = ['comet','nova','bolt','viper','orbit','crown'];
 const COLORS = ['#28e7ff','#ffb52b','#3dff91','#ff4f79','#a77bff','#ffffff'];
 
@@ -25,6 +20,9 @@ function escapeHtml(value){
 }
 function modeBySlug(slug){
   return appState.experience?.modes.find(mode => mode.slug === slug);
+}
+function modeAsset(slug){
+  return `/static/assets/modes/${encodeURIComponent(slug)}.webp`;
 }
 function currentPlayer(game){
   return game?.players.find(player => player.id === game.current_player_id) || game?.players[0];
@@ -177,7 +175,7 @@ function controlPlayers(){
 
 function modeCard(mode){
   return `<button class="mode-card" data-action="select-mode" data-mode="${escapeHtml(mode.slug)}" style="--accent:${escapeHtml(mode.accent)}">
-    <img src="${MODE_ASSETS[mode.slug] || ''}" alt="" loading="eager">
+    <img src="${modeAsset(mode.slug)}" alt="" loading="eager">
     <span class="mode-shade"></span>
     <span class="mode-copy"><small>${escapeHtml(mode.tagline)}</small><b>${escapeHtml(mode.title)}</b><em>${escapeHtml(mode.description)}</em></span>
     <i>→</i>
@@ -208,7 +206,7 @@ function instructionSteps(mode){
 function controlInstructions(){
   const mode = modeBySlug(appState.experience.selected_mode);
   if(!mode) return controlGameSelect();
-  return `<section class="control-scene instruction-control" style="--accent:${escapeHtml(mode.accent)};--hero:url('${MODE_ASSETS[mode.slug]}')">
+  return `<section class="control-scene instruction-control" style="--accent:${escapeHtml(mode.accent)};--hero:url('${modeAsset(mode.slug)}')">
     <div class="instruction-hero">
       <div>${sceneHeader(mode.tagline,mode.title,mode.description)}</div>
     </div>
@@ -343,7 +341,7 @@ function renderProjector(){
   }
 }
 function projectorBackdrop(mode, inner, className=''){
-  const image = mode ? MODE_ASSETS[mode.slug] : MODE_ASSETS.countup;
+  const image = modeAsset(mode?.slug || 'countup');
   return `<section class="projector-scene ${className}" style="--scene-image:url('${image}');--accent:${escapeHtml(mode?.accent || '#28e7ff')}"><div class="cinema-shade"></div>${inner}</section>`;
 }
 function projectorAttract(){

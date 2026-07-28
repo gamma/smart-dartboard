@@ -64,6 +64,32 @@ class SessionControllerTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.controller.set_screen("playing")
 
+    def test_multiple_games_accumulate_in_the_same_session(self):
+        player = self.controller.create_player("Ada", "nova", "#ff00aa")
+        self.controller.start_session([player["id"]])
+        for game_number in range(2):
+            self.controller.prepare_game("countup", {"rounds": 1})
+            self.controller.start_game()
+            self.controller.set_screen("playing")
+            for dart in range(3):
+                self.controller.process_event(
+                    {
+                        "type": "hit",
+                        "label": "S20",
+                        "score": 20,
+                        "seq": game_number * 3 + dart,
+                        "field": 20,
+                        "multiplier": 1,
+                    }
+                )
+            self.assertEqual("game_result", self.controller.screen)
+            if game_number == 0:
+                self.controller.next_game()
+        stats = self.controller.public_state()["statistics"][0]
+        self.assertEqual(2, stats["games"])
+        self.assertEqual(2, stats["wins"])
+        self.assertEqual(6, stats["darts"])
+
 
 class EventPipelineTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
