@@ -8,7 +8,20 @@ const appState = {
 };
 
 const BOARD_ORDER = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
-const AVATARS = ['comet','nova','bolt','viper','orbit','crown'];
+const AVATARS = [
+  {id:'comet', emoji:'☄️', label:'Komet'},
+  {id:'nova', emoji:'🌟', label:'Stern'},
+  {id:'bolt', emoji:'⚡', label:'Blitz'},
+  {id:'viper', emoji:'🐍', label:'Schlange'},
+  {id:'orbit', emoji:'🪐', label:'Planet'},
+  {id:'crown', emoji:'👑', label:'Krone'},
+  {id:'bull', emoji:'🎯', label:'Ziel'},
+  {id:'fire', emoji:'🔥', label:'Feuer'},
+  {id:'unicorn', emoji:'🦄', label:'Einhorn'},
+  {id:'ninja', emoji:'🥷', label:'Ninja'},
+  {id:'robot', emoji:'🤖', label:'Roboter'},
+  {id:'party', emoji:'🥳', label:'Party'},
+];
 const COLORS = ['#28e7ff','#ffb52b','#3dff91','#ff4f79','#a77bff','#ffffff'];
 
 function $(id){ return document.getElementById(id); }
@@ -23,6 +36,9 @@ function modeBySlug(slug){
 }
 function modeAsset(slug){
   return `/static/assets/modes/${encodeURIComponent(slug)}.webp`;
+}
+function avatarEmoji(avatar){
+  return AVATARS.find(option => option.id === avatar)?.emoji || '🎯';
 }
 function currentPlayer(game){
   return game?.players.find(player => player.id === game.current_player_id) || game?.players[0];
@@ -139,7 +155,7 @@ function controlAttract(){
 
 function playerCard(player, selected){
   return `<button class="player-select ${selected ? 'selected' : ''}" data-action="toggle-player" data-id="${escapeHtml(player.id)}">
-    <span class="avatar avatar-${escapeHtml(player.avatar)}" style="--player:${escapeHtml(player.color)}">${escapeHtml(player.name.slice(0,1).toUpperCase())}</span>
+    <span class="avatar avatar-${escapeHtml(player.avatar)}" style="--player:${escapeHtml(player.color)}" aria-label="${escapeHtml(player.avatar)}">${avatarEmoji(player.avatar)}</span>
     <span><b>${escapeHtml(player.name)}</b><small>${selected ? 'Ausgewählt' : 'Antippen'}</small></span>
     <i>${selected ? '✓' : '+'}</i>
   </button>`;
@@ -156,7 +172,7 @@ function controlPlayers(){
         <label>Name<input name="name" maxlength="32" autocomplete="off" placeholder="Spielername" required></label>
         <div class="choice-label">Avatar</div>
         <div class="avatar-choices">${AVATARS.map((avatar,index) =>
-          `<label class="mini-choice"><input type="radio" name="avatar" value="${avatar}" ${index===0?'checked':''}><span>${avatar.slice(0,1).toUpperCase()}</span></label>`
+          `<label class="mini-choice" title="${escapeHtml(avatar.label)}"><input type="radio" name="avatar" value="${escapeHtml(avatar.id)}" ${index===0?'checked':''}><span>${avatar.emoji}</span></label>`
         ).join('')}</div>
         <div class="choice-label">Farbe</div>
         <div class="color-choices">${COLORS.map((color,index) =>
@@ -239,7 +255,7 @@ function marks(player, targets){
 }
 function scoreboard(game){
   return game.players.map(player => `<article class="score-row ${player.id===game.current_player_id?'active':''}" style="--player:${escapeHtml(player.color)}">
-    <span class="avatar avatar-${escapeHtml(player.avatar)}">${escapeHtml(player.name.slice(0,1))}</span>
+    <span class="avatar avatar-${escapeHtml(player.avatar)}" aria-label="${escapeHtml(player.avatar)}">${avatarEmoji(player.avatar)}</span>
     <div><b>${escapeHtml(player.name)}</b>${game.game_type==='cricket' ? marks(player,game.cricket_targets) : ''}</div>
     <strong>${player.score}</strong>
   </article>`).join('');
