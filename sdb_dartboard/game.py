@@ -44,6 +44,7 @@ class GameState:
     message: str = "Ready"
     options: Dict[str, Any] = field(default_factory=dict)
     turn_start_values: Dict[str, int] = field(default_factory=dict)
+    round_number: int = 1
 
     def current_player(self) -> Optional[Player]:
         if not self.players:
@@ -70,6 +71,7 @@ class GameState:
             "winner_id": self.winner_id,
             "message": self.message,
             "turn_start_values": dict(self.turn_start_values),
+            "round_number": self.round_number,
         }
 
     def restore_snapshot(self, snap: Dict[str, Any]) -> None:
@@ -91,6 +93,7 @@ class GameState:
         self.winner_id = snap["winner_id"]
         self.message = snap["message"]
         self.turn_start_values = dict(snap.get("turn_start_values", {}))
+        self.round_number = int(snap.get("round_number", 1))
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -111,6 +114,7 @@ class GameState:
             "current_player_id": self.current_player().id if self.current_player() else None,
             "darts_in_turn": self.darts_in_turn,
             "turn_score": self.turn_score,
+            "round_number": self.round_number,
             "status": self.status,
             "winner_id": self.winner_id,
             "last_event": self.last_event,
@@ -277,10 +281,16 @@ class GameEngine:
         return self.state
 
     def _advance_player(self) -> None:
+        was_last_player = bool(
+            self.state.players
+            and self.state.current_player_index == len(self.state.players) - 1
+        )
         if self.state.players:
             self.state.current_player_index = (
                 self.state.current_player_index + 1
             ) % len(self.state.players)
+        if was_last_player:
+            self.state.round_number += 1
         self.state.darts_in_turn = 0
         self.state.turn_score = 0
         player = self.state.current_player()
@@ -319,7 +329,7 @@ class GameEngine:
         self.state.message = outcome.message
         if outcome.finished:
             self.state.status = "finished"
-            self.state.winner_id = player.id
+            self.state.winner_id = outcome.winner_id or player.id
         elif outcome.force_hold:
             self.state.status = "hold"
         else:

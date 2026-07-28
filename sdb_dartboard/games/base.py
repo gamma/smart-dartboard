@@ -47,6 +47,7 @@ class ThrowOutcome:
     finished: bool = False
     bust: bool = False
     force_hold: bool = False
+    winner_id: str | None = None
 
 
 class GameMode(Protocol):

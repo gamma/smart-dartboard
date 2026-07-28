@@ -35,10 +35,10 @@ class SessionController:
         self.selected_options: Dict[str, Any] = {}
         self.calibration = {
             "corners": [
-                {"x": 0.0, "y": 0.0},
-                {"x": 1.0, "y": 0.0},
-                {"x": 1.0, "y": 1.0},
-                {"x": 0.0, "y": 1.0},
+                {"x": 0.247, "y": 0.05},
+                {"x": 0.753, "y": 0.05},
+                {"x": 0.753, "y": 0.95},
+                {"x": 0.247, "y": 0.95},
             ],
             "scale": 1.0,
             "offset_x": 0.0,

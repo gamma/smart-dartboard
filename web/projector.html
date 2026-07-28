@@ -3,41 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Dartboard Projector</title>
+  <meta name="theme-color" content="#000000">
+  <title>Smart Dartboard · Projector</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
 <body class="projector-body">
-  <div class="projector-shell">
-    <section class="projector-board-panel">
-      <div class="board-stage" id="boardStage">
-        <svg id="dartboardSvg" class="dartboard-svg" viewBox="0 0 500 500" aria-label="Dartboard projection"></svg>
-        <div id="boardPulse" class="board-pulse"></div>
-      </div>
-    </section>
-
-    <section class="projector-hud">
-      <header class="hud-top">
-        <div>
-          <div class="eyebrow" id="game">DARTBOARD</div>
-          <div id="wsStatus" class="ws-status"></div>
-        </div>
-        <div id="statusBadge" class="status-badge">READY</div>
-      </header>
-
-      <main class="score-focus">
-        <div id="name" class="current-name">Ready</div>
-        <div id="score" class="current-score">0</div>
-        <div id="turn" class="turn">Darts 0/3</div>
-        <div id="last" class="last-event">Waiting…</div>
-      </main>
-
-      <footer class="hud-bottom">
-        <div id="miniPlayers" class="mini-players"></div>
-        <div class="hint">Control: /control</div>
-      </footer>
-    </section>
-  </div>
-  <div id="players" style="display:none"></div>
+  <main id="projectorRoot" class="projector-root" aria-live="polite"></main>
+  <button id="audioUnlock" class="audio-unlock" data-action="audio">Sound aktivieren</button>
+  <div id="wsStatus" class="projector-connection"></div>
   <script src="/static/app.js"></script>
 </body>
 </html>

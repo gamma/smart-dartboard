@@ -2,66 +2,26 @@
 <html lang="de">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Dartboard Control</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#05070b">
+  <title>Smart Dartboard · Control</title>
   <link rel="stylesheet" href="/static/style.css">
 </head>
-<body>
-  <div class="page">
-    <div class="row">
-      <h1>Smart Dartboard Control</h1>
-      <div id="wsStatus"></div>
-      <a href="/projector" target="_blank">Projector öffnen</a>
-    </div>
-
-    <div class="card">
-      <h2>Neues Spiel</h2>
-      <div class="row">
-        <select id="gameType">
-          <option value="countup">Count Up</option>
-          <option value="x01">X01</option>
-          <option value="cricket">Cricket</option>
-        </select>
-        <input id="x01" type="number" value="501" min="101" step="100">
-        <button onclick="newGame()">Start</button>
+<body class="control-body">
+  <div class="control-app">
+    <header class="topbar">
+      <button class="brand-button" data-action="home" aria-label="Startseite">
+        <span class="brand-mark">◎</span>
+        <span><b>SMART DARTS</b><small>SESSION CONTROL</small></span>
+      </button>
+      <div class="topbar-actions">
+        <span id="wsStatus" class="connection-pill"></span>
+        <a class="icon-button" href="/projector" target="_blank" title="Projektor öffnen">↗</a>
       </div>
-      <p>Spieler, eine Zeile pro Name:</p>
-      <textarea id="names" class="textarea">Player 1
-Player 2</textarea>
-    </div>
-
-    <div class="card">
-      <h2>Spielsteuerung</h2>
-      <div class="row">
-        <button onclick="continueTurn()">Weiter</button>
-        <button class="secondary" onclick="nextPlayer()">Nächster Spieler erzwingen</button>
-        <button class="danger" onclick="undo()">Undo</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Spielstand</h2>
-      <div id="meta"></div>
-      <div id="players" class="players"></div>
-    </div>
-
-    <div class="card">
-      <h2>Test ohne Board</h2>
-      <div class="row">
-        <button onclick="inject('hit','S20',20,{field:20,multiplier:1})">S20</button>
-        <button onclick="inject('hit','T20',60,{field:20,multiplier:3})">T20</button>
-        <button onclick="inject('hit','D20',40,{field:20,multiplier:2})">D20</button>
-        <button onclick="inject('hit','SBull',25,{field:25,multiplier:1})">25</button>
-        <button onclick="inject('hit','DBull',50,{field:25,multiplier:2})">50</button>
-        <button onclick="inject('miss','MISS',0)">Miss</button>
-      </div>
-    </div>
-
-    <div class="card">
-      <h2>Letztes Event</h2>
-      <div id="last" class="history"></div>
-    </div>
+    </header>
+    <main id="controlRoot" class="control-root" aria-live="polite"></main>
   </div>
+  <div id="toast" class="toast" role="status"></div>
   <script src="/static/app.js"></script>
 </body>
 </html>

@@ -40,6 +40,17 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual("Bob", engine.state.current_player().name)
         self.assertEqual(0, engine.state.darts_in_turn)
 
+    def test_countup_finishes_after_configured_rounds(self):
+        engine = GameEngine()
+        engine.reset("countup", ["Ada", "Bob"], options={"rounds": 1})
+        for seq in range(3):
+            engine.handle_event(hit(20, seq))
+        engine.continue_turn()
+        for seq in range(3, 6):
+            engine.handle_event(hit(10, seq))
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual(engine.state.players[0].id, engine.state.winner_id)
+
     def test_x01_bust_restores_complete_turn_and_holds(self):
         engine = GameEngine()
         engine.reset("x01", ["Ada", "Bob"], options={"start_score": 101})
