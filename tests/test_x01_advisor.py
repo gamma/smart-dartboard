@@ -21,8 +21,12 @@ class X01AdvisorTest(unittest.TestCase):
     def test_setup_when_no_finish_possible(self):
         advice = x01_advice(171, 3, "double")
         self.assertEqual(advice["status"], "setup")
-        self.assertEqual(advice["primary"]["label"], "T20")
-        self.assertEqual(advice["setup"]["leave"], 111)
+        self.assertEqual([dart["label"] for dart in advice["sequence"]], ["T20", "T20", "S11"])
+        self.assertEqual(advice["setup"]["leave"], 40)
+
+    def test_standard_table_is_preferred(self):
+        advice = x01_advice(82, 2, "double")
+        self.assertEqual([dart["label"] for dart in advice["sequence"]], ["DBull", "D16"])
 
 
 if __name__ == "__main__":
