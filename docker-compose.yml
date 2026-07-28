@@ -6,9 +6,12 @@ services:
     privileged: true
     volumes:
       - /var/run/dbus:/var/run/dbus
+      - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
       - SDB_ENABLE_BLE=1
       - SDB_DEVICE_NAME=SDB-BT
+      - SDB_DATA_DIR=/app/data
+      - SDB_ALLOW_TEST_EVENTS=0
     command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped

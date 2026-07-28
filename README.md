@@ -1,115 +1,94 @@
 # Smart Dartboard
 
-Eigene Web-Anwendung für ein Bluetooth-Smart-Dartboard vom Typ `SDB-BT` / SDBplay-kompatibel.
+Lokale, touch-optimierte Spielhallen-Anwendung für ein Bluetooth-Dartboard vom
+Typ `SDB-BT` / SDBplay-kompatibel.
 
-Ziel ist ein lokales System, das Treffer per Bluetooth Low Energy ausliest, daraus Spiel-Events erzeugt und zwei Web-Oberflächen bereitstellt:
+Das System liest Treffer per Bluetooth Low Energy, speichert Spieler, Sessions,
+Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 
-- `/projector` – reine Beamer-/Anzeigeoberfläche
-- `/control` – Steueroberfläche für iPad, Handy, Mac oder zweiten Bildschirm
+- `/control` – Point-and-click-Steuerung für Tablet, Handy oder Touchscreen
+- `/projector` – kalibrierbare Projektion, Spielanleitungen, Effekte und Sound
 
-## Aktueller Status
+## Funktionen
 
-- BLE-Profil des Boards identifiziert.
-- Treffer-Notify-Kanal gefunden: Service `FFF0`, Characteristic `FFF1`.
-- Trefferprotokoll entschlüsselt.
-- Python-Basisimplementierung vorhanden.
-- FastAPI-Webserver mit REST/WebSocket vorhanden.
-- Erste Control- und Projector-Weboberflächen vorhanden.
-- Docker-/Raspberry-Pi-Deployment vorbereitet.
+- dauerhafte Spielerprofile mit Farbe und Avatar
+- mehrere Spiele pro Session
+- Session- und Gesamtstatistiken
+- grafische Spielauswahl mit 3D-Renderings
+- eigener Anleitungsbildschirm pro Spielmodus auf beiden Displays
+- Count Up, X01 und Cricket als automatisch entdeckte Spielmodule
+- konfigurierbare Varianten wie Rundenzahl, 301/501/701 und Double Out
+- persistenter Spielzustand mit Recovery und Undo nach einem Neustart
+- serielle BLE-Verarbeitung und Schutz vor doppelten Notifications
+- Drei-Dart-Hold für sicheres Entfernen der Darts
+- perspektivische Vierpunkt-Projektorkalibrierung
+- synthetisierte Treffer-, Miss-, Wechsel-, Countdown- und Siegersounds
+- Healthcheck und Docker-/Raspberry-Pi-Betrieb
 
-## Schnellstart lokal ohne Bluetooth
+## Schnellstart ohne Dartboard
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-SDB_ENABLE_BLE=0 uvicorn app:app --host 0.0.0.0 --port 8000
+SDB_ENABLE_BLE=0 SDB_ALLOW_TEST_EVENTS=1 \
+  uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-Dann öffnen:
+Danach öffnen:
 
 ```text
 http://localhost:8000/control
 http://localhost:8000/projector
 ```
 
-In `/control` können Testevents ohne Dartboard ausgelöst werden.
-
 ## Start mit Dartboard
 
 ```bash
-python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-Das Backend sucht standardmäßig nach dem BLE-Gerät:
-
-```text
-SDB-BT
-```
-
-Optional kann ein fester Gerätename oder eine Adresse gesetzt werden:
+Optionale Konfiguration:
 
 ```bash
-SDB_DEVICE_NAME=SDB-BT uvicorn app:app --host 0.0.0.0 --port 8000
-SDB_DEVICE_ADDRESS=<BLE_ADDRESS> uvicorn app:app --host 0.0.0.0 --port 8000
+SDB_DEVICE_NAME=SDB-BT
+SDB_DEVICE_ADDRESS=<BLE_ADDRESS>
+SDB_DATA_DIR=/pfad/zu/persistenten/daten
+SDB_ALLOW_TEST_EVENTS=0
 ```
+
+Der Boardstatus wird auf beiden Oberflächen angezeigt. `/api/health` meldet
+Datenbank- und BLE-Status.
 
 ## Docker
 
 ```bash
-docker compose up --build
+docker compose up --build -d
+docker compose ps
 ```
 
-Dann im lokalen Netzwerk öffnen:
+`./data` wird nach `/app/data` eingebunden. Spieler, Sessions und laufende
+Spiele bleiben deshalb auch nach einem Container-Neubau erhalten.
+
+## Tests
+
+```bash
+python3 -m unittest discover -v
+node --check web/static/app.js
+docker compose config --quiet
+```
+
+## Dokumentation
+
+- [Technische Architektur](docs/TECHNICAL.md)
+- [Betrieb und Kiosk-Setup](docs/OPERATIONS.md)
+- [Neue Spielmodule entwickeln](docs/GAME_PLUGINS.md)
+
+## Datenfluss
 
 ```text
-http://<host>:8000/control
-http://<host>:8000/projector
+SDB-BT → BLE FFF1 → Decoder → Interpreter → Event Queue
+       → Game Plugin → Session Controller → SQLite
+       → REST/WebSocket → Control + Projector
 ```
-
-Bluetooth im Container läuft über BlueZ/DBus des Hosts. Siehe `docker-compose.yml`.
-
-## Wichtige Dateien
-
-```text
-app.py                         FastAPI Backend, REST API, WebSocket
-sdb_dartboard/client.py        BLE Client für SDB-BT / FFF1 Notify
-sdb_dartboard/protocol.py      Low-Level-Paketdecoder
-sdb_dartboard/interpreter.py   Kontextlogik für Miss/Button-Release
-sdb_dartboard/game.py          einfache Game Engine / State
-sdb_dartboard/ws.py            WebSocket Connection Manager
-web/control.html               Steueroberfläche
-web/projector.html             Beameroberfläche
-web/static/app.js              Frontend-Logik
-web/static/style.css           Styling
-scan_ble.py                    BLE Scanner
-dump_gatt.py                   GATT-Dump
-live_dartboard.py              Terminal-Live-Logger
-Dockerfile                     Container Build
-docker-compose.yml             Deployment mit Bluetooth-Zugriff
-docs/TECHNICAL.md              vollständige technische Dokumentation
-```
-
-## Hardware-Empfehlung
-
-Für Entwicklung: Mac oder Linux-Rechner.
-
-Für Deployment:
-
-- **Raspberry Pi Zero 2 W**: geeignet als kleines Headless-BLE-Backend.
-- **Raspberry Pi 4/5 oder Mini-PC**: empfohlen, wenn Backend, Webserver und Beamer-Browser auf einem Gerät laufen sollen.
-
-Empfohlene Zielarchitektur:
-
-```text
-Dartboard → BLE → Pi/Mini-PC Backend → WebSocket → /projector + /control
-```
-
-## Technische Dokumentation
-
-Alle Erkenntnisse, Protokolldetails, Architekturentscheidungen und offenen Punkte stehen zentral in:
-
-[docs/TECHNICAL.md](docs/TECHNICAL.md)

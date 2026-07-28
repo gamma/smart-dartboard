@@ -34,6 +34,10 @@ class DartboardStore:
         with self._lock:
             self._connection.close()
 
+    def ping(self) -> bool:
+        with self._lock:
+            return self._connection.execute("SELECT 1").fetchone()[0] == 1
+
     def _migrate(self) -> None:
         with self._lock, self._connection:
             self._connection.executescript(

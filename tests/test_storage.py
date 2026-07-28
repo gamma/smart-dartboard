@@ -42,6 +42,9 @@ class StorageTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.store.start_session(["missing"])
 
+    def test_database_health_probe(self):
+        self.assertTrue(self.store.ping())
+
 
 if __name__ == "__main__":
     unittest.main()

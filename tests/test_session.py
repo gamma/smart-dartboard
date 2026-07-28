@@ -58,6 +58,12 @@ class SessionControllerTests(unittest.TestCase):
         self.assertEqual("session_summary", state["screen"])
         self.assertEqual("finished", state["session"]["status"])
 
+    def test_finished_game_cannot_be_returned_to_playing_screen(self):
+        self._start_game()
+        self.controller.engine.state.status = "finished"
+        with self.assertRaises(ValueError):
+            self.controller.set_screen("playing")
+
 
 class EventPipelineTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

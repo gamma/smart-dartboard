@@ -82,7 +82,11 @@ function updateExperience(experience, event){
 function renderConnection(){
   const element = $('wsStatus');
   if(!element) return;
-  element.innerHTML = `<i class="${appState.wsOk ? 'online' : ''}"></i>${appState.wsOk ? 'LIVE' : 'OFFLINE'}`;
+  const hardware=appState.experience?.hardware;
+  const boardReady=!hardware?.enabled || hardware.status==='connected';
+  const cssClass=!appState.wsOk?'':boardReady?'online':'searching';
+  const label=!appState.wsOk?'OFFLINE':boardReady?'LIVE':hardware?.status==='error'?'BOARD FEHLER':'BOARD SUCHT';
+  element.innerHTML = `<i class="${cssClass}"></i>${label}`;
 }
 function render(){
   renderConnection();
@@ -384,7 +388,7 @@ function projectorPlaying(){
 function projectorResult(){
   const champion = winner();
   const mode = modeBySlug(appState.experience.game.game_type);
-  return projectorBackdrop(mode,`<div class="projector-center winner-scene"><div class="winner-crown">♛</div><div class="kicker">WINNER</div><h1>${escapeHtml(champion?.name || 'GAME OVER')}</h1><p>${champion?.score ?? ''}</p></div>`,'result-projector');
+  return projectorBackdrop(mode,`<div class="projector-center winner-scene"><div class="winner-crown">♛</div><div class="kicker">WINNER</div><h1>${escapeHtml(champion?.name || 'GAME OVER')}</h1><p class="result-score">${champion?.score ?? ''} PUNKTE</p></div>`,'result-projector');
 }
 function projectorSummary(){
   return projectorBackdrop(null,`<div class="projector-summary"><div>${sceneHeader('SESSION COMPLETE','Was für eine Runde!','Eure Highlights')}</div><div class="projector-stats">${statCards()}</div></div>`);
@@ -509,6 +513,7 @@ function playEventCue(event,experience){
     tone(base,.16,0,'triangle',.16); tone(base*1.5,.2,.08,'sine',.1);
   } else if(event.type==='miss') tone(110,.28,0,'sawtooth',.08);
   else if(event.type==='continue'||event.type==='next_player') tone(330,.14);
+  else if(event.type==='hardware_status'&&event.status==='error') tone(95,.4,0,'sawtooth',.06);
   if(experience.game.status==='finished'){
     [392,523,659,784].forEach((frequency,index)=>tone(frequency,.35,index*.12,'triangle',.13));
   }
@@ -522,7 +527,7 @@ function startCountdown(){
     if(isProjector()) tone(value>0?330+(3-value)*110:660,.16,0,'triangle',.12);
     if(value<0){
       clearInterval(appState.countdownTimer);
-      if(!isProjector()) action('/api/game/live');
+      if(!isProjector() && appState.experience?.screen==='countdown') action('/api/game/live');
     }
     value--;
   };

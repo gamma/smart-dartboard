@@ -44,6 +44,7 @@ class SessionController:
             "offset_x": 0.0,
             "offset_y": 0.0,
         }
+        self.hardware: Dict[str, Any] = {"enabled": False, "status": "disabled"}
         self._restore()
 
     def close(self) -> None:
@@ -89,6 +90,7 @@ class SessionController:
             "players": self.store.list_players(),
             "statistics": self.store.statistics(player_ids or None),
             "calibration": self.calibration,
+            "hardware": self.hardware,
         }
 
     def create_player(self, name: str, avatar: str, color: str) -> Dict[str, Any]:
@@ -144,8 +146,8 @@ class SessionController:
     def set_screen(self, screen: str) -> None:
         if screen not in SCREENS:
             raise ValueError(f"Unknown screen: {screen}")
-        if screen == "playing" and self.engine.state.status == "idle":
-            raise ValueError("Cannot show playing screen without a game")
+        if screen == "playing" and self.engine.state.status != "running":
+            raise ValueError("Playing screen requires a running game")
         self.screen = screen
         self._persist()
 

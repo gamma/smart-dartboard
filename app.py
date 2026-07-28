@@ -48,6 +48,10 @@ async def publish_state(event: Optional[Dict[str, Any]] = None) -> None:
 async def lifespan(_: FastAPI):
     global ble_task, ble_enabled
     ble_enabled = os.environ.get("SDB_ENABLE_BLE", "1").lower() not in {"0", "false"}
+    controller.hardware = {
+        "enabled": ble_enabled,
+        "status": "starting" if ble_enabled else "disabled",
+    }
     if ble_enabled:
         client = SdbDartboardClient(
             name=os.environ.get("SDB_DEVICE_NAME", "SDB-BT"),
@@ -59,7 +63,11 @@ async def lifespan(_: FastAPI):
             if accepted:
                 await publish_state(event)
 
-        ble_task = asyncio.create_task(client.run(on_event))
+        async def on_status(status: Dict[str, Any]) -> None:
+            controller.hardware = status
+            await publish_state({"type": "hardware_status", **status})
+
+        ble_task = asyncio.create_task(client.run(on_event, on_status))
         LOG.info("BLE task started")
     else:
         LOG.info("BLE disabled via SDB_ENABLE_BLE=0")
@@ -134,6 +142,19 @@ async def projector():
 @app.get("/api/bootstrap")
 async def bootstrap():
     return controller.public_state()
+
+
+@app.get("/api/health")
+async def health():
+    database_ok = controller.store.ping()
+    board_status = controller.hardware.get("status", "unknown")
+    board_ok = not ble_enabled or board_status == "connected"
+    return {
+        "status": "ok" if database_ok and board_ok else "degraded",
+        "database": "ok" if database_ok else "error",
+        "board": board_status,
+        "ble_enabled": ble_enabled,
+    }
 
 
 @app.get("/api/state")

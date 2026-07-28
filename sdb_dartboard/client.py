@@ -17,6 +17,7 @@ SERVICE_UUID = "0000fff0-0000-1000-8000-00805f9b34fb"
 NOTIFY_UUID = "0000fff1-0000-1000-8000-00805f9b34fb"
 
 EventHandler = Callable[[Dict[str, Any]], Awaitable[None]]
+StatusHandler = Callable[[Dict[str, Any]], Awaitable[None]]
 
 
 class SdbDartboardClient:
@@ -34,6 +35,7 @@ class SdbDartboardClient:
         self.interpreter = EventInterpreter()
         self._stop = asyncio.Event()
         self._handler: Optional[EventHandler] = None
+        self._status_handler: Optional[StatusHandler] = None
 
     async def find_device(self):
         if self.address:
@@ -46,16 +48,34 @@ class SdbDartboardClient:
                 return device.address
         raise RuntimeError(f"Device not found: {self.name}")
 
-    async def run(self, handler: EventHandler) -> None:
+    async def _report_status(self, status: str, detail: Optional[str] = None) -> None:
+        if not self._status_handler:
+            return
+        payload = {"enabled": True, "status": status}
+        if detail:
+            payload["detail"] = detail
+        try:
+            await self._status_handler(payload)
+        except Exception:
+            LOG.exception("BLE status handler failed")
+
+    async def run(
+        self,
+        handler: EventHandler,
+        status_handler: Optional[StatusHandler] = None,
+    ) -> None:
         self._handler = handler
+        self._status_handler = status_handler
         while not self._stop.is_set():
             try:
+                await self._report_status("searching")
                 address = await self.find_device()
                 await self._connect_once(address)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 LOG.warning("BLE connection loop error: %s", exc)
+                await self._report_status("error", str(exc))
                 await asyncio.sleep(self.reconnect_delay)
 
     async def stop(self) -> None:
@@ -63,10 +83,12 @@ class SdbDartboardClient:
 
     async def _connect_once(self, address: str) -> None:
         LOG.info("Connecting to %s ...", address)
+        await self._report_status("connecting", address)
         async with BleakClient(address) as client:
             if not client.is_connected:
                 raise RuntimeError("BLE connection failed")
             LOG.info("Connected; subscribing to %s", self.notify_uuid)
+            await self._report_status("connected", address)
 
             queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
 
@@ -91,6 +113,7 @@ class SdbDartboardClient:
             except Exception:
                 pass
             LOG.info("Disconnected")
+            await self._report_status("disconnected")
 
 
 async def print_event(event: Dict[str, Any]) -> None:

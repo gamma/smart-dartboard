@@ -247,232 +247,108 @@ Für Button/Miss-Kontext wird danach `EventInterpreter` verwendet.
 
 ---
 
-## 8. Web-App
+## 8. Session- und Screen-Architektur
 
-### Routen
+`SessionController` ist die zentrale, persistente Zustandsquelle. Beide
+Oberflächen folgen derselben Screen-State-Machine:
 
 ```text
-GET /control      Steueroberfläche
-GET /projector    Beameroberfläche
-GET /api/state    aktueller Spielzustand
-POST /api/new-game
+attract → players → game_select → instructions → countdown
+        → playing → game_result → game_select
+        → session_summary → attract
+```
+
+SQLite speichert Spieler, Sessionteilnehmer, Spiele, Würfe, Statistiken,
+Runtime-Checkpoints und Projektorkalibrierung. Nach jedem relevanten Event wird
+ein vollständiger Checkpoint inklusive Undo-Snapshots geschrieben.
+
+### Wichtige Routen
+
+```text
+GET  /control
+GET  /projector
+GET  /api/bootstrap
+GET  /api/health
+POST /api/players
+POST /api/session/start
+POST /api/session/end
+POST /api/game/prepare
+POST /api/game/start
+POST /api/game/live
+POST /api/game/next
+POST /api/continue
 POST /api/next-player
-POST /api/event   Test-/Entwicklungsevent ohne BLE
-WS /ws            Live-Updates
+POST /api/undo
+POST /api/calibration
+WS   /ws
 ```
 
-### Control UI
-
-Gedacht für iPad/Handy/Mac.
-
-Aktuell:
-
-- Spiel starten
-- Spieler eingeben
-- Count Up / X01 wählen
-- Nächster Spieler
-- Testevents ohne Board
-- Spielstand ansehen
-- letztes Event anzeigen
-
-### Projector UI
-
-Gedacht für Beamer/TV.
-
-Aktuell:
-
-- aktueller Spieler
-- großer Score
-- Darts pro Aufnahme
-- Turn Score
-- letztes Event
-- Verbindungsstatus
+`POST /api/event` ist ausschließlich für lokale Entwicklung gedacht und bei
+aktiviertem BLE standardmäßig gesperrt.
 
 ---
 
-## 9. Aktuelle Game Engine
+## 9. Eventpipeline und Game Engine
 
-Datei:
+BLE-Callbacks legen dekodierte Ereignisse in eine Queue. Dadurch werden Treffer
+streng seriell verarbeitet. Die `EventPipeline` verwirft identische
+Sequenznummer-/Rohdatenkombinationen innerhalb eines begrenzten Fensters.
 
-```text
-sdb_dartboard/game.py
-```
+Spielregeln liegen als automatisch entdeckte Plugins unter
+`sdb_dartboard/games`. Aktuell implementiert:
 
-Aktuell implementiert:
+- Count Up mit 5, 8 oder 10 Runden und automatischer Siegerermittlung
+- X01 mit 301/501/701, Straight Out und Double Out
+- vollständiger Aufnahme-Bust mit Rücksetzung auf den Startscore der Aufnahme
+- Cricket mit Marks, Overflow-Scoring und Gewinnerprüfung
+- Miss als regulärer Wurf
+- Drei-Dart-Hold, bewusster Spielerwechsel und Undo
 
-- Spieler und zentraler Spielzustand
-- aktueller Spieler
-- Throw History mit Snapshots für Undo
-- Count Up
-- X01 rudimentär
-- Cricket-Grundmodus
-- Miss zählt als Wurf
-- nach 3 Darts geht der Turn in `hold`
-- Spielerwechsel passiert erst nach `continue`
-- `continue` kann über `/control` oder Board-Menübutton ausgelöst werden
-- Board-Menübutton während `running` erzwingt Spielerwechsel
-- Undo letzter Wurf
-
-### Turn-Hold-Regel
-
-Nach drei Darts wird **nicht automatisch** zum nächsten Spieler gewechselt. Stattdessen:
-
-```text
-running -> 3. Dart -> hold
-```
-
-Im Hold-Zustand werden Treffer ignoriert, bis der Benutzer weiter schaltet:
-
-```text
-/control: Weiter
-oder
-Board-Menübutton drücken
-```
-
-Dann:
-
-```text
-hold -> continue -> next player -> running
-```
-
-Das ist wichtig für Bedienbarkeit am realen Board: Spieler können ihre Darts ziehen, der Spielstand bleibt sichtbar, und erst danach wird bewusst gewechselt.
-
-### Spielmodi
-
-#### Count Up
-
-- Startscore 0
-- jeder Treffer addiert Punkte
-- Miss zählt als Wurf mit 0 Punkten
-
-#### X01
-
-- Startscore konfigurierbar, z. B. 301/501
-- Treffer ziehen Punkte ab
-- Score unter 0 wird als Bust markiert und nicht abgezogen
-- exakte 0 beendet das Spiel
-
-Noch offen für X01:
-
-- Double Out
-- Master Out
-- vollständige Bust-Regeln pro Aufnahme
-- Checkout-Vorschläge
-
-#### Cricket
-
-- Ziele: 20, 19, 18, 17, 16, 15, Bull
-- Treffer setzen Marks bis maximal 3
-- Überzählige Marks scoren, wenn mindestens ein Gegner das Feld noch nicht geschlossen hat
-- Spieler gewinnt, wenn alle Ziele geschlossen sind und er mindestens gleich viele Punkte wie die Gegner hat
-
-Noch offen für Cricket:
-
-- bessere UI für Marks
-- Optionen Cut-Throat / No-Score
-- detaillierte Regeltests
-
-### Noch offen
-
-- Wurfkorrektur/Manuelles Ersetzen
-- Legs/Sets
-- Persistenz
-- Spielkonfigurationen
-- sauberere UI/UX
-- automatische Tests für Game Engine
+Der Plugin-Vertrag und das Hinzufügen neuer Modi sind in
+`docs/GAME_PLUGINS.md` dokumentiert.
 
 ---
 
-## 10. Deployment
+## 10. Projektor
 
-### Lokal ohne BLE
+Die spielrelevante Dartboard-Ebene verwendet ein festes
+`1000 × 1000`-Koordinatensystem. Eine aus vier Zielpunkten berechnete
+Homographie wird als CSS-`matrix3d` angewendet. So werden Position, Skalierung,
+Rotation, Keystone und Perspektive softwareseitig korrigiert.
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-SDB_ENABLE_BLE=0 uvicorn app:app --host 0.0.0.0 --port 8000
-```
+Atmosphärische 3D-Hintergründe bleiben von dieser präzisen Ebene getrennt.
+Treffersegmente werden auf der SVG-Geometrie hervorgehoben.
 
-### Lokal mit BLE
-
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app:app --host 0.0.0.0 --port 8000
-```
-
-### Docker
-
-```bash
-docker compose up --build
-```
-
-Docker nutzt:
-
-```yaml
-network_mode: host
-privileged: true
-volumes:
-  - /var/run/dbus:/var/run/dbus
-```
-
-Das ist für BLE/BlueZ im Container der pragmatische Ansatz.
-
-### Linux/BlueZ Troubleshooting
-
-```bash
-sudo systemctl status bluetooth
-sudo systemctl restart bluetooth
-bluetoothctl show
-rfkill list
-sudo rfkill unblock bluetooth
-```
-
-Wichtig: Das Dartboard kann wahrscheinlich nur eine Verbindung gleichzeitig halten. LightBlue/SDBplay trennen, bevor das Backend verbunden wird.
+Die Sound-Engine nutzt Web Audio und erzeugt getrennte Cues für Treffer,
+Double/Triple, Miss, Spielerwechsel, Countdown, Sieg und Boardfehler. Im
+Kioskmodus sollte Browser-Autoplay freigeschaltet werden.
 
 ---
 
-## 11. Hardware-Empfehlung
+## 11. Deployment
 
-### Entwicklung
-
-- Mac oder Linux-Laptop
-- Vorteil: Debugging, BLE-Tests, zwei Bildschirme
-
-### Minimal-Deployment
-
-- Raspberry Pi Zero 2 W
-- Gut als Headless-BLE-Backend
-- Für Beamer-UI und Browser eher knapp
-
-### Empfohlenes All-in-One-Deployment
-
-- Raspberry Pi 4/5 oder Mini-PC
-- Backend + Webserver + Browser/Kioskmodus + Beamer auf einem Gerät
-
-Empfohlene Zielarchitektur:
+Empfohlen ist ein Raspberry Pi 4/5 oder Mini-PC mit lokalem Projektor-Browser
+und einem Tablet im selben Netzwerk.
 
 ```text
-Dartboard → BLE → Pi 5/Mini-PC → HDMI Beamer /projector
-                              → iPad/Mac Browser /control
+Dartboard → BLE → Pi/Mini-PC → HDMI → /projector
+                       └─────→ WLAN → /control
 ```
+
+Docker verwendet Host-Netzwerk, System-DBus und aktuell `privileged: true`, um
+BlueZ zuverlässig zu erreichen. `./data` wird persistent nach `/app/data`
+eingebunden. Details stehen in `docs/OPERATIONS.md`.
 
 ---
 
-## 12. Offene technische Punkte
+## 12. Verbleibende Erweiterungen
 
-1. Auf echter Linux-/Mac-Hardware mit BLE testen.
-2. Prüfen, ob `connect → subscribe FFF1` ohne weitere Initialisierung zuverlässig funktioniert.
-3. Reconnect-Verhalten testen.
-4. Feste BLE-Adresse optional unterstützen.
-5. Logging verbessern.
-6. WebSocket-API stabilisieren.
-7. Game Engine ausbauen.
-8. UI/UX verbessern.
-9. Optional PWA-Unterstützung für iPad-Control-UI.
-10. Optional Kioskmodus für Projector-UI.
+1. Langzeittest mit realem Board und kontrollierten Reconnect-Szenarien.
+2. Wurf manuell ersetzen statt nur Undo.
+3. X01 Legs, Sets, Master Out und Checkout-Vorschläge.
+4. Cricket Cut-Throat und No-Score.
+5. PWA-/Homescreen-Paket für das Control-Tablet.
+6. Optional mehrere benannte Kalibrierungsprofile.
 
 ---
 
