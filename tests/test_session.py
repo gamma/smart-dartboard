@@ -90,6 +90,27 @@ class SessionControllerTests(unittest.TestCase):
         self.assertEqual(2, stats["wins"])
         self.assertEqual(6, stats["darts"])
 
+    def test_correction_rewrites_persisted_statistics(self):
+        ada, _ = self._start_game()
+        self.controller.process_event(
+            {"type": "hit", "label": "T20", "score": 60, "seq": 1, "field": 20, "multiplier": 3}
+        )
+        self.controller.process_event(
+            {"type": "hit", "label": "S20", "score": 20, "seq": 2, "field": 20, "multiplier": 1}
+        )
+
+        self.controller.correct_turn_throw(
+            0,
+            {"type": "hit", "label": "D20", "score": 40, "field": 20, "multiplier": 2},
+        )
+
+        self.assertEqual(60, self.controller.engine.state.players[0].score)
+        stats = {
+            item["id"]: item for item in self.controller.public_state()["statistics"]
+        }
+        self.assertEqual(60, stats[ada["id"]]["total_points"])
+        self.assertEqual(2, stats[ada["id"]]["darts"])
+
 
 class EventPipelineTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

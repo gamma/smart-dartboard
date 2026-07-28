@@ -90,6 +90,33 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual(40, engine.state.players[0].score)
         self.assertIsNone(engine.state.winner_id)
 
+    def test_throw_correction_replays_the_current_turn(self):
+        engine = GameEngine()
+        engine.reset("countup", ["Ada"])
+        engine.handle_event(hit(20, 1, label="S20"))
+        engine.handle_event(hit(60, 2, multiplier=3, label="T20"))
+        engine.handle_event({"type": "miss", "score": 0, "seq": 3, "label": "MISS"})
+
+        engine.correct_turn_throw(0, hit(40, 99, multiplier=2, label="D20"))
+
+        self.assertEqual(100, engine.state.players[0].score)
+        self.assertEqual("hold", engine.state.status)
+        self.assertEqual(["D20", "T20", "MISS"], [throw.label for throw in engine.state.throws])
+        self.assertEqual(1, engine.state.throws[0].seq)
+        self.assertTrue(engine.state.throws[0].raw["corrected"])
+
+    def test_x01_correction_recalculates_later_throws(self):
+        engine = GameEngine()
+        engine.reset("x01", ["Ada"], options={"start_score": 101})
+        engine.handle_event(hit(20, 1, label="S20"))
+        engine.handle_event(hit(20, 2, label="S20"))
+        self.assertEqual(61, engine.state.players[0].score)
+
+        engine.correct_turn_throw(0, hit(60, 99, multiplier=3, label="T20"))
+
+        self.assertEqual(21, engine.state.players[0].score)
+        self.assertEqual(80, engine.state.turn_score)
+
 
 if __name__ == "__main__":
     unittest.main()

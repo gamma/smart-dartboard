@@ -24,6 +24,10 @@ Das System benötigt im Spielbetrieb keine Internetverbindung.
 7. Auf dem Projektor einmal **Sound aktivieren** wählen.
 8. Über **Projektor kalibrieren** die Scheibe deckungsgleich ausrichten.
 
+Ohne verbundenes BLE-Board läuft die Projektoransicht im Testmodus. In diesem
+Modus erzeugt ein Klick auf ein Scheibensegment den entsprechenden Treffer;
+für einen Fehlwurf steht daneben **MISS** bereit.
+
 Die Kalibrierung und alle Spieldaten liegen in `./data/dartboard.db`.
 
 ## Projektor-Kioskmodus

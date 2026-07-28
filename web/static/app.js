@@ -7,6 +7,7 @@ const appState = {
   lastCueKey: null,
   projectedEvent: null,
   boardResetTimer: null,
+  selectedCorrectionIndex: null,
 };
 
 const BOARD_ORDER = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
@@ -45,6 +46,9 @@ function avatarEmoji(avatar){
 }
 function currentPlayer(game){
   return game?.players.find(player => player.id === game.current_player_id) || game?.players[0];
+}
+function testModeEnabled(){
+  return Boolean(appState.experience?.hardware?.test_events);
 }
 
 async function api(path, body = {}){
@@ -96,6 +100,7 @@ function updateExperience(experience, event){
     const throwWasCounted=!isThrow || (lastThrow && Number(lastThrow.seq)===Number(event.seq));
     if(throwWasCounted) playEventCue(event, experience);
     if(isThrow && throwWasCounted){
+      appState.selectedCorrectionIndex=null;
       appState.projectedEvent=event;
       clearTimeout(appState.boardResetTimer);
       appState.boardResetTimer=setTimeout(()=>{
@@ -103,6 +108,7 @@ function updateExperience(experience, event){
         if(isProjector() && appState.experience?.screen==='playing') renderProjector();
       },BOARD_EVENT_VISIBLE_MS);
     }
+    if(event.type==='throw_corrected') appState.selectedCorrectionIndex=null;
   }
   if(previous?.screen !== experience.screen && experience.screen === 'countdown'){
     startCountdown();
@@ -152,6 +158,7 @@ function renderControl(){
     calibration: controlCalibration,
   };
   root.innerHTML = (renderers[screen] || controlAttract)();
+  if(screen==='playing' && $('dartboardSvg')) buildBoard();
 }
 
 function controlAttract(){
@@ -276,6 +283,41 @@ function scoreboard(game){
     <strong>${player.score}</strong>
   </article>`).join('');
 }
+function currentTurnThrows(game){
+  return game.darts_in_turn > 0 ? game.throws.slice(-game.darts_in_turn) : [];
+}
+function turnDartCards(game){
+  const throws=currentTurnThrows(game);
+  return [0,1,2].map(index=>{
+    const dart=throws[index];
+    if(!dart){
+      return `<div class="turn-dart empty"><span>${index+1}</span><b>—</b><small>NOCH OFFEN</small></div>`;
+    }
+    return `<button class="turn-dart ${appState.selectedCorrectionIndex===index?'selected':''}" data-action="select-correction" data-index="${index}">
+      <span>${index+1}</span><b>${escapeHtml(dart.label || 'MISS')}</b><small>${dart.score} PUNKTE · ANTIPPEN ZUM KORRIGIEREN</small>
+    </button>`;
+  }).join('');
+}
+function correctionPanel(){
+  const selected=appState.selectedCorrectionIndex;
+  if(selected===null){
+    return '<div class="correction-hint">Zum Korrigieren einen der aktuellen Würfe antippen.</div>';
+  }
+  return `<section class="correction-panel">
+    <div class="correction-board-shell">
+      <svg id="dartboardSvg" class="dartboard-svg correction-board" viewBox="0 0 500 500" aria-label="Korrektur-Dartboard"></svg>
+    </div>
+    <div class="correction-copy">
+      <div class="kicker">WURF ${selected+1} KORRIGIEREN</div>
+      <h2>Neues Feld antippen</h2>
+      <p>Wähle den tatsächlich getroffenen Bereich direkt auf der Scheibe. Der aktuelle Spielstand und alle folgenden Würfe werden automatisch neu berechnet.</p>
+      <div class="correction-actions">
+        ${actionButton('Als MISS werten','correct-miss','danger')}
+        ${actionButton('Abbrechen','cancel-correction','ghost')}
+      </div>
+    </div>
+  </section>`;
+}
 function controlPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -284,16 +326,12 @@ function controlPlaying(){
     <div><div class="kicker">${escapeHtml(mode?.title || game.game_type)} · RUNDE ${game.round_number}</div><h1>${game.status==='hold'?'Aufnahme beendet':`${escapeHtml(currentPlayer(game)?.name || '')} ist dran`}</h1></div>
       <div class="turn-counter"><span>${game.darts_in_turn}</span><small>/ 3 DARTS</small><b>${game.turn_score} PTS</b></div>
     </div>
+    <div class="turn-darts">${turnDartCards(game)}</div>
+    ${correctionPanel()}
     <div class="scoreboard">${scoreboard(game)}</div>
     <div class="operator-panel">
       ${game.status==='hold' ? actionButton('Weiter zum nächsten Spieler','continue','primary') : actionButton('Spieler wechseln','next-player','secondary')}
       ${actionButton('Letzten Wurf zurück','undo','danger')}
-      <details><summary>Testtreffer</summary><div class="test-hits">
-        <button data-action="test-hit" data-label="S20" data-score="20" data-field="20" data-multiplier="1">S20</button>
-        <button data-action="test-hit" data-label="T20" data-score="60" data-field="20" data-multiplier="3">T20</button>
-        <button data-action="test-hit" data-label="D20" data-score="40" data-field="20" data-multiplier="2">D20</button>
-        <button data-action="test-hit" data-label="MISS" data-score="0">MISS</button>
-      </div></details>
     </div>
   </section>`;
 }
@@ -405,7 +443,8 @@ function projectorPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
   const player = currentPlayer(game) || {};
-  return `<section class="projection-game" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
+  const testMode=testModeEnabled();
+  return `<section class="projection-game ${testMode?'test-mode':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
     <div id="projectionPlane" class="projection-plane">${boardSvg()}<div id="boardPulse" class="board-pulse"></div></div>
     <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong>${player.score ?? 0}</strong></header>
     <footer class="projection-bottom">
@@ -413,6 +452,7 @@ function projectorPlaying(){
       <div>${game.darts_in_turn}/3 DARTS · ${game.turn_score} PTS</div>
     </footer>
     <aside class="projection-roster">${game.players.map(item=>`<span class="${item.id===game.current_player_id?'active':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
+    ${testMode?'<div class="projector-test-tools"><b>TESTMODUS</b><span>Scheibensegment anklicken</span><button data-action="test-miss">MISS</button></div>':''}
   </section>`;
 }
 function projectorResult(){
@@ -474,6 +514,31 @@ function renderBoardEvent(event){
     if(segment) segment.classList.add('hit');
     if(pulse) pulse.className='board-pulse hit show';
   }
+}
+function eventFromBoardSegment(segment){
+  const match=segment.id.match(/^seg-([A-Za-z]+)-(\d+)$/);
+  if(!match) return null;
+  const zone=match[1], field=Number(match[2]);
+  const definitions={
+    double:{ring:'double',multiplier:2,prefix:'D'},
+    triple:{ring:'triple',multiplier:3,prefix:'T'},
+    singleInner:{ring:'single_inner',multiplier:1,prefix:'S'},
+    singleOuter:{ring:'single_outer',multiplier:1,prefix:'S'},
+    singleBull:{ring:'single_bull',multiplier:1,prefix:'S'},
+    doubleBull:{ring:'double_bull',multiplier:2,prefix:'D'},
+  };
+  const definition=definitions[zone];
+  if(!definition) return null;
+  const bull=field===25;
+  return {
+    type:'hit',
+    field,
+    ring:definition.ring,
+    multiplier:definition.multiplier,
+    label:bull ? `${definition.prefix}Bull` : `${definition.prefix}${field}`,
+    score:field*definition.multiplier,
+    seq:Date.now(),
+  };
 }
 
 function solveLinear(matrix, vector){
@@ -566,6 +631,20 @@ function startCountdown(){
 }
 
 document.addEventListener('click',async event=>{
+  const segment=event.target.closest('.seg');
+  if(segment){
+    const hitEvent=eventFromBoardSegment(segment);
+    if(hitEvent && isProjector() && testModeEnabled()){
+      await action('/api/event',hitEvent);
+      return;
+    }
+    if(hitEvent && segment.closest('.correction-board') && appState.selectedCorrectionIndex!==null){
+      const turnIndex=appState.selectedCorrectionIndex;
+      appState.selectedCorrectionIndex=null;
+      await action('/api/throw/correct',{turn_index:turnIndex,event:hitEvent});
+      return;
+    }
+  }
   const target=event.target.closest('[data-action]');
   if(!target) return;
   const name=target.dataset.action;
@@ -589,6 +668,25 @@ document.addEventListener('click',async event=>{
   if(name==='continue'){ await action('/api/continue'); return; }
   if(name==='next-player'){ await action('/api/next-player'); return; }
   if(name==='undo'){ await action('/api/undo'); return; }
+  if(name==='select-correction'){
+    appState.selectedCorrectionIndex=Number(target.dataset.index);
+    renderControl(); return;
+  }
+  if(name==='cancel-correction'){
+    appState.selectedCorrectionIndex=null;
+    renderControl(); return;
+  }
+  if(name==='correct-miss'){
+    const turnIndex=appState.selectedCorrectionIndex;
+    if(turnIndex===null) return;
+    appState.selectedCorrectionIndex=null;
+    await action('/api/throw/correct',{turn_index:turnIndex,event:{type:'miss',label:'MISS',score:0,seq:Date.now()}});
+    return;
+  }
+  if(name==='test-miss'){
+    await action('/api/event',{type:'miss',label:'MISS',score:0,seq:Date.now()});
+    return;
+  }
   if(name==='next-game'){ await action('/api/game/next'); return; }
   if(name==='end-session'){ await action('/api/session/end'); return; }
   if(name==='close-session'){ appState.selectedPlayers.clear(); await action('/api/session/close'); return; }
@@ -596,10 +694,6 @@ document.addEventListener('click',async event=>{
     const corners=appState.experience.calibration.corners;
     await action('/api/calibration',{...appState.experience.calibration,corners});
     await action('/api/session/close'); return;
-  }
-  if(name==='test-hit'){
-    const score=Number(target.dataset.score), field=Number(target.dataset.field||0), multiplier=Number(target.dataset.multiplier||0);
-    await action('/api/event',{type:target.dataset.label==='MISS'?'miss':'hit',label:target.dataset.label,score,field,multiplier,seq:Date.now(),ring:multiplier===3?'triple':multiplier===2?'double':'single_outer'}); return;
   }
 });
 document.addEventListener('submit',async event=>{

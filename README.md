@@ -21,6 +21,8 @@ Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 - persistenter Spielzustand mit Recovery und Undo nach einem Neustart
 - serielle BLE-Verarbeitung und Schutz vor doppelten Notifications
 - Drei-Dart-Hold für sicheres Entfernen der Darts
+- große Anzeige der aktuellen drei Würfe mit Touch-Korrekturscheibe
+- direkt anklickbare Projektorscheibe für Testtreffer ohne Hardware
 - perspektivische Vierpunkt-Projektorkalibrierung
 - synthetisierte Treffer-, Miss-, Wechsel-, Countdown- und Siegersounds
 - Healthcheck und Docker-/Raspberry-Pi-Betrieb

@@ -193,6 +193,37 @@ class SessionController:
             self.screen = "playing"
         self._persist()
 
+    def correct_turn_throw(
+        self,
+        turn_index: int,
+        replacement: Dict[str, Any],
+    ) -> None:
+        was_finished = self.engine.state.status == "finished"
+        self.engine.correct_turn_throw(turn_index, replacement)
+        if self.game_id:
+            final_scores = {
+                player.id: player.score for player in self.engine.state.players
+            }
+            self.store.replace_game_throws(
+                self.game_id,
+                [
+                    {
+                        "seq": throw.seq,
+                        "player_id": throw.player_id,
+                        "event": throw.raw,
+                        "score_after": final_scores.get(throw.player_id, 0),
+                    }
+                    for throw in self.engine.state.throws
+                ],
+            )
+            if self.engine.state.status == "finished":
+                self.store.finish_game(self.game_id, self.engine.state.winner_id)
+                self.screen = "game_result"
+            elif was_finished:
+                self.store.reopen_game(self.game_id)
+                self.screen = "playing"
+        self._persist()
+
     def next_game(self) -> None:
         self.game_id = None
         self.selected_mode = None

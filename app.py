@@ -48,9 +48,14 @@ async def publish_state(event: Optional[Dict[str, Any]] = None) -> None:
 async def lifespan(_: FastAPI):
     global ble_task, ble_enabled
     ble_enabled = os.environ.get("SDB_ENABLE_BLE", "1").lower() not in {"0", "false"}
+    test_events_allowed = (
+        not ble_enabled
+        or os.environ.get("SDB_ALLOW_TEST_EVENTS", "0").lower() in {"1", "true"}
+    )
     controller.hardware = {
         "enabled": ble_enabled,
         "status": "starting" if ble_enabled else "disabled",
+        "test_events": test_events_allowed,
     }
     if ble_enabled:
         client = SdbDartboardClient(
@@ -64,7 +69,7 @@ async def lifespan(_: FastAPI):
                 await publish_state(event)
 
         async def on_status(status: Dict[str, Any]) -> None:
-            controller.hardware = status
+            controller.hardware = {**status, "test_events": test_events_allowed}
             await publish_state({"type": "hardware_status", **status})
 
         ble_task = asyncio.create_task(client.run(on_event, on_status))
@@ -115,6 +120,11 @@ class CalibrationRequest(BaseModel):
     scale: float = Field(default=1.0, ge=0.5, le=2.0)
     offset_x: float = Field(default=0.0, ge=-1.0, le=1.0)
     offset_y: float = Field(default=0.0, ge=-1.0, le=1.0)
+
+
+class ThrowCorrectionRequest(BaseModel):
+    turn_index: int = Field(ge=0, le=2)
+    event: Dict[str, Any]
 
 
 @app.exception_handler(ValueError)
@@ -273,6 +283,18 @@ async def continue_turn():
 async def undo():
     controller.undo()
     await publish_state({"type": "undo"})
+    return engine.state.as_dict()
+
+
+@app.post("/api/throw/correct")
+async def correct_throw(req: ThrowCorrectionRequest):
+    controller.correct_turn_throw(req.turn_index, req.event)
+    correction_event = {
+        "type": "throw_corrected",
+        "turn_index": req.turn_index,
+        "replacement": req.event,
+    }
+    await publish_state(correction_event)
     return engine.state.as_dict()
 
 

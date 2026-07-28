@@ -279,6 +279,7 @@ POST /api/game/next
 POST /api/continue
 POST /api/next-player
 POST /api/undo
+POST /api/throw/correct
 POST /api/calibration
 WS   /ws
 ```
@@ -303,6 +304,7 @@ Spielregeln liegen als automatisch entdeckte Plugins unter
 - Cricket mit Marks, Overflow-Scoring und Gewinnerprüfung
 - Miss als regulärer Wurf
 - Drei-Dart-Hold, bewusster Spielerwechsel und Undo
+- Korrektur eines aktuellen Wurfs mit Neuberechnung der restlichen Aufnahme
 
 Der Plugin-Vertrag und das Hinzufügen neuer Modi sind in
 `docs/GAME_PLUGINS.md` dokumentiert.

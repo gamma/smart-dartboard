@@ -260,6 +260,43 @@ class GameEngine:
         self.state.message = f"Undo {last.label}"
         return self.state
 
+    def correct_turn_throw(
+        self,
+        turn_index: int,
+        replacement: Dict[str, Any],
+    ) -> GameState:
+        """Replace one throw in the active three-dart turn and replay the rest."""
+        turn_count = self.state.darts_in_turn
+        if turn_count <= 0:
+            raise ValueError("There are no throws in the current turn")
+        if turn_index < 0 or turn_index >= turn_count:
+            raise ValueError("Throw index is outside the current turn")
+        target_position = len(self.state.throws) - turn_count + turn_index
+        if target_position < 0:
+            raise ValueError("Throw history is incomplete")
+
+        target = self.state.throws[target_position]
+        current_player = self.state.current_player()
+        if current_player is None or target.player_id != current_player.id:
+            raise ValueError("Only throws from the current player can be corrected")
+
+        subsequent_events = [
+            dict(throw.raw) for throw in self.state.throws[target_position + 1 :]
+        ]
+        prefix = list(self.state.throws[:target_position])
+        self.state.restore_snapshot(target.snapshot_before)
+        self.state.throws = prefix
+
+        corrected = dict(replacement)
+        corrected["seq"] = target.seq
+        corrected["corrected"] = True
+        self.handle_event(corrected)
+        for event in subsequent_events:
+            replay = dict(event)
+            replay.pop("bust", None)
+            self.handle_event(replay)
+        return self.state
+
     def handle_event(self, event: Dict[str, Any]) -> GameState:
         self.state.last_event = event
         event_type = event.get("type")

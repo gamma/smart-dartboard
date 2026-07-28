@@ -226,6 +226,33 @@ class DartboardStore:
                 (game_id,),
             )
 
+    def replace_game_throws(
+        self,
+        game_id: str,
+        throws: Iterable[Dict[str, Any]],
+    ) -> None:
+        """Atomically rewrite a game's event journal after a correction."""
+        rows = list(throws)
+        with self._lock, self._connection:
+            self._connection.execute("DELETE FROM throws WHERE game_id=?", (game_id,))
+            self._connection.executemany(
+                """
+                INSERT INTO throws(game_id, seq, player_id, event_json, score_after, created_at)
+                VALUES(?, ?, ?, ?, ?, ?)
+                """,
+                [
+                    (
+                        game_id,
+                        int(throw["seq"]),
+                        throw.get("player_id"),
+                        json.dumps(throw["event"]),
+                        int(throw.get("score_after", 0)),
+                        utc_now(),
+                    )
+                    for throw in rows
+                ],
+            )
+
     def set_runtime_value(self, key: str, value: Any) -> None:
         with self._lock, self._connection:
             self._connection.execute(
