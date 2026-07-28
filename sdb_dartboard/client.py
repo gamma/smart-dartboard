@@ -68,17 +68,23 @@ class SdbDartboardClient:
                 raise RuntimeError("BLE connection failed")
             LOG.info("Connected; subscribing to %s", self.notify_uuid)
 
+            queue: asyncio.Queue[Dict[str, Any]] = asyncio.Queue()
+
             def on_notify(sender, data: bytearray):
                 decoded = decode_packet(bytes(data))
                 event = self.interpreter.interpret(decoded)
-                if self._handler:
-                    asyncio.create_task(self._handler(event))
+                queue.put_nowait(event)
 
             await client.start_notify(self.notify_uuid, on_notify)
             LOG.info("Subscribed. Waiting for dartboard events.")
 
             while client.is_connected and not self._stop.is_set():
-                await asyncio.sleep(0.5)
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=0.5)
+                except asyncio.TimeoutError:
+                    continue
+                if self._handler:
+                    await self._handler(event)
 
             try:
                 await client.stop_notify(self.notify_uuid)

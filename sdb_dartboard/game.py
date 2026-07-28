@@ -186,6 +186,51 @@ class GameEngine:
         )
         return self.state
 
+    def export_state(self) -> Dict[str, Any]:
+        """Return a complete checkpoint, including data needed for Undo."""
+        return {
+            "game_type": self.state.game_type,
+            "x01_start_score": self.state.x01_start_score,
+            "options": self.state.options,
+            "state": self.state.snapshot(),
+            "last_event": self.state.last_event,
+            "throws": [
+                {
+                    "seq": throw.seq,
+                    "type": throw.type,
+                    "label": throw.label,
+                    "score": throw.score,
+                    "player_id": throw.player_id,
+                    "raw": throw.raw,
+                    "snapshot_before": throw.snapshot_before,
+                }
+                for throw in self.state.throws
+            ],
+        }
+
+    def import_state(self, checkpoint: Dict[str, Any]) -> GameState:
+        """Restore an exact checkpoint after a process or machine restart."""
+        self.state = GameState(
+            game_type=checkpoint["game_type"],
+            x01_start_score=int(checkpoint.get("x01_start_score", 501)),
+            options=dict(checkpoint.get("options", {})),
+        )
+        self.state.restore_snapshot(checkpoint["state"])
+        self.state.last_event = checkpoint.get("last_event")
+        self.state.throws = [
+            ThrowEvent(
+                seq=int(data["seq"]),
+                type=str(data.get("type", "throw")),
+                label=str(data.get("label", "")),
+                score=int(data.get("score", 0)),
+                player_id=data.get("player_id"),
+                raw=dict(data.get("raw", {})),
+                snapshot_before=dict(data["snapshot_before"]),
+            )
+            for data in checkpoint.get("throws", [])
+        ]
+        return self.state
+
     def continue_turn(self) -> GameState:
         if self.state.status == "hold":
             self._advance_player()

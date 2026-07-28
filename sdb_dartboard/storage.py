@@ -79,6 +79,11 @@ class DartboardStore:
                 CREATE INDEX IF NOT EXISTS idx_games_session ON games(session_id);
                 CREATE INDEX IF NOT EXISTS idx_throws_game ON throws(game_id);
                 CREATE INDEX IF NOT EXISTS idx_throws_player ON throws(player_id);
+                CREATE TABLE IF NOT EXISTS runtime_state (
+                    key TEXT PRIMARY KEY,
+                    value_json TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
 
@@ -198,6 +203,55 @@ class DartboardStore:
                 "UPDATE games SET status='finished', winner_id=?, ended_at=? WHERE id=?",
                 (winner_id, utc_now(), game_id),
             )
+
+    def reopen_game(self, game_id: str) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                "UPDATE games SET status='running', winner_id=NULL, ended_at=NULL WHERE id=?",
+                (game_id,),
+            )
+
+    def delete_last_throw(self, game_id: str) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                DELETE FROM throws WHERE id=(
+                    SELECT id FROM throws WHERE game_id=? ORDER BY id DESC LIMIT 1
+                )
+                """,
+                (game_id,),
+            )
+
+    def set_runtime_value(self, key: str, value: Any) -> None:
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                INSERT INTO runtime_state(key, value_json, updated_at)
+                VALUES(?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET
+                    value_json=excluded.value_json,
+                    updated_at=excluded.updated_at
+                """,
+                (key, json.dumps(value), utc_now()),
+            )
+
+    def get_runtime_value(self, key: str, default: Any = None) -> Any:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT value_json FROM runtime_state WHERE key=?", (key,)
+            ).fetchone()
+        return json.loads(row["value_json"]) if row else default
+
+    def get_game(self, game_id: str) -> Optional[Dict[str, Any]]:
+        with self._lock:
+            row = self._connection.execute(
+                "SELECT * FROM games WHERE id=?", (game_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        result["options"] = json.loads(result.pop("options_json"))
+        return result
 
     def statistics(self, player_ids: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
         ids = list(player_ids or [])
