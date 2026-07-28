@@ -1,0 +1,14 @@
+services:
+  dartboard:
+    build: .
+    container_name: sdb-dartboard
+    network_mode: host
+    privileged: true
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+    environment:
+      - PYTHONUNBUFFERED=1
+      - SDB_ENABLE_BLE=1
+      - SDB_DEVICE_NAME=SDB-BT
+    command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped
