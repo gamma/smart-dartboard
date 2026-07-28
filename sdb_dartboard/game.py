@@ -4,7 +4,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-CRICKET_TARGETS = [20, 19, 18, 17, 16, 15, 25]
+from .games import registry
+from .games.cricket import CRICKET_TARGETS
 
 
 @dataclass
@@ -13,6 +14,8 @@ class Player:
     name: str
     score: int = 0
     marks: Dict[str, int] = field(default_factory=dict)
+    avatar: str = "comet"
+    color: str = "#28e7ff"
 
 
 @dataclass
@@ -28,17 +31,19 @@ class ThrowEvent:
 
 @dataclass
 class GameState:
-    game_type: str = "countup"  # countup, x01, cricket
+    game_type: str = "countup"
     x01_start_score: int = 501
     players: List[Player] = field(default_factory=list)
     current_player_index: int = 0
     darts_in_turn: int = 0
     turn_score: int = 0
     throws: List[ThrowEvent] = field(default_factory=list)
-    status: str = "idle"  # idle, running, hold, finished
+    status: str = "idle"
     winner_id: Optional[str] = None
     last_event: Optional[Dict[str, Any]] = None
     message: str = "Ready"
+    options: Dict[str, Any] = field(default_factory=dict)
+    turn_start_values: Dict[str, int] = field(default_factory=dict)
 
     def current_player(self) -> Optional[Player]:
         if not self.players:
@@ -47,24 +52,37 @@ class GameState:
 
     def snapshot(self) -> Dict[str, Any]:
         return {
-            "players": [{"id": p.id, "name": p.name, "score": p.score, "marks": dict(p.marks)} for p in self.players],
+            "players": [
+                {
+                    "id": player.id,
+                    "name": player.name,
+                    "score": player.score,
+                    "marks": dict(player.marks),
+                    "avatar": player.avatar,
+                    "color": player.color,
+                }
+                for player in self.players
+            ],
             "current_player_index": self.current_player_index,
             "darts_in_turn": self.darts_in_turn,
             "turn_score": self.turn_score,
             "status": self.status,
             "winner_id": self.winner_id,
             "message": self.message,
+            "turn_start_values": dict(self.turn_start_values),
         }
 
     def restore_snapshot(self, snap: Dict[str, Any]) -> None:
-        by_id = {p.id: p for p in self.players}
+        by_id = {player.id: player for player in self.players}
         restored: List[Player] = []
-        for pdata in snap["players"]:
-            p = by_id.get(pdata["id"], Player(id=pdata["id"], name=pdata["name"]))
-            p.name = pdata["name"]
-            p.score = pdata["score"]
-            p.marks = dict(pdata.get("marks", {}))
-            restored.append(p)
+        for data in snap["players"]:
+            player = by_id.get(data["id"], Player(id=data["id"], name=data["name"]))
+            player.name = data["name"]
+            player.score = data["score"]
+            player.marks = dict(data.get("marks", {}))
+            player.avatar = data.get("avatar", "comet")
+            player.color = data.get("color", "#28e7ff")
+            restored.append(player)
         self.players = restored
         self.current_player_index = snap["current_player_index"]
         self.darts_in_turn = snap["darts_in_turn"]
@@ -72,12 +90,23 @@ class GameState:
         self.status = snap["status"]
         self.winner_id = snap["winner_id"]
         self.message = snap["message"]
+        self.turn_start_values = dict(snap.get("turn_start_values", {}))
 
     def as_dict(self) -> Dict[str, Any]:
         return {
             "game_type": self.game_type,
             "x01_start_score": self.x01_start_score,
-            "players": [{"id": p.id, "name": p.name, "score": p.score, "marks": p.marks} for p in self.players],
+            "players": [
+                {
+                    "id": player.id,
+                    "name": player.name,
+                    "score": player.score,
+                    "marks": player.marks,
+                    "avatar": player.avatar,
+                    "color": player.color,
+                }
+                for player in self.players
+            ],
             "current_player_index": self.current_player_index,
             "current_player_id": self.current_player().id if self.current_player() else None,
             "darts_in_turn": self.darts_in_turn,
@@ -86,10 +115,19 @@ class GameState:
             "winner_id": self.winner_id,
             "last_event": self.last_event,
             "message": self.message,
+            "options": self.options,
+            "mode": registry.get(self.game_type).metadata.as_dict() if self.status != "idle" else None,
             "cricket_targets": CRICKET_TARGETS,
             "throws": [
-                {"seq": t.seq, "type": t.type, "label": t.label, "score": t.score, "player_id": t.player_id, "raw": t.raw}
-                for t in self.throws[-30:]
+                {
+                    "seq": throw.seq,
+                    "type": throw.type,
+                    "label": throw.label,
+                    "score": throw.score,
+                    "player_id": throw.player_id,
+                    "raw": throw.raw,
+                }
+                for throw in self.throws[-30:]
             ],
         }
 
@@ -98,20 +136,53 @@ class GameEngine:
     def __init__(self) -> None:
         self.state = GameState(players=[Player(id=str(uuid4()), name="Player 1")])
 
-    def reset(self, game_type: str = "countup", players: Optional[List[str]] = None, x01_start_score: int = 501) -> GameState:
-        names = [n.strip() for n in (players or ["Player 1"]) if n.strip()] or ["Player 1"]
+    def reset(
+        self,
+        game_type: str = "countup",
+        players: Optional[List[Any]] = None,
+        x01_start_score: int = 501,
+        options: Optional[Dict[str, Any]] = None,
+    ) -> GameState:
         game_type = game_type.lower()
-        initial_score = 0 if game_type in ("countup", "cricket") else x01_start_score
-        ps = [Player(id=str(uuid4()), name=n, score=initial_score) for n in names]
-        if game_type == "cricket":
-            for p in ps:
-                p.marks = {str(t): 0 for t in CRICKET_TARGETS}
+        mode = registry.get(game_type)
+        source_players = players or ["Player 1"]
+        resolved_players: List[Player] = []
+        for item in source_players:
+            if isinstance(item, dict):
+                name = str(item.get("name", "")).strip()
+                if name:
+                    resolved_players.append(
+                        Player(
+                            id=str(item.get("id") or uuid4()),
+                            name=name,
+                            avatar=str(item.get("avatar", "comet")),
+                            color=str(item.get("color", "#28e7ff")),
+                        )
+                    )
+            else:
+                name = str(item).strip()
+                if name:
+                    resolved_players.append(Player(id=str(uuid4()), name=name))
+        if not resolved_players:
+            resolved_players = [Player(id=str(uuid4()), name="Player 1")]
+
+        resolved_options = {
+            option.key: option.default for option in mode.metadata.options
+        }
+        resolved_options.update(options or {})
+        if game_type == "x01" and "start_score" not in (options or {}):
+            resolved_options["start_score"] = x01_start_score
+        for player in resolved_players:
+            mode.initialize_player(player, resolved_options)
+
         self.state = GameState(
             game_type=game_type,
-            x01_start_score=x01_start_score,
-            players=ps,
+            x01_start_score=int(resolved_options.get("start_score", x01_start_score)),
+            players=resolved_players,
             status="running",
             message="Game started",
+            options=resolved_options,
+            turn_start_values={player.id: player.score for player in resolved_players},
         )
         return self.state
 
@@ -124,7 +195,6 @@ class GameEngine:
         return self.state
 
     def next_player(self) -> GameState:
-        # Public forced next-player action from screen or board button.
         if self.state.status in ("running", "hold"):
             self._advance_player()
             self.state.status = "running"
@@ -143,10 +213,9 @@ class GameEngine:
 
     def handle_event(self, event: Dict[str, Any]) -> GameState:
         self.state.last_event = event
-        typ = event.get("type")
+        event_type = event.get("type")
 
-        if typ == "button" and event.get("action") == "press":
-            # Board button means continue if in hold, otherwise force next player.
+        if event_type == "button" and event.get("action") == "press":
             if self.state.status == "hold":
                 return self.continue_turn()
             return self.next_player()
@@ -154,19 +223,24 @@ class GameEngine:
         if self.state.status != "running":
             return self.state
 
-        if typ == "hit":
+        if event_type == "hit":
             self._apply_throw(event)
-        elif typ == "miss":
+        elif event_type == "miss":
             miss = {**event, "label": "MISS", "score": 0}
+            self.state.last_event = miss
             self._apply_throw(miss)
-
         return self.state
 
     def _advance_player(self) -> None:
         if self.state.players:
-            self.state.current_player_index = (self.state.current_player_index + 1) % len(self.state.players)
+            self.state.current_player_index = (
+                self.state.current_player_index + 1
+            ) % len(self.state.players)
         self.state.darts_in_turn = 0
         self.state.turn_score = 0
+        player = self.state.current_player()
+        if player:
+            self.state.turn_start_values[player.id] = player.score
 
     def _hold_after_turn(self) -> None:
         if self.state.status == "running" and self.state.darts_in_turn >= 3:
@@ -177,64 +251,31 @@ class GameEngine:
         player = self.state.current_player()
         if player is None:
             return
-        snap = self.state.snapshot()
+        snapshot = self.state.snapshot()
         label = str(event.get("label", ""))
         score = int(event.get("score", 0))
-
-        if self.state.game_type == "countup":
-            self._apply_countup(player, score)
-        elif self.state.game_type == "x01":
-            self._apply_x01(player, score, event)
-        elif self.state.game_type == "cricket":
-            self._apply_cricket(player, event)
-        else:
-            self._apply_countup(player, score)
+        outcome = registry.get(self.state.game_type).apply_throw(
+            self.state, player, event
+        )
 
         self.state.darts_in_turn += 1
-        self.state.turn_score += score
-        self.state.throws.append(ThrowEvent(
-            seq=int(event.get("seq", -1)),
-            type="throw",
-            label=label,
-            score=score,
-            player_id=player.id,
-            raw=event,
-            snapshot_before=snap,
-        ))
-        if self.state.status == "running":
-            self.state.message = f"{player.name}: {label}"
-        self._hold_after_turn()
-
-    def _apply_countup(self, player: Player, score: int) -> None:
-        player.score += score
-
-    def _apply_x01(self, player: Player, score: int, event: Dict[str, Any]) -> None:
-        new_score = player.score - score
-        if new_score < 0:
-            event["bust"] = True
-            self.state.message = "Bust"
-            return
-        player.score = new_score
-        if new_score == 0:
+        self.state.turn_score += outcome.turn_value
+        self.state.throws.append(
+            ThrowEvent(
+                seq=int(event.get("seq", -1)),
+                type="throw",
+                label=label,
+                score=score,
+                player_id=player.id,
+                raw=event,
+                snapshot_before=snapshot,
+            )
+        )
+        self.state.message = outcome.message
+        if outcome.finished:
             self.state.status = "finished"
             self.state.winner_id = player.id
-            self.state.message = f"{player.name} wins"
-
-    def _apply_cricket(self, player: Player, event: Dict[str, Any]) -> None:
-        field = int(event.get("field", 0) or 0)
-        multiplier = int(event.get("multiplier", 0) or 0)
-        if field not in CRICKET_TARGETS or multiplier <= 0:
-            return
-        key = str(field)
-        before = player.marks.get(key, 0)
-        after = min(3, before + multiplier)
-        overflow = max(0, before + multiplier - 3)
-        player.marks[key] = after
-        # Simple Cricket scoring: score overflow if at least one opponent is not closed.
-        if overflow and any(op.id != player.id and op.marks.get(key, 0) < 3 for op in self.state.players):
-            player.score += overflow * field
-        if all(player.marks.get(str(t), 0) >= 3 for t in CRICKET_TARGETS):
-            if player.score >= max((p.score for p in self.state.players if p.id != player.id), default=0):
-                self.state.status = "finished"
-                self.state.winner_id = player.id
-                self.state.message = f"{player.name} wins"
+        elif outcome.force_hold:
+            self.state.status = "hold"
+        else:
+            self._hold_after_turn()
