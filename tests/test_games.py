@@ -20,7 +20,7 @@ def hit(score: int, seq: int = 1, field: int = 20, multiplier: int = 1, label: s
 class GameRegistryTests(unittest.TestCase):
     def test_builtin_modes_are_discovered(self):
         self.assertEqual(
-            {"countup", "cricket", "x01", "target_rush", "avoid_bomb", "color_clash", "risk_it", "king_of_board"},
+            {"countup", "cricket", "x01", "target_rush", "avoid_bomb", "color_clash", "risk_it", "king_of_board", "treasure_hunt"},
             {mode.metadata.slug for mode in registry.all()},
         )
         for mode in registry.all():
@@ -170,6 +170,16 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual(1, engine.state.players[0].score)
         overlay = engine.state.as_dict()["overlay"]
         self.assertEqual(1, len(overlay["owned"]))
+    def test_treasure_hunt_reveals_reward(self):
+        engine = GameEngine()
+        engine.reset("treasure_hunt", ["Ada"], options={"traps": 3})
+        key, item = next(iter(engine.state.mode_state["hidden"].items()))
+        target = item["dart"]
+        event = hit(target["score"], 123, field=target["field"], multiplier=target["multiplier"], label=target["label"])
+        event["ring"] = target["ring"]
+        engine.handle_event(event)
+        self.assertTrue(engine.state.mode_state["revealed"])
+        self.assertIsNotNone(engine.state.as_dict()["overlay"])
 
 
 if __name__ == "__main__":

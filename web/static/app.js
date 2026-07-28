@@ -39,7 +39,7 @@ function modeBySlug(slug){
   return appState.experience?.modes.find(mode => mode.slug === slug);
 }
 function modeAsset(slug){
-  const known = new Set(['countup','x01','cricket']);
+  const known = new Set(['countup','x01','cricket','target_rush','avoid_bomb','color_clash','risk_it','king_of_board','treasure_hunt']);
   const safe = known.has(slug) ? slug : 'countup';
   return `/static/assets/modes/${encodeURIComponent(safe)}.webp`;
 }

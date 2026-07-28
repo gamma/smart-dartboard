@@ -1051,6 +1051,7 @@ avoid_bomb
 color_clash
 risk_it
 king_of_board
+treasure_hunt
 ```
 
 Zusätzlich wurde ein generisches Overlay-Feld im Game-State eingeführt:
@@ -1082,6 +1083,7 @@ sdb_dartboard/games/avoid_bomb.py
 sdb_dartboard/games/color_clash.py
 sdb_dartboard/games/risk_it.py
 sdb_dartboard/games/king_of_board.py
+sdb_dartboard/games/treasure_hunt.py
 ```
 
 ### Tests
@@ -1094,6 +1096,7 @@ Die Party-Modes sind in `tests/test_games.py` abgedeckt:
 - Color-Clash-Farbwertung
 - Risk-It-Bank-Action
 - King-of-the-Board-Owned-Overlay
+- Treasure-Hunt-Reveal-Mechanik
 
 ### Nächste sinnvolle Ergänzungen
 
