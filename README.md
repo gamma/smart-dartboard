@@ -86,6 +86,7 @@ docker compose config --quiet
 - [Technische Architektur](docs/TECHNICAL.md)
 - [Betrieb und Kiosk-Setup](docs/OPERATIONS.md)
 - [Neue Spielmodule entwickeln](docs/GAME_PLUGINS.md)
+- [Party-Modi & visuelle Incentives](docs/PARTY_MODES.md)
 
 ## Datenfluss
 
