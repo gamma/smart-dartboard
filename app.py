@@ -99,6 +99,20 @@ async def next_player():
     return engine.state.as_dict()
 
 
+@app.post("/api/continue")
+async def continue_turn():
+    engine.continue_turn()
+    await publish_state({"type": "continue"})
+    return engine.state.as_dict()
+
+
+@app.post("/api/undo")
+async def undo():
+    engine.undo()
+    await publish_state({"type": "undo"})
+    return engine.state.as_dict()
+
+
 @app.post("/api/event")
 async def inject_event(event: dict):
     # For development/testing without BLE.

@@ -300,27 +300,86 @@ sdb_dartboard/game.py
 
 Aktuell implementiert:
 
-- Spieler
+- Spieler und zentraler Spielzustand
 - aktueller Spieler
-- Spielzustand
-- Throw History
-- Count Up rudimentär
+- Throw History mit Snapshots für Undo
+- Count Up
 - X01 rudimentär
-- automatischer Spielerwechsel nach 3 Darts
+- Cricket-Grundmodus
 - Miss zählt als Wurf
-- Button Press löst `next_player` aus
+- nach 3 Darts geht der Turn in `hold`
+- Spielerwechsel passiert erst nach `continue`
+- `continue` kann über `/control` oder Board-Menübutton ausgelöst werden
+- Board-Menübutton während `running` erzwingt Spielerwechsel
+- Undo letzter Wurf
 
-Noch offen:
+### Turn-Hold-Regel
 
-- Undo
-- Wurfkorrektur
-- Bust-Regeln sauber
+Nach drei Darts wird **nicht automatisch** zum nächsten Spieler gewechselt. Stattdessen:
+
+```text
+running -> 3. Dart -> hold
+```
+
+Im Hold-Zustand werden Treffer ignoriert, bis der Benutzer weiter schaltet:
+
+```text
+/control: Weiter
+oder
+Board-Menübutton drücken
+```
+
+Dann:
+
+```text
+hold -> continue -> next player -> running
+```
+
+Das ist wichtig für Bedienbarkeit am realen Board: Spieler können ihre Darts ziehen, der Spielstand bleibt sichtbar, und erst danach wird bewusst gewechselt.
+
+### Spielmodi
+
+#### Count Up
+
+- Startscore 0
+- jeder Treffer addiert Punkte
+- Miss zählt als Wurf mit 0 Punkten
+
+#### X01
+
+- Startscore konfigurierbar, z. B. 301/501
+- Treffer ziehen Punkte ab
+- Score unter 0 wird als Bust markiert und nicht abgezogen
+- exakte 0 beendet das Spiel
+
+Noch offen für X01:
+
 - Double Out
 - Master Out
+- vollständige Bust-Regeln pro Aufnahme
 - Checkout-Vorschläge
-- Cricket
+
+#### Cricket
+
+- Ziele: 20, 19, 18, 17, 16, 15, Bull
+- Treffer setzen Marks bis maximal 3
+- Überzählige Marks scoren, wenn mindestens ein Gegner das Feld noch nicht geschlossen hat
+- Spieler gewinnt, wenn alle Ziele geschlossen sind und er mindestens gleich viele Punkte wie die Gegner hat
+
+Noch offen für Cricket:
+
+- bessere UI für Marks
+- Optionen Cut-Throat / No-Score
+- detaillierte Regeltests
+
+### Noch offen
+
+- Wurfkorrektur/Manuelles Ersetzen
+- Legs/Sets
 - Persistenz
 - Spielkonfigurationen
+- sauberere UI/UX
+- automatische Tests für Game Engine
 
 ---
 
