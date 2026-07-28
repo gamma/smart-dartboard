@@ -1,76 +1,115 @@
-# Smart-Dartboard-Projekt
+# Smart Dartboard
 
-Ziel: Entwicklung einer eigenen Computer-Anwendung, die ein Bluetooth-Smart-Dartboard direkt anbindet, Treffer in Echtzeit ausliest und eigene Spielmodi sowie Beamer-Projektionen ermöglicht.
+Eigene Web-Anwendung für ein Bluetooth-Smart-Dartboard vom Typ `SDB-BT` / SDBplay-kompatibel.
 
-## Aktueller Stand
+Ziel ist ein lokales System, das Treffer per Bluetooth Low Energy ausliest, daraus Spiel-Events erzeugt und zwei Web-Oberflächen bereitstellt:
 
-- SDBplay 2 wurde als Referenz-App identifiziert.
-- Das Dartboard nutzt sehr wahrscheinlich Bluetooth Low Energy, BLE.
-- Öffentlich wurde bisher keine vollständige Protokolldokumentation gefunden.
-- Die wichtigste nächste Aufgabe ist Reverse Engineering der BLE-Kommunikation.
+- `/projector` – reine Beamer-/Anzeigeoberfläche
+- `/control` – Steueroberfläche für iPad, Handy, Mac oder zweiten Bildschirm
 
-## Wichtige Dateien
+## Aktueller Status
 
-- `smart-dartboard-technische-dokumentation.md` enthält die aktuelle technische Projektdokumentation.
-- `BLE_BEOBACHTUNGEN.md` enthält reale BLE-Daten aus dem iOS-BLE-Scanner.
+- BLE-Profil des Boards identifiziert.
+- Treffer-Notify-Kanal gefunden: Service `FFF0`, Characteristic `FFF1`.
+- Trefferprotokoll entschlüsselt.
+- Python-Basisimplementierung vorhanden.
+- FastAPI-Webserver mit REST/WebSocket vorhanden.
+- Erste Control- und Projector-Weboberflächen vorhanden.
+- Docker-/Raspberry-Pi-Deployment vorbereitet.
 
-## Reale BLE-Erkenntnisse
-
-Das Dartboard wurde als BLE-Gerät erkannt:
-
-- Gerätename: `SDB-BT`
-- Advertised Service UUID: `FFF0`
-- Hauptservice: `FFF0`
-- Characteristics:
-  - `FFF1`: Notify, Read
-  - `FFF2`: Write, Write without Response
-  - `FFF4`: Notify, Read
-  - `FFF5`: Write, Write without Response
-- Weiterer Service: `FE59`, vermutlich Firmware-/DFU-Service
-
-Damit ist bestätigt: Das Board arbeitet über BLE/GATT. Das Trefferprotokoll liegt sehr wahrscheinlich auf Service `FFF0`.
-
-## Nächste technische Schritte am Mac
-
-1. Python installieren oder prüfen:
-
-```bash
-python3 --version
-```
-
-2. Virtuelle Umgebung anlegen:
+## Schnellstart lokal ohne Bluetooth
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install bleak
+pip install -r requirements.txt
+SDB_ENABLE_BLE=0 uvicorn app:app --host 0.0.0.0 --port 8000
 ```
 
-3. BLE-Scanner schreiben/ausführen.
-4. Dartboard einschalten.
-5. Gerätename, Services und Characteristics erfassen.
-6. Notify-Characteristics abonnieren.
-7. Treffer auslösen und Rohdaten loggen.
-8. Bytefolgen den Segmenten zuordnen.
-
-## Empfohlene Architektur
+Dann öffnen:
 
 ```text
-Dartboard
-  ↓ Bluetooth LE
-Python BLE Backend
-  ↓ WebSocket/Event API
-Frontend / Beamer UI
-  ↓
-Eigene Spiele, Animationen, Projektion
+http://localhost:8000/control
+http://localhost:8000/projector
 ```
 
-## Übergabe an andere KI / Codex
+In `/control` können Testevents ohne Dartboard ausgelöst werden.
 
-Eine andere KI sollte zuerst diese Dateien lesen:
+## Start mit Dartboard
 
-1. `README.md`
-2. `smart-dartboard-technische-dokumentation.md`
-3. `KI_BRIEFING.md`
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app:app --host 0.0.0.0 --port 8000
+```
 
-Danach sollte sie mit dem BLE-Prototyping beginnen.
+Das Backend sucht standardmäßig nach dem BLE-Gerät:
+
+```text
+SDB-BT
+```
+
+Optional kann ein fester Gerätename oder eine Adresse gesetzt werden:
+
+```bash
+SDB_DEVICE_NAME=SDB-BT uvicorn app:app --host 0.0.0.0 --port 8000
+SDB_DEVICE_ADDRESS=<BLE_ADDRESS> uvicorn app:app --host 0.0.0.0 --port 8000
+```
+
+## Docker
+
+```bash
+docker compose up --build
+```
+
+Dann im lokalen Netzwerk öffnen:
+
+```text
+http://<host>:8000/control
+http://<host>:8000/projector
+```
+
+Bluetooth im Container läuft über BlueZ/DBus des Hosts. Siehe `docker-compose.yml`.
+
+## Wichtige Dateien
+
+```text
+app.py                         FastAPI Backend, REST API, WebSocket
+sdb_dartboard/client.py        BLE Client für SDB-BT / FFF1 Notify
+sdb_dartboard/protocol.py      Low-Level-Paketdecoder
+sdb_dartboard/interpreter.py   Kontextlogik für Miss/Button-Release
+sdb_dartboard/game.py          einfache Game Engine / State
+sdb_dartboard/ws.py            WebSocket Connection Manager
+web/control.html               Steueroberfläche
+web/projector.html             Beameroberfläche
+web/static/app.js              Frontend-Logik
+web/static/style.css           Styling
+scan_ble.py                    BLE Scanner
+dump_gatt.py                   GATT-Dump
+live_dartboard.py              Terminal-Live-Logger
+Dockerfile                     Container Build
+docker-compose.yml             Deployment mit Bluetooth-Zugriff
+docs/TECHNICAL.md              vollständige technische Dokumentation
+```
+
+## Hardware-Empfehlung
+
+Für Entwicklung: Mac oder Linux-Rechner.
+
+Für Deployment:
+
+- **Raspberry Pi Zero 2 W**: geeignet als kleines Headless-BLE-Backend.
+- **Raspberry Pi 4/5 oder Mini-PC**: empfohlen, wenn Backend, Webserver und Beamer-Browser auf einem Gerät laufen sollen.
+
+Empfohlene Zielarchitektur:
+
+```text
+Dartboard → BLE → Pi/Mini-PC Backend → WebSocket → /projector + /control
+```
+
+## Technische Dokumentation
+
+Alle Erkenntnisse, Protokolldetails, Architekturentscheidungen und offenen Punkte stehen zentral in:
+
+[docs/TECHNICAL.md](docs/TECHNICAL.md)
