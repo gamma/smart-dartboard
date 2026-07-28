@@ -1036,3 +1036,67 @@ if shuffle == turn:
   "danger": [{"id": "D1", "color": "red", "label": "-25"}]
 }
 ```
+
+---
+
+## 13. Implementierungsstand
+
+Stand: 2026-07-28
+
+Die erste Party-Version ist implementiert:
+
+```text
+target_rush
+avoid_bomb
+color_clash
+```
+
+Zusätzlich wurde ein generisches Overlay-Feld im Game-State eingeführt:
+
+```json
+{
+  "overlay": {
+    "prompt": "Triff T20!",
+    "targets": [],
+    "danger": [],
+    "bonus": [],
+    "combo": {}
+  }
+}
+```
+
+Der Projector rendert diese Overlay-Zonen direkt auf der SVG-Dartboardscheibe:
+
+- `targets` → cyan/grün
+- `danger` → rot/flackernd
+- `bonus` → gold/schimmernd
+
+### Implementierte Dateien
+
+```text
+sdb_dartboard/games/arcade.py
+sdb_dartboard/games/target_rush.py
+sdb_dartboard/games/avoid_bomb.py
+sdb_dartboard/games/color_clash.py
+```
+
+### Tests
+
+Die Party-Modes sind in `tests/test_games.py` abgedeckt:
+
+- Discovery der neuen Modes
+- Target-Rush-Overlay
+- Avoid-Bomb-Danger-Overlay
+- Color-Clash-Farbwertung
+
+### Nächste sinnvolle Ergänzungen
+
+1. Eigene Mode-Artworks für `target_rush`, `avoid_bomb`, `color_clash`.
+2. Control-UI-Detailpanel für Party-Regeln während des Spiels.
+3. Sound-Mapping pro Party-Event:
+   - target exact
+   - almost
+   - bomb
+   - color bonus
+4. Timer-/Speed-Mechanik für Target Rush und Lightning Round.
+5. Persistente Highscores pro Party-Modus.

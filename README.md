@@ -16,7 +16,7 @@ Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 - Session- und Gesamtstatistiken
 - grafische Spielauswahl mit 3D-Renderings
 - eigener Anleitungsbildschirm pro Spielmodus auf beiden Displays
-- Count Up, X01 und Cricket als automatisch entdeckte Spielmodule
+- Count Up, X01, Cricket und erste Party-Modi als automatisch entdeckte Spielmodule
 - konfigurierbare Varianten wie Rundenzahl, 301/501/701 und Double Out
 - persistenter Spielzustand mit Recovery und Undo nach einem Neustart
 - serielle BLE-Verarbeitung und Schutz vor doppelten Notifications

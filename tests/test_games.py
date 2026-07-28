@@ -20,7 +20,7 @@ def hit(score: int, seq: int = 1, field: int = 20, multiplier: int = 1, label: s
 class GameRegistryTests(unittest.TestCase):
     def test_builtin_modes_are_discovered(self):
         self.assertEqual(
-            {"countup", "cricket", "x01"},
+            {"countup", "cricket", "x01", "target_rush", "avoid_bomb", "color_clash"},
             {mode.metadata.slug for mode in registry.all()},
         )
         for mode in registry.all():
@@ -116,6 +116,41 @@ class GameEngineTests(unittest.TestCase):
 
         self.assertEqual(21, engine.state.players[0].score)
         self.assertEqual(80, engine.state.turn_score)
+
+    def test_target_rush_exposes_overlay(self):
+        engine = GameEngine()
+        engine.reset("target_rush", ["Ada"], options={"difficulty": "easy"})
+        state = engine.state.as_dict()
+        self.assertEqual("target_rush", state["game_type"])
+        self.assertTrue(state["overlay"]["targets"])
+        self.assertIn("Triff", state["overlay"]["prompt"])
+
+    def test_avoid_bomb_exposes_danger_overlay(self):
+        engine = GameEngine()
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertEqual(2, len(overlay["danger"]))
+
+    def test_color_clash_scores_colored_segments(self):
+        engine = GameEngine()
+        engine.reset("color_clash", ["Ada"], options={"shuffle": "turn"})
+        colors = engine.state.mode_state["colors"]
+        first_id, color = next(iter(colors.items()))
+        label = "DBull" if first_id == "DBULL" else "SBull" if first_id == "SBULL" else first_id
+        if label.startswith("T"):
+            field, multiplier, score, ring = int(label[1:]), 3, int(label[1:]) * 3, "triple"
+        elif label.startswith("D") and label != "DBull":
+            field, multiplier, score, ring = int(label[1:]), 2, int(label[1:]) * 2, "double"
+        elif label == "DBull":
+            field, multiplier, score, ring = 25, 2, 50, "double_bull"
+        elif label == "SBull":
+            field, multiplier, score, ring = 25, 1, 25, "single_bull"
+        else:
+            field, multiplier, score, ring = int(label[1:]), 1, int(label[1:]), "single_outer"
+        event = hit(score, 99, field=field, multiplier=multiplier, label=label)
+        event["ring"] = ring
+        engine.handle_event(event)
+        self.assertEqual({"gold": 50, "cyan": 25, "green": 10, "red": -25}[color], engine.state.players[0].score)
 
 
 if __name__ == "__main__":

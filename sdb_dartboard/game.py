@@ -46,6 +46,7 @@ class GameState:
     options: Dict[str, Any] = field(default_factory=dict)
     turn_start_values: Dict[str, int] = field(default_factory=dict)
     round_number: int = 1
+    mode_state: Dict[str, Any] = field(default_factory=dict)
 
     def current_player(self) -> Optional[Player]:
         if not self.players:
@@ -73,6 +74,7 @@ class GameState:
             "message": self.message,
             "turn_start_values": dict(self.turn_start_values),
             "round_number": self.round_number,
+            "mode_state": dict(self.mode_state),
         }
 
     def restore_snapshot(self, snap: Dict[str, Any]) -> None:
@@ -95,6 +97,7 @@ class GameState:
         self.message = snap["message"]
         self.turn_start_values = dict(snap.get("turn_start_values", {}))
         self.round_number = int(snap.get("round_number", 1))
+        self.mode_state = dict(snap.get("mode_state", {}))
 
     def advice(self) -> Optional[Dict[str, Any]]:
         if self.game_type != "x01" or self.status not in ("running", "hold"):
@@ -104,6 +107,15 @@ class GameState:
             return None
         darts_left = max(0, 3 - self.darts_in_turn)
         return x01_advice(player.score, darts_left, str(self.options.get("out_rule", "straight")))
+
+    def overlay(self) -> Optional[Dict[str, Any]]:
+        if self.status == "idle":
+            return None
+        mode = registry.get(self.game_type)
+        getter = getattr(mode, "get_overlay", None)
+        if getter is None:
+            return None
+        return getter(self)
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -133,6 +145,7 @@ class GameState:
             "mode": registry.get(self.game_type).metadata.as_dict() if self.status != "idle" else None,
             "cricket_targets": CRICKET_TARGETS,
             "advice": self.advice(),
+            "overlay": self.overlay(),
             "throws": [
                 {
                     "seq": throw.seq,
@@ -199,6 +212,9 @@ class GameEngine:
             options=resolved_options,
             turn_start_values={player.id: player.score for player in resolved_players},
         )
+        initializer = getattr(mode, "initialize_state", None)
+        if initializer is not None:
+            initializer(self.state, resolved_options)
         return self.state
 
     def export_state(self) -> Dict[str, Any]:

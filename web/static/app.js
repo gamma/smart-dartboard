@@ -39,7 +39,9 @@ function modeBySlug(slug){
   return appState.experience?.modes.find(mode => mode.slug === slug);
 }
 function modeAsset(slug){
-  return `/static/assets/modes/${encodeURIComponent(slug)}.webp`;
+  const known = new Set(['countup','x01','cricket']);
+  const safe = known.has(slug) ? slug : 'countup';
+  return `/static/assets/modes/${encodeURIComponent(safe)}.webp`;
 }
 function avatarEmoji(avatar){
   return AVATARS.find(option => option.id === avatar)?.emoji || '🎯';
@@ -461,6 +463,12 @@ function projectorAdvice(game){
   return `<aside class="projector-advice ${escapeHtml(advice.status)}"><span>${headline}</span><b>${escapeHtml(advice.primary.label)}</b><small>${escapeHtml(sequence || advice.message || '')}</small></aside>`;
 }
 
+function projectorOverlayPrompt(game){
+  const overlay = game.overlay;
+  if(!overlay?.prompt || game.status === 'hold' || game.game_type === 'x01') return '';
+  return `<aside class="projector-advice arcade"><span>ARCADE</span><b>${escapeHtml(overlay.prompt)}</b><small>${escapeHtml(overlay.combo?.count ? `Combo x${overlay.combo.count}` : '')}</small></aside>`;
+}
+
 function projectorPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -474,6 +482,7 @@ function projectorPlaying(){
       <div>${game.darts_in_turn}/3 DARTS · ${game.turn_score} PTS</div>
     </footer>
     ${projectorAdvice(game)}
+    ${projectorOverlayPrompt(game)}
     <aside class="projection-roster">${game.players.map(item=>`<span class="${item.id===game.current_player_id?'active':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
     ${testMode?'<div class="projector-test-tools"><b>TESTMODUS</b><span>Scheibensegment anklicken</span><button data-action="test-miss">MISS</button></div>':''}
   </section>`;
@@ -525,7 +534,17 @@ function ringToZone(ring){
   return ({double:'double',triple:'triple',single_inner:'singleInner',single_outer:'singleOuter',single_bull:'singleBull',double_bull:'doubleBull'})[ring];
 }
 function renderBoardEvent(event){
-  document.querySelectorAll('.seg.hit,.seg.miss-zone,.seg.advice-target').forEach(element=>element.classList.remove('hit','miss-zone','advice-target'));
+  document.querySelectorAll('.seg.hit,.seg.miss-zone,.seg.advice-target,.seg.overlay-target,.seg.overlay-danger,.seg.overlay-bonus').forEach(element=>element.classList.remove('hit','miss-zone','advice-target','overlay-target','overlay-danger','overlay-bonus'));
+  const overlay = appState.experience?.game?.overlay;
+  const paint = (items, cls) => (items || []).forEach(item => {
+    const segment = $(boardSegmentId(ringToZone(item.ring), item.field));
+    if(segment) segment.classList.add(cls);
+  });
+  if(appState.experience?.game?.status === 'running'){
+    paint(overlay?.targets, 'overlay-target');
+    paint(overlay?.danger, 'overlay-danger');
+    paint(overlay?.bonus, 'overlay-bonus');
+  }
   const advice = appState.experience?.game?.advice;
   if(advice?.primary && appState.experience?.game?.status === 'running'){
     const target = advice.primary;
