@@ -104,7 +104,7 @@ class CandyCannonMode:
                 },
             ]
         return {
-            "prompt": "BEREIT · JETZT BULL TREFFEN!" if ready else "ZIEL: 8, 9 ODER 10 · DANN BULL",
+            "prompt": "BEREIT · JETZT BULL TREFFEN!" if ready else "LADUNG AUF 8–10 STELLEN · DANN MIT BULL FEUERN",
             "targets": targets,
             "panel": {
                 "title": "CANDY CANNON",
