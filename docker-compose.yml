@@ -2,15 +2,20 @@ services:
   dartboard:
     build: .
     container_name: sdb-dartboard
-    network_mode: host
-    privileged: true
+    ports:
+      - "8000:8000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
     volumes:
-      - /var/run/dbus:/var/run/dbus
+      - /var/run/dbus:/var/run/dbus:ro
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
       - SDB_ENABLE_BLE=1
       - SDB_DEVICE_NAME=SDB-BT
+      - SDB_DEVICE_ADDRESS=${SDB_DEVICE_ADDRESS:-}
       - SDB_DATA_DIR=/app/data
       - SDB_ALLOW_TEST_EVENTS=0
     command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]

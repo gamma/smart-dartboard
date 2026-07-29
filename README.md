@@ -66,6 +66,12 @@ SDB_ALLOW_TEST_EVENTS=0
 Der Boardstatus wird auf beiden Oberflächen angezeigt. `/api/health` meldet
 Datenbank- und BLE-Status.
 
+Für den Arcade-Betrieb sollte `SDB_DEVICE_ADDRESS` gesetzt und Port `8000`
+ausschließlich im isolierten Dartboard-Netz erreichbar sein. Browsersteuerung
+und WebSocket akzeptieren nur denselben Origin; native Wartungsskripte ohne
+`Origin` bleiben im lokalen Netz nutzbar. Weitere Hinweise:
+[Betrieb und Sicherheit](docs/OPERATIONS.md).
+
 ## Docker
 
 ```bash

@@ -13,6 +13,32 @@ Raspberry Pi 4/5 oder Mini-PC
 
 Das System benötigt im Spielbetrieb keine Internetverbindung.
 
+## Netzwerk- und Sicherheitsmodell
+
+Die Anwendung ist für genau ein Dartboard in einem isolierten lokalen Netz
+gedacht. Sie besitzt bewusst keine Benutzerkonten. Deshalb gelten für den
+Betrieb diese Grenzen:
+
+- Port `8000` nur im internen Dartboard-Netz freigeben und niemals per
+  Router-Portfreigabe oder öffentlichem Reverse Proxy ins Internet stellen.
+- Controller und Projektor aus demselben Origin öffnen, zum Beispiel beide
+  über `http://dartboard.local:8000`. Fremde Browser-Origins und WebSockets
+  werden abgewiesen.
+- Das Board nicht gemeinsam mit einem unkontrollierten Gast-WLAN betreiben.
+  Falls das unvermeidbar ist, den Zugriff per Host-Firewall auf die festen
+  Controller-/Projektor-Adressen begrenzen.
+- `SDB_ALLOW_TEST_EVENTS=0` im Produktivbetrieb beibehalten.
+- Nach Möglichkeit `SDB_DEVICE_ADDRESS` auf die feste BLE-Adresse der echten
+  Scheibe setzen. Dann verbindet sich der Dienst nicht allein anhand des
+  Gerätenamens.
+
+Der Container läuft ohne `privileged`, ohne Host-Netzwerk, ohne zusätzliche
+Linux-Capabilities und mit `no-new-privileges`. Für BLE wird nur der
+D-Bus-Socket des Hosts read-only eingebunden. Falls die lokale
+BlueZ-Konfiguration den Zugriff darüber verweigert, sollte gezielt die
+D-Bus-/BlueZ-Berechtigung angepasst werden; `privileged: true` ist nicht der
+empfohlene Rückweg.
+
 ## Erstinstallation
 
 1. Linux und BlueZ installieren und Bluetooth aktivieren.
