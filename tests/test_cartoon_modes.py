@@ -155,6 +155,26 @@ class CartoonModeTests(unittest.TestCase):
         engine.handle_event(hit(25, "single_bull", 1, 5))
         self.assertEqual(0, player.score)
 
+    def test_cookie_overlay_uses_cookie_props_and_marks_bull_as_milk(self):
+        engine = GameEngine()
+        engine.reset("cookie_monster", ["Ada"])
+
+        overlay = engine.state.as_dict()["overlay"]
+        cookie_items = overlay["bonus"] + overlay["targets"] + overlay["danger"]
+
+        self.assertEqual(12, sum(
+            item.get("icon") in {"cookie", "cookie_moldy"}
+            for item in cookie_items
+        ))
+        self.assertEqual(
+            {"single_bull", "double_bull"},
+            {
+                item["ring"] for item in overlay["bonus"]
+                if item.get("icon") == "milk"
+            },
+        )
+        self.assertEqual(5, len(overlay["visual_legend"]))
+
     def test_space_defender_team_win_has_all_winners(self):
         engine = GameEngine()
         engine.reset("space_defender", ["Ada", "Bob"], options={"waves": 4})

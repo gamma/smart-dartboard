@@ -7,6 +7,16 @@ from .arcade import TARGET_POOL_NORMAL, finish_round_game, overlay_item, zone_id
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 COOKIE_POINTS = {"gold": 50, "blue": 25, "green": 10, "moldy": -30}
+COOKIE_COLORS = {
+    "gold": "#ffcf33",
+    "blue": "#55c7dc",
+    "green": "#69c98f",
+    "moldy": "#9dac76",
+}
+MILK_BULLS = [
+    {"label": "SBull", "field": 25, "ring": "single_bull"},
+    {"label": "DBull", "field": 25, "ring": "double_bull"},
+]
 
 
 class CookieMonsterMode:
@@ -14,7 +24,7 @@ class CookieMonsterMode:
         slug="cookie_monster",
         title="Cookie Monster",
         tagline="Naschen, retten, Sugar Rush",
-        description="Sammle gute Cookies, meide schimmlige und rette deinen Turn mit einem Schluck Bull-Milch.",
+        description="Triff die sichtbaren Cookies auf der Scheibe, meide Schimmel und rette deinen Turn mit Bull-Milch.",
         accent="#e9a23b",
         accent_secondary="#68b0ab",
         visual="cookie-monster",
@@ -26,9 +36,10 @@ class CookieMonsterMode:
             ]),
         ],
         instructions=[
-            InstructionStep("Cookies sammeln", "Gold +50, Blau +25, Grün +10 und schimmlig -30.", "cookie"),
-            InstructionStep("Milch-Bull", "Bull verdoppelt einen positiven Turn oder rettet einen negativen.", "milk"),
-            InstructionStep("Sugar Rush", "Drei gute Cookies in Folge verdoppeln deinen nächsten guten Cookie.", "combo"),
+            InstructionStep("Cookie-Feld treffen", "Nur Segmente mit einem sichtbaren Cookie geben Cookie-Punkte.", "cookie"),
+            InstructionStep("Cookie-Farbe zählt", "Gold +50, Blau +25, Grün +10 und Schimmel -30.", "score"),
+            InstructionStep("Bull ist Milch", "Bull verdoppelt einen positiven Turn oder rettet einen negativen.", "milk"),
+            InstructionStep("Drei gute laden Rush", "Der nächste gute Cookie zählt danach doppelt.", "combo"),
         ],
         sound_theme="arcade",
     )
@@ -59,6 +70,19 @@ class CookieMonsterMode:
 
     def _reset_streak(self, state: Any, player: Any) -> None:
         state.mode_state["streak"][player.id] = 0
+
+    def _cookie_overlay(
+        self,
+        dart: Dict[str, Any],
+        kind: str,
+        label: str,
+    ) -> Dict[str, Any]:
+        item = overlay_item(dart, COOKIE_COLORS[kind], label, kind == "moldy")
+        item.update({
+            "icon": "cookie_moldy" if kind == "moldy" else "cookie",
+            "variant": kind,
+        })
+        return item
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         is_bull = event.get("type") == "hit" and int(event.get("field", 0)) == 25
@@ -108,12 +132,27 @@ class CookieMonsterMode:
         current = state.current_player()
         sugar = bool(state.mode_state.get("sugar", {}).get(current.id if current else "", False))
         streak = int(state.mode_state.get("streak", {}).get(current.id if current else "", 0))
+        milk = [
+            {
+                **overlay_item(dart, "#8fd3ff", "MILCH" if index == 0 else "", True),
+                "icon": "milk",
+                "variant": "milk",
+            }
+            for index, dart in enumerate(MILK_BULLS)
+        ]
         return {
-            "prompt": "Cookies sammeln · Bull ist Milch",
-            "bonus": [overlay_item(d, "gold", "+50", False) for d in groups["gold"]],
-            "targets": [overlay_item(d, "cyan", "+25", False) for d in groups["blue"]]
-                + [overlay_item(d, "green", "+10", False) for d in groups["green"]],
-            "danger": [overlay_item(d, "red", "-30", True) for d in groups["moldy"]],
+            "prompt": "COOKIE-FELDER TREFFEN · BULL = MILCH",
+            "bonus": [self._cookie_overlay(d, "gold", "+50") for d in groups["gold"]] + milk,
+            "targets": [self._cookie_overlay(d, "blue", "+25") for d in groups["blue"]]
+                + [self._cookie_overlay(d, "green", "+10") for d in groups["green"]],
+            "danger": [self._cookie_overlay(d, "moldy", "-30") for d in groups["moldy"]],
+            "visual_legend": [
+                {"icon": "cookie", "color": COOKIE_COLORS["gold"], "label": "Gold-Cookie", "value": "+50"},
+                {"icon": "cookie", "color": COOKIE_COLORS["blue"], "label": "Blauer Cookie", "value": "+25"},
+                {"icon": "cookie", "color": COOKIE_COLORS["green"], "label": "Grüner Cookie", "value": "+10"},
+                {"icon": "cookie_moldy", "color": COOKIE_COLORS["moldy"], "label": "Schimmel", "value": "-30"},
+                {"icon": "milk", "color": "#8fd3ff", "label": "Bull-Milch", "value": "Turn ×2 / retten"},
+            ],
             "panel": {
                 "title": "COOKIE COMBO",
                 "headline": "SUGAR RUSH BEREIT!" if sugar else f"Serie {streak}/3",

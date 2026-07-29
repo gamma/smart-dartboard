@@ -55,6 +55,11 @@ const MODE_AMBIENCE = {
   robin_hood:'leaves', simon_says:'signals', space_defender:'space',
   target_rush:'streaks', treasure_hunt:'gems', x01:'streaks',
 };
+const OVERLAY_ICON_ASSETS = {
+  cookie:'/static/assets/effects/cookie.webp',
+  cookie_moldy:'/static/assets/effects/cookie_moldy.webp',
+  milk:'/static/assets/effects/milk.webp',
+};
 
 function $(id){ return document.getElementById(id); }
 function isProjector(){ return location.pathname.includes('projector'); }
@@ -70,6 +75,20 @@ function promptMarkup(value){
     .filter(Boolean);
   if(parts.length<2) return escapeHtml(parts[0] || '');
   return `<i class="stacked-prompt">${parts.map(part=>`<em>${escapeHtml(part)}</em>`).join('\n')}</i>`;
+}
+function overlayIconAsset(icon){
+  return OVERLAY_ICON_ASSETS[String(icon || '')] || '';
+}
+function visualLegendMarkup(items, placement){
+  const entries=(items || []).map(item=>{
+    const asset=overlayIconAsset(item.icon);
+    if(!asset) return '';
+    return `<div class="visual-legend-item variant-${escapeHtml(item.icon)}" style="--legend-color:${escapeHtml(item.color || '#e9a23b')}">
+      <img src="${asset}" alt="">
+      <p><strong>${escapeHtml(item.label || '')}</strong><small>${escapeHtml(item.value || '')}</small></p>
+    </div>`;
+  }).join('');
+  return entries ? `<div class="overlay-visual-legend ${escapeHtml(placement || '')}">${entries}</div>` : '';
 }
 function modeBySlug(slug){
   return appState.experience?.modes.find(mode => mode.slug === slug);
@@ -534,10 +553,12 @@ function controlModePrompt(game){
     : Number.isFinite(overlay.pot)
       ? `POT ${overlay.pot}`
       : '';
+  const visualLegend=visualLegendMarkup(overlay.visual_legend,'control-visual-legend');
   return `<aside class="control-mode-prompt">
     <span>AKTUELLE AUFGABE</span>
     <b>${promptMarkup(overlay.prompt)}</b>
     ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+    ${visualLegend}
   </aside>`;
 }
 function genericPanel(panel, compact=false){
@@ -834,7 +855,8 @@ function projectorOverlayPrompt(game){
     : overlay.prompt;
   const label=game.game_type==='simon_says' && !appState.memoryHidden ? '3 SEKUNDEN MERKEN' : 'ZIEL';
   const detail=overlay.combo?.count ? `Combo ×${overlay.combo.count}` : '';
-  return `<aside class="projector-advice arcade"><span>${label}</span><b>${promptMarkup(prompt)}</b>${detail?`<small>${escapeHtml(detail)}</small>`:''}</aside>`;
+  const visualLegend=visualLegendMarkup(overlay.visual_legend,'projector-visual-legend');
+  return `<aside class="projector-advice arcade"><span>${label}</span><b>${promptMarkup(prompt)}</b>${detail?`<small>${escapeHtml(detail)}</small>`:''}${visualLegend}</aside>`;
 }
 function projectorModePanel(game){
   const overlay = game.overlay || {};
@@ -1016,15 +1038,35 @@ function renderBoardEvent(event){
   const overlay = appState.experience?.game?.overlay;
   const labelLayer=$('overlayLabels');
   if(labelLayer) labelLayer.innerHTML='';
+  const paintedProps=new Set();
   const paintLabel = item => {
-    if(!labelLayer || !item.label) return;
+    if(!labelLayer || (!item.label && !item.icon)) return;
     const index=BOARD_ORDER.indexOf(Number(item.field));
     const radii={double:222,triple:129,single_inner:78,single_outer:176,single_bull:30,double_bull:0};
     const radius=radii[item.ring];
     const isBull=Number(item.field)===25;
     if(radius===undefined || (!isBull && index<0)) return;
     const [x,y]=isBull ? [250,250] : polar(250,250,radius,index*18);
-    labelLayer.insertAdjacentHTML('beforeend',`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(item.label)}</text>`);
+    const asset=overlayIconAsset(item.icon);
+    if(!asset){
+      labelLayer.insertAdjacentHTML('beforeend',`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(item.label)}</text>`);
+      return;
+    }
+    const propKey=isBull ? `${item.icon}:bull` : `${item.icon}:${item.ring}:${item.field}`;
+    if(paintedProps.has(propKey)) return;
+    paintedProps.add(propKey);
+    const fieldHit=event?.type==='hit' && Number(event.field)===Number(item.field);
+    const propHit=fieldHit && (item.icon==='milk' || String(event.ring)===String(item.ring));
+    const variant=/^[a-z_]+$/.test(String(item.variant || '')) ? item.variant : 'default';
+    const width=item.icon==='milk'?26:30;
+    const height=item.icon==='milk'?36:30;
+    const imageY=y-height/2-(item.label?5:0);
+    const labelY=y+height/2+4;
+    labelLayer.insertAdjacentHTML('beforeend',`<g class="overlay-prop variant-${variant} ${propHit?'overlay-prop-hit':''}">
+      <circle class="overlay-prop-halo" cx="${x}" cy="${y-3}" r="${item.icon==='milk'?18:17}" fill="${escapeHtml(item.color || '#e9a23b')}"></circle>
+      <image href="${asset}" x="${x-width/2}" y="${imageY}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"></image>
+      ${item.label?`<text x="${x}" y="${labelY}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(item.label)}</text>`:''}
+    </g>`);
   };
   const paint = (items, cls) => (items || []).forEach(item => {
     const segment = $(boardSegmentId(ringToZone(item.ring), item.field));

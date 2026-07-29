@@ -127,14 +127,14 @@ ImageGen erzeugt. Der Generierungsablauf wurde überwiegend durch GPT-5.6-sol
 gesteuert. Die lokale Codex-Sitzung und die noch vorhandenen
 ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 
-- 50 direkte ImageGen-Aufrufe sowie ein anfänglicher Batch mit drei
+- 52 direkte ImageGen-Aufrufe sowie ein anfänglicher Batch mit drei
   ImageGen-Aufrufen liefen in einer mit `gpt-5.6-sol` gesteuerten
   Codex-Sitzung.
 - Die C2PA-Manifeste der geprüften Original-PNGs nennen
   `OpenAI Media Service API`, den Software-Agenten `gpt-image` in Version `2.0`
   und den digitalen Quelltyp `trainedAlgorithmicMedia`.
-- Aus insgesamt 53 erzeugten Ergebnissen wurden die heute vorhandenen 37 Cover
-  und 13 Effekte ausgewählt; drei Cover-Kandidaten wurden verworfen oder
+- Aus insgesamt 55 erzeugten Ergebnissen wurden die heute vorhandenen 37 Cover
+  und 15 Effekte ausgewählt; drei Cover-Kandidaten wurden verworfen oder
   ersetzt. Sämtliche übergebenen Bildreferenzen zeigen auf bereits lokal
   erzeugte Dateien dieses Projekts. Fremde Bilder, Logos oder
   Markenreferenzen wurden in den protokollierten Aufrufen nicht verwendet.
@@ -146,7 +146,7 @@ ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 |---|---|---|---|---|
 | Playful-Cartoon-Cover | 24 ImageGen-Ergebnisse; `heart_chase` nur aus Text erzeugt, danach als interne Stilreferenz für alle weiteren Cover | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | ImageMagick: mittiger Zuschnitt auf 900 × 640, WebP-Qualität 88 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 | Classic-Neon-Cover | 13 ImageGen-Ergebnisse; `countup`, `x01` und `cricket` nur aus Text, danach als interne Stilreferenzen für die weiteren Neon-Cover | `gpt-image` 2.0; 28.–29.07.2026; gesteuert mit `gpt-5.6-sol` | historische Versionen aus Git-Commit `54ba4a3` wiederhergestellt, mittig auf 900 × 640 gebracht und als WebP mit Qualität 88 exportiert | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
-| animierte 3D-Props | 13 ImageGen-Ergebnisse; zwölf Props mit `heart_chase` als interner Referenz, `candy_overheat` mit `candy_cannon` und `candy` | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt, beschnitten, auf höchstens 512 × 512 skaliert und als Alpha-WebP exportiert; `candy_overheat` 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
+| animierte 3D-Props | 15 ImageGen-Ergebnisse; zwölf Props mit `heart_chase` als interner Referenz, `candy_overheat` mit `candy_cannon` und `candy`, `cookie_moldy` und `milk` mit `heart_chase` und `cookie` | `gpt-image` 2.0; 29.–30.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt, beschnitten, auf höchstens 512 × 512 skaliert und als Alpha-WebP exportiert; `candy_overheat` 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 
 Der Neon-Basis-Prompt beschreibt somit reproduzierbar die sichtbare
 Bildsprache. Die historischen Einzelprompts sind zusätzlich in der lokalen
@@ -166,6 +166,8 @@ wartbare Zusammenfassung und kein behaupteter wortgleicher Originalprompt.
 5. Zwölf Ambient-Props wurden einzeln vor Grün beziehungsweise Magenta erzeugt
    und lokal freigestellt. Der spätere Candy-Overheat-Effekt verwendete nur das
    eigene Candy-Cannon-Cover und den eigenen Candy-Prop als Referenzen.
+6. Am 30.07.2026 entstanden `cookie_moldy` und `milk` mit dem eigenen
+   Heart-Chase-Cover und Cookie-Prop als einzigen Bildreferenzen.
 
 Die zugehörigen Git-Commits sind `179cf40` für die ersten drei Cover,
 `e5f3192` für die ergänzten Neon-Artworks, `475d23f` für das vollständige
@@ -217,6 +219,8 @@ Qualitätsstufe 90 gespeichert. Die aktuelle Bibliothek umfasst:
 | `heart.webp` | Stoffherz | Heart Chase |
 | `egg.webp` | bemaltes Spielzeugei | Dragon Eggs |
 | `cookie.webp` | weicher Schoko-Cookie | Cookie Monster |
+| `cookie_moldy.webp` | schimmliger Filz-Cookie | Cookie Monster Gefahrenziel |
+| `milk.webp` | cremeblaue Filz-Milchflasche | Cookie Monster Bull-Milch |
 | `candy.webp` | eingewickeltes Bonbon | Candy Cannon |
 | `block.webp` | abgerundeter Puzzleblock | Block Drop |
 | `billiard.webp` | schwarze Achterkugel | Eight Ball |
@@ -239,4 +243,44 @@ outward. Energetic and unmistakably explosive, but playful, family-friendly
 and made from tactile felt, painted clay and paper. Keep the complete silhouette
 inside the square canvas with generous margin. No cannon, dartboard, text,
 realistic fire, dark soot or translucent smoke.
+```
+
+### Cookie-Monster-Zusatzprops
+
+Beide Assets wurden am 30.07.2026 mit dem eingebauten OpenAI ImageGen
+(`gpt-image` 2.0), gesteuert durch `gpt-5.6-sol`, erzeugt. Referenzen waren
+ausschließlich `web/static/assets/modes/heart_chase.webp` und
+`web/static/assets/effects/cookie.webp`. Die Chroma-Flächen wurden mit
+`remove_chroma_key.py` und weicher Matte entfernt; anschließend wurden die
+Ergebnisse mit `cwebp` auf 512 × 512 Pixel und Alpha-WebP-Qualität 90
+konvertiert.
+
+Finaler Prompt für `cookie_moldy.webp`:
+
+```text
+Use case: stylized-concept
+Asset type: isolated high-resolution 3D prop sprite for the Smart Dartboard Cookie Monster mode
+Input images: Image 1 is the mandatory Playful Cartoon style reference; Image 2 is the existing good cookie prop whose scale, plush material, camera angle and silhouette should be closely matched.
+Primary request: Render one clearly spoiled moldy chocolate-chip cookie. Keep the same round, thick, soft felt/plush cookie construction as the good cookie, but make it desaturated gray-brown with several unmistakable fuzzy sage-green and pale mint mold spots and a few darker stale cracks. It should look comically unpleasant and safe, not disgusting or realistic.
+Style/medium: polished cinematic stylized 3D animation render; tactile felt and soft plush fibers, rounded handcrafted toy shapes, believable depth and crisp surface detail.
+Composition/framing: exactly one complete round cookie centered in a square canvas, same slight three-quarter top view as the reference cookie, generous clean margin, no cropping, readable at 40–80 px.
+Lighting/mood: warm soft studio key light with clear readable mold texture; playful family arcade mood.
+Background: perfectly flat solid #ff00ff chroma-key magenta, uniformly lit, no floor, horizon, cast shadow, gradient, texture, reflection, or magenta spill.
+Constraints: exactly one cookie; no face, eyes, limbs, plate, crumbs, dartboard, people, text, letters, logo, watermark or border; do not use #ff00ff anywhere in the cookie.
+Avoid: photoreal food photography, slime, insects, gore, gross wet decay, emoji styling, flat vector art, dark nightclub style, neon tubes or heavy bloom.
+```
+
+Finaler Prompt für `milk.webp`:
+
+```text
+Use case: stylized-concept
+Asset type: isolated high-resolution 3D prop sprite for the Smart Dartboard Cookie Monster mode
+Input images: Image 1 is the mandatory Playful Cartoon style reference; Image 2 establishes the soft plush material, scale and friendly prop rendering.
+Primary request: Render one instantly recognizable small old-fashioned milk bottle made as a soft handcrafted arcade toy. The bottle is opaque warm cream-white felt with a rounded sky-blue cap and a simple blue felt band around its middle, with a tiny soft white milk splash frozen just above the opening. Keep it charming, readable and clearly associated with milk without any written label.
+Style/medium: polished cinematic stylized 3D animation render; tactile felt, plush stitching and softly painted clay details; rounded friendly toy shapes, believable depth and crisp silhouette.
+Composition/framing: exactly one complete upright bottle centered in a square canvas, slight three-quarter view, generous clean margin, no cropping, readable at 35–80 px.
+Lighting/mood: warm soft studio key light, cheerful family arcade mood, clear cream and blue separation.
+Background: perfectly flat solid #00ff00 chroma-key green, uniformly lit, no floor, horizon, cast shadow, gradient, texture, reflection, or green spill.
+Constraints: exactly one bottle with one small attached splash; opaque materials only; no cookie, dartboard, people, face, eyes, limbs, text, letters, logo, brand, watermark or border; do not use #00ff00 anywhere in the prop.
+Avoid: transparent glass, photoreal liquid, product photography, emoji styling, flat vector art, multiple bottles, scenery, dark nightclub style, neon tubes or heavy bloom.
 ```
