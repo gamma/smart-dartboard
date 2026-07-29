@@ -246,10 +246,22 @@ class CartoonModeTests(unittest.TestCase):
 
         engine.handle_event(hit(25, "single_bull", 1, 1))
         self.assertEqual(piece_index + 1, engine.state.mode_state["piece_index"])
+        self.assertEqual("running", engine.state.status)
+        self.assertEqual(1, engine.state.darts_in_turn)
 
-        engine.continue_turn()
         engine.handle_event(hit(25, "double_bull", 2, 2))
         self.assertEqual(piece_index + 2, engine.state.mode_state["piece_index"])
+        self.assertEqual("running", engine.state.status)
+        self.assertEqual(2, engine.state.darts_in_turn)
+
+    def test_block_drop_can_end_turn_after_drop_by_option(self):
+        engine = GameEngine()
+        engine.reset("block_drop", ["Ada"], options={"drop_flow": "hold"})
+
+        engine.handle_event(hit(25, "single_bull", 1, 1))
+
+        self.assertEqual("hold", engine.state.status)
+        self.assertEqual(1, engine.state.darts_in_turn)
 
     def test_block_drop_overlay_uses_four_contiguous_color_areas(self):
         engine = GameEngine()

@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, List, Tuple
 
-from .base import GameMetadata, InstructionStep, ThrowOutcome
+from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 WIDTH = 5
 HEIGHT = 8
@@ -49,9 +49,21 @@ class BlockDropMode:
         accent_secondary="#81b29a",
         visual="block-drop",
         icon="blocks",
+        options=[
+            GameOption(
+                "drop_flow",
+                "Nach Drop",
+                "choice",
+                "continue",
+                [
+                    {"value": "continue", "label": "Weiterwerfen"},
+                    {"value": "hold", "label": "Zug beenden"},
+                ],
+            ),
+        ],
         instructions=[
             InstructionStep("Vier große Flächen", "Die vier Farbbögen bewegen links/rechts oder drehen links/rechts.", "controls"),
-            InstructionStep("Bull ist Drop", "Single Bull und Double Bull setzen den Stein sofort. Double Bull gibt +25.", "power"),
+            InstructionStep("Bull ist Drop", "Beide Bulls setzen sofort. Standardmäßig darfst du mit dem nächsten Stein weiterwerfen.", "power"),
             InstructionStep("Gemeinsamer Takt", "Erst nachdem alle gespielt haben, fällt der Stein automatisch eine Zeile.", "round"),
             InstructionStep("Fünf Linien", "Löscht gemeinsam fünf Linien, bevor ein Stein oben herausragt.", "blocks"),
         ],
@@ -255,7 +267,11 @@ class BlockDropMode:
         if not can_continue:
             return self._finish(state, False, "BLOCK OUT! Das Feld ist voll", points)
         detail = f" · {cleared} Linie{'n' if cleared != 1 else ''}!" if cleared else ""
-        return ThrowOutcome(points, f"{action} · +{points}{detail}", force_hold=True)
+        return ThrowOutcome(
+            points,
+            f"{action} · +{points}{detail}",
+            force_hold=state.options.get("drop_flow", "continue") == "hold",
+        )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         board = [list(row) for row in state.mode_state.get("board", [])]
