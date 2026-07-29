@@ -122,11 +122,12 @@ class DartboardStore:
         session = {"id": str(uuid4()), "status": "active", "started_at": utc_now()}
         with self._lock, self._connection:
             known = {
-                row["id"]
-                for row in self._connection.execute(
-                    f"SELECT id FROM players WHERE id IN ({','.join('?' for _ in ids)})",
-                    ids,
-                ).fetchall()
+                player_id
+                for player_id in ids
+                if self._connection.execute(
+                    "SELECT 1 FROM players WHERE id=?",
+                    (player_id,),
+                ).fetchone()
             }
             missing = [player_id for player_id in ids if player_id not in known]
             if missing:
@@ -297,13 +298,8 @@ class DartboardStore:
         return result
 
     def statistics(self, player_ids: Optional[Iterable[str]] = None) -> List[Dict[str, Any]]:
-        ids = list(player_ids or [])
-        where = ""
-        params: List[Any] = []
-        if ids:
-            where = f"WHERE p.id IN ({','.join('?' for _ in ids)})"
-            params.extend(ids)
-        query = f"""
+        selected_ids = set(player_ids or [])
+        query = """
             SELECT p.id, p.name, p.avatar, p.color,
                    COUNT(DISTINCT CASE WHEN g.status='finished' THEN g.id END) AS games,
                    COUNT(DISTINCT CASE WHEN g.winner_id=p.id THEN g.id END) AS wins,
@@ -316,15 +312,16 @@ class DartboardStore:
             LEFT JOIN games g ON g.session_id=sp.session_id
             LEFT JOIN throws t
               ON t.game_id=g.id AND t.player_id=p.id AND g.status!='aborted'
-            {where}
             GROUP BY p.id
             ORDER BY wins DESC, total_points DESC, lower(p.name)
         """
         with self._lock:
-            rows = self._connection.execute(query, params).fetchall()
+            rows = self._connection.execute(query).fetchall()
         result = []
         for row in rows:
             item = dict(row)
+            if selected_ids and item["id"] not in selected_ids:
+                continue
             item["three_dart_average"] = round(
                 item["total_points"] / item["darts"] * 3, 2
             ) if item["darts"] else 0

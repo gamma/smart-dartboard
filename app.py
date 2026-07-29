@@ -8,14 +8,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from sdb_dartboard.client import SdbDartboardClient
 from sdb_dartboard.game import GameEngine
 from sdb_dartboard.session import EventPipeline, SessionController
+from sdb_dartboard.validation import DartEventRequest, same_origin
 from sdb_dartboard.ws import ConnectionManager
 
 LOG = logging.getLogger(__name__)
@@ -90,10 +91,43 @@ app = FastAPI(title="SDB Dartboard", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=STATIC), name="static")
 
 
+@app.middleware("http")
+async def protect_browser_mutations(request: Request, call_next):
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and not same_origin(
+        request.headers.get("origin"), request.headers.get("host")
+    ):
+        response = JSONResponse(
+            status_code=403,
+            content={"detail": "Cross-origin control requests are not allowed"},
+        )
+    else:
+        response = await call_next(request)
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+        "script-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'; "
+        "base-uri 'none'; form-action 'self'"
+    )
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
 class NewGameRequest(BaseModel):
     game_type: str = "countup"
-    players: List[str] = Field(default_factory=lambda: ["Player 1", "Player 2"])
-    x01_start_score: int = 501
+    players: List[str] = Field(
+        default_factory=lambda: ["Player 1", "Player 2"],
+        min_length=1,
+        max_length=8,
+    )
+    x01_start_score: int = Field(default=501)
+
+    @field_validator("players")
+    @classmethod
+    def validate_player_names(cls, players: List[str]) -> List[str]:
+        cleaned = [name.strip() for name in players]
+        if any(not name or len(name) > 32 for name in cleaned):
+            raise ValueError("Player names must contain 1–32 characters")
+        return cleaned
 
 
 class PlayerRequest(BaseModel):
@@ -120,8 +154,14 @@ class ScreenRequest(BaseModel):
     screen: str
 
 
+class CalibrationPoint(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    x: float = Field(ge=0.0, le=1.0)
+    y: float = Field(ge=0.0, le=1.0)
+
+
 class CalibrationRequest(BaseModel):
-    corners: List[Dict[str, float]]
+    corners: List[CalibrationPoint] = Field(min_length=4, max_length=4)
     scale: float = Field(default=1.0, ge=0.5, le=2.0)
     offset_x: float = Field(default=0.0, ge=-1.0, le=1.0)
     offset_y: float = Field(default=0.0, ge=-1.0, le=1.0)
@@ -142,7 +182,7 @@ class SoundStatusRequest(BaseModel):
 
 class ThrowCorrectionRequest(BaseModel):
     turn_index: int = Field(ge=0, le=2)
-    event: Dict[str, Any]
+    event: DartEventRequest
 
 
 @app.exception_handler(ValueError)
@@ -319,6 +359,11 @@ async def sound_test():
 # Compatibility endpoint for scripts and the original control interface.
 @app.post("/api/new-game")
 async def new_game(req: NewGameRequest):
+    if controller.session_id or controller.game_id:
+        raise HTTPException(
+            status_code=409,
+            detail="Standalone new-game cannot replace an active session",
+        )
     engine.reset(
         req.game_type,
         req.players,
@@ -355,21 +400,23 @@ async def undo():
 
 @app.post("/api/throw/correct")
 async def correct_throw(req: ThrowCorrectionRequest):
-    controller.correct_turn_throw(req.turn_index, req.event)
+    replacement = req.event.normalized()
+    controller.correct_turn_throw(req.turn_index, replacement)
     correction_event = {
         "type": "throw_corrected",
         "turn_index": req.turn_index,
-        "replacement": req.event,
+        "replacement": replacement,
     }
     await publish_state(correction_event)
     return engine.state.as_dict()
 
 
 @app.post("/api/event")
-async def inject_event(event: Dict[str, Any]):
+async def inject_event(req: DartEventRequest):
     allow = os.environ.get("SDB_ALLOW_TEST_EVENTS", "0").lower() in {"1", "true"}
     if ble_enabled and not allow:
         raise HTTPException(status_code=403, detail="Test events are disabled")
+    event = req.normalized()
     await pipeline.process(event, source="test")
     await publish_state(event)
     return engine.state.as_dict()
@@ -377,6 +424,9 @@ async def inject_event(event: Dict[str, Any]):
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket):
+    if not same_origin(websocket.headers.get("origin"), websocket.headers.get("host")):
+        await websocket.close(code=1008, reason="Cross-origin WebSocket denied")
+        return
     await manager.connect(websocket)
     try:
         experience = controller.public_state()

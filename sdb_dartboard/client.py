@@ -110,8 +110,8 @@ class SdbDartboardClient:
 
             try:
                 await client.stop_notify(self.notify_uuid)
-            except Exception:
-                pass
+            except Exception as exc:
+                LOG.debug("Stopping BLE notifications failed during cleanup: %s", exc)
             LOG.info("Disconnected")
             await self._report_status("disconnected")
 
