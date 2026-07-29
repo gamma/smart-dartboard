@@ -1,52 +1,60 @@
 # Reproduzierbare Spielmodus-Artworks
 
-Die Cover unter `web/static/assets/modes/<slug>.webp` verwenden dieselbe
-Bildsprache wie die ursprünglichen Cover für Count Up, X01 und Cricket:
-realistische, hochwertige 3D-/Product-Renderings eines echten Dartboards in
-einer dunklen Spielhallen- oder Bühnenumgebung.
+Die Cover unter `web/static/assets/modes/<slug>.webp` verwenden eine gemeinsame
+fröhliche 3D-Cartoon-Bildsprache. Die Scheibe bleibt als Dartboard klar
+erkennbar, die Welt darum wirkt jedoch wie ein hochwertiges handgebautes
+Arcade-Spielzeug: warm, farbenfroh, charmant und familienfreundlich.
 
 ## Referenzbilder
 
-Bei einer Neugenerierung immer gemeinsam als Stilreferenz verwenden:
-
-- `web/static/assets/modes/countup.webp`
-- `web/static/assets/modes/x01.webp`
-- `web/static/assets/modes/cricket.webp`
-
-Die Referenzen bestimmen Materialtreue, Licht, Kontrast, Tiefenschärfe und
-Kamerawirkung. Motive und Farbakzente kommen aus dem jeweiligen Modus-Prompt.
+Neue Cover verwenden `web/static/assets/modes/heart_chase.webp` als
+Stilreferenz. Motive und Requisiten kommen aus dem jeweiligen Modus-Prompt.
 
 ## Basis-Prompt
 
 ```text
 Use case: stylized-concept
 Asset type: cinematic game-mode cover for a touch-controlled smart dart arcade
-Primary request: Create a playful arcade interpretation of the specified game mode while matching the three supplied classic dartboard cover references.
-Input images: the Count Up, X01 and Cricket covers are style references only.
-Scene/backdrop: a believable premium arcade, club or arena environment, very dark and atmospheric, with subtle practical lights and haze.
-Subject: one physically plausible regulation dartboard remains the unmistakable hero object; add only a few mode-specific physical or holographic cues around it.
-Style/medium: lifelike high-end cinematic 3D product render, realistic sisal, metal wire, darts, glass and light; playful but not cartoon, not flat graphic design.
+Primary request: Create a joyful, playful 3D cartoon interpretation of the specified dart game mode.
+Input images: the Heart Chase cover is a style reference only.
+Scene/backdrop: a bright handcrafted miniature arcade world with painted wood, soft fabric, paper, clay and toy-like props; warm daylight or cheerful fairground lighting.
+Subject: one recognizable regulation dartboard remains the hero object; surround it with a few large, readable mode-specific props and friendly visual storytelling.
+Style/medium: polished stylized 3D animation render with rounded shapes, tactile materials, expressive charm and believable depth; cartoon-like but not flat vector art.
 Composition/framing: landscape 3:2; dartboard centered slightly right; clear darker negative space on the left and lower-left for UI copy; strong depth and perspective; no important detail at the outer edges.
-Lighting/mood: dramatic volumetric rim light, controlled neon accents, deep blacks, premium arcade energy, crisp focal board, shallow depth of field.
-Color palette: mostly black and charcoal with the mode-specific accent colors; preserve natural cream, black, red and green dartboard materials.
+Lighting/mood: soft warm key light, gentle shadows, optimistic and inviting; crisp focal board with restrained depth of field.
+Color palette: warm cream, sky blue, leafy green, coral, mustard and mode-specific colors; natural dartboard colors may be simplified but remain recognizable.
 Constraints: one coherent scene; regulation board geometry; visually readable at card size; no people; no logos; no brands; no watermark; no frame; no UI.
-Avoid: any text, letters, numbers outside the dartboard, title typography, poster layout, flat circles, vector art, 2D illustration, oversized abstract blobs, duplicated boards, deformed darts, fantasy board geometry, childish cartoon styling.
+Avoid: any text, letters or title typography, poster layout, flat vector art, duplicated boards, deformed darts, dark nightclub scenes, black void backgrounds, neon tubes, cyberpunk, holograms, lasers, heavy bloom, ominous mood, photoreal product advertising.
 ```
 
 ## Modusspezifische Ergänzungen
 
 | Slug | Motiv und Akzent |
 |---|---|
-| `target_rush` | Cyan/Grün; ein präzises Segment leuchtet als holografisches Ziel, leichte Bewegungsstreifen fliegender Darts |
-| `avoid_bomb` | Magenta/Amber; wenige rote Warnsegmente, kontrollierte Funken und eine kleine stilisierte Energie-Explosion hinter dem Board |
-| `color_clash` | Gold/Cyan/Grün/Magenta; einzelne Segmente projizieren farbiges Licht in feinen volumetrischen Strahlen |
-| `risk_it` | Amber/Magenta; leuchtender Arcade-Jackpot-Chip beziehungsweise Energie-Pot vor dem Sockel, Spannung und hohe Einsätze |
-| `king_of_board` | Violett/Cyan; dezente holografische Gebietsgrenzen und eine kleine metallische Krone oberhalb des Boards |
-| `treasure_hunt` | Gold/Grün; einzelne Segmente strahlen wie gefundene Schätze, wenige realistische Münzen und ein edelsteinartiger Lichtakzent |
-| `boss_fight` | Magenta/Violett; Board vor einer monumentalen Arcade-Arena, bedrohliche Energie-Silhouette und goldene Schwachpunkte, kein konkretes Monster-Gesicht |
-| `darts_bingo` | Gold/Violett; schwebendes dezentes 3×3-Hologrammraster hinter dem Board, einige Felder leuchten als Treffer |
-| `lightning_round` | Cyan/Gold; elektrischer Impuls und kurze Lichtspuren, eingefrorene schnelle Bewegung, keine unrealistische Beschädigung |
-| `simon_says` | Grün/Violett/Cyan; drei nacheinander pulsierende Segmente mit subtilen Lichtbahnen als Memory-Sequenz |
+| `countup` | Koralle/Gold/Grün; aufsteigende Holzstufen, Pfeile und Sternmarken als freundliches Punkterennen |
+| `x01` | Koralle/Blau/Grün; absteigende Spielsteine führen zu einer kleinen Zielfahne |
+| `cricket` | Grasgrün/Senf; freundliche Filz-Grillen, kleine Holzschläger und sechs Zielmarken |
+| `target_rush` | Himmelblau/Koralle; bewegte Zielscheiben auf einer hölzernen Rennbahn mit Zielfahne |
+| `avoid_bomb` | Grün/Koralle; harmlose schwarze Spielzeugbomben zwischen sicheren grünen Zielchips, keine Explosion |
+| `color_clash` | Koralle/Himmelblau; zwei freundliche Farbteams bemalen hölzerne Gebietsplättchen |
+| `risk_it` | Rosa/Gold; Holzwaage mit Sparschwein und wachsendem Stapel aus Sternchips |
+| `king_of_board` | Gold/Koralle; große gepolsterte Krone, kleine Bilderbuchburg und Turnierfähnchen |
+| `treasure_hunt` | Gold/Grün; helle Spielzeuginsel mit Schatzkiste, Blankokarte, Kompass und Trittsteinen |
+| `boss_fight` | Koralle/Himmelblau; großer freundlicher Filz-Monsterboss mit Spielzeugrüstung und kleinen Koop-Helden |
+| `darts_bingo` | Creme/Gold/Grün; Raster aus abgerundeten Holzplättchen, die mit Sternen und Blättern gestempelt werden |
+| `lightning_round` | Senfgelb/Koralle; springende weiche Blitz-Maskottchen, geschlossene Spielzeug-Stoppuhr und Bewegungsbögen |
+| `simon_says` | Koralle/Grün/Blau/Gold; vier große Stofftaster und eine Spur farbiger Erinnerungssterne |
+| `heart_chase` | Koralle/Gold; freundliche große Stoffherzen verfolgen sich wie Spielfiguren rund um die Scheibe |
+| `robin_hood` | Waldgrün/Gold; Spielzeugpfeile, kleine Zielscheiben und freundliche Waldkulisse |
+| `dragon_eggs` | Orange/Grün; bunte Eier, ein neugieriger kleiner Drache und warme Burg-Spielzeugwelt |
+| `ghost_chase` | Mint/Creme; ein rundlicher freundlicher Geist saust mit Stoffschweif um das Board |
+| `cookie_monster` | Keksbraun/Blau; fröhliche Kekse, Milchflasche und verspielte Küchenrequisiten |
+| `space_defender` | Himmelblau/Grün/Gold; freundliche Spielzeugraumschiffe und kleine runde Planeten |
+| `candy_cannon` | Koralle/Gelb; Bonbonkanone aus bemaltem Holz mit fliegenden Süßigkeiten |
+| `mini_golf` | Grasgrün/Creme; Mini-Golf-Bahn, kleine Fahne und sanfte Hügel rund um das Board |
+| `eight_ball` | Billardgrün/Gold; bunte Billardkugeln und kleine Holztisch-Elemente |
+| `block_drop` | Koralle/Senf/Mint; bunte abgerundete Puzzleblöcke stapeln sich spielerisch |
+| `dart_sweeper` | Salbeigrün/Orange; freundliche Spielzeugminen, Fragezeichen-Plättchen und aufgedeckte Zahlenchips |
 
 ## Ausgabe
 

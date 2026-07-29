@@ -2,7 +2,30 @@
 
 Stand: 2026-07-29
 
-Dieses Dokument beschreibt zusätzliche Party-Modi mit klarer Cartoon-/Arcade-Ausrichtung. Sie sind als Spezifikationen gedacht; noch nicht implementierte Modi sollen später als eigenständige Game-Plugins umgesetzt werden.
+Dieses Dokument enthält sowohl die verbindlichen V1-Regeln als auch ältere
+Ideenskizzen. Bei Widersprüchen gilt ausschließlich die folgende
+V1-Entscheidungstabelle. Varianten in den ausführlichen Ideenskizzen darunter
+sind nicht Bestandteil von V1.
+
+## Verbindliche V1-Entscheidungen
+
+Alle Modi sind eigenständige Game-Plugins. Ein Koop-Sieg gibt jedem Spieler der
+aktuellen Session einen Sieg und drei Sessionpunkte; ein MVP ist rein visuell.
+Das gilt ebenfalls für den bereits vorhandenen Koop-Modus `boss_fight`.
+
+| Plugin | Verbindliche Kurzregel |
+| --- | --- |
+| `heart_chase` | 2–8 Spieler, 2/3/5 Herzen. Drei Darts müssen die aktuelle Turn-Punktzahl strikt übertreffen; sonst geht ein Herz verloren. Die tatsächlich erzielte Punktzahl wird immer die nächste Messlatte. Letzter aktiver Spieler gewinnt. Keine V1-Varianten. |
+| `robin_hood` | Drei zufällige Sheriff-Ziele starten das Spiel. Jedes Ziel ist ein eigener Pfeil und kann genau einmal gesplittet werden; Duplikate bleiben getrennt. Standard trifft das exakte Segment, Easy dieselbe Zahl. Fünf Runden, höchste Punktzahl gewinnt. Authentic Robin Hood bleibt zurückgestellt. |
+| `dragon_eggs` | Sichtbare Eier geben +30, sichtbare Schuppen −15 und ein persönliches Heat. Beim dritten Heat wird zusätzlich die Hälfte der positiven Punkte des aktuellen Turns abgezogen, danach Heat auf null. Ziele wechseln je Turn. 5/8 Runden, höchste Punktzahl. |
+| `ghost_chase` | Exaktes wechselndes Ziel. Treffer 1/2/3 eines Turns geben 40/50/60. Ein erfolgloser Turn setzt Combo zurück und erhöht Escape; nach drei Fehlschlägen zieht der Geist um, wird aber nicht schwerer. Easy/Normal/Hard, 5/8 Runden. |
+| `cookie_monster` | Pro Turn: 2 goldene Cookies +50, 3 blaue +25, 4 grüne +10, 3 schimmelige −30. Bull-Milch verdoppelt einen positiven Turn oder neutralisiert einen negativen. Drei gute Cookies laden Sugar Rush; der nächste gute Cookie zählt doppelt. 5/8 Runden. |
+| `space_defender` | Koop: exakte Schiffe, Ringmultiplikator entspricht Schaden, Bull trifft alle. Bei zehn aktiven Schiffen verliert das Team. Nach der letzten Welle gibt es genau eine Aufräumrunde. Erfolgreiches Team: +3 für alle. |
+| `candy_cannon` | Persönliche Ladung bleibt über Turns: Single +1, Double +2, Triple +3, Bull +4. Manuelles Feuern bei 8–10 gibt +50 und zieht dem führenden Gegner 25 ab (Minimum null; Gleichstand nach Turn-Reihenfolge). Über 10 überhitzt und setzt auf null. 5/8 Runden, mindestens zwei Spieler. |
+| `mini_golf` | Alle spielen dasselbe Loch. Easy: Zahl genügt; Normal: exaktes Single/Double; Hard: exaktes Double/Triple/Bull. Treffer mit Dart 1/2/3 zählt 1/2/3 Schläge, kompletter Fehlschlag 4. 6/9 Löcher, niedrigster Score. |
+| `eight_ball` | Exakt zwei Spieler. Spieler 1 räumt Singles 1–7, Spieler 2 Singles 9–15. Richtig +20 und bis maximal drei Darts weiterspielen; falsches Feld oder Miss beendet den Turn. Double Bull gewinnt erst nach Abräumen, zu frühes Double Bull schenkt dem Gegner den Sieg. |
+| `block_drop` | Koop ohne Timer auf 5×8 Raster. 1–5 links, 6–10 rechts, 11–15 drehen, 16–20 Hard Drop, Bull Power +25, Miss Soft Drop. Nach drei Darts wird automatisch fixiert. Fünf Linien gewinnen, Top-out verliert. |
+| `dart_sweeper` | Koop auf den 20 Zahlenfeldern. Single deckt das direkte Feld auf; Double zusätzlich einen, Triple zwei sichere Nachbarn. Ein direkter Minentreffer explodiert unabhängig vom Ring. SBull scannt ein, DBull zwei sichere Felder. Kein Flood Reveal. Presets: 3/5/7 Minen und 5/3/2 Leben. Erster Direkttreffer plus unmittelbare Nachbarn sind minenfrei. |
 
 ## Gemeinsame Prinzipien
 

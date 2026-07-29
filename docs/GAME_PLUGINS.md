@@ -54,6 +54,10 @@ Ein optionaler Hook `on_turn_start(state, player)` wird nach dem
 Spielerwechsel ausgeführt. Er eignet sich beispielsweise zum Mischen von
 Farben oder zum Erzeugen einer neuen Aufgabe.
 
+Eliminierungsmodi können zusätzlich
+`is_player_active(state, player) -> bool` anbieten. Der Core überspringt
+inaktive Spieler dann automatisch.
+
 ## Verfügbare Zustandsdaten
 
 `apply_throw` erhält:
@@ -86,8 +90,16 @@ Das Event enthält bei einem Treffer typischerweise:
 - Aufnahmewechsel, Hold, Undo, Persistenz und BLE bleiben Aufgabe des Cores.
 - `ThrowOutcome.turn_value` bestimmt den angezeigten Aufnahmewert.
 - `finished=True` beendet das Spiel.
-- `winner_id` wird gesetzt, wenn nicht der gerade werfende Spieler gewinnt.
+- Ein Einzelsieg setzt `winner_id`, `winner_ids=[winner_id]` und
+  `result_type="individual_win"`.
+- Ein Koop-Sieg setzt alle Teammitglieder in `winner_ids` und
+  `result_type="team_win"`; `winner_id` bleibt leer.
+- Niederlagen ohne Sieger verwenden `result_type="challenge_loss"`,
+  Gleichstände `result_type="draw"`.
 - `force_hold=True` beendet die Aufnahme sofort, beispielsweise bei Bust.
+- `get_overlay(state)` darf neben Zielen ein deklaratives `panel` sowie
+  mehrteilige `zones` liefern. Beide Ansichten rendern diese Daten ohne
+  modusabhängige Core-Änderung.
 - Jede neue Regel benötigt Tests für Normalfall, Randfall, Sieg und Undo.
 - Jeder Modus mit Cover folgt dem Basis-Prompt in
   `docs/ARTWORK_PROMPTS.md`; Bildtitel gehören in die UI, nicht in das Artwork.

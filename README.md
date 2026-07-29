@@ -18,7 +18,9 @@ Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 - wertungsfreier Spielabbruch zurück zur Spielauswahl
 - grafische Spielauswahl mit 3D-Renderings
 - eigener Anleitungsbildschirm pro Spielmodus auf beiden Displays
-- Count Up, X01, Cricket und erste Party-Modi als automatisch entdeckte Spielmodule
+- 24 automatisch entdeckte Spielmodule: Klassiker, Party-, Challenge- und
+  Koop-Modi einschließlich Heart Chase, Space Defender, Block Drop und
+  DartSweeper
 - konfigurierbare Varianten wie Rundenzahl, 301/501/701 und Double Out
 - persistenter Spielzustand mit Recovery und Undo nach einem Neustart
 - serielle BLE-Verarbeitung und Schutz vor doppelten Notifications
