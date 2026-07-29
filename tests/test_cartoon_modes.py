@@ -178,6 +178,9 @@ class CartoonModeTests(unittest.TestCase):
         self.assertEqual(50, ada.score)
         self.assertEqual(75, bob.score)
         self.assertEqual(0, engine.state.mode_state["charge"][ada.id])
+        self.assertEqual("candy_fire", engine.state.last_event["effect"])
+        self.assertEqual(bob.id, engine.state.last_event["target_player_id"])
+        self.assertEqual(25, engine.state.last_event["target_score_loss"])
         engine.state.mode_state["charge"][ada.id] = 9
         engine.handle_event(hit(20, "triple", 3, 5))
         self.assertEqual(0, engine.state.mode_state["charge"][ada.id])

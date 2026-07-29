@@ -289,6 +289,67 @@
   animation: candy-overheat-flash .8s ease-out forwards;
 }
 
+.projection-roster span.candy-fire-target {
+  position: relative;
+  z-index: 6;
+  border-color: #f4d35e;
+  background: rgba(231, 111, 81, .2);
+  box-shadow: 0 0 24px rgba(244, 211, 94, .3);
+  animation: candy-fire-target-hit .48s .4s ease-out;
+}
+
+.candy-fire-hit {
+  position: absolute;
+  z-index: 5;
+  left: -80px;
+  top: 50%;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+  font-style: normal;
+}
+
+.candy-fire-hit::before {
+  content: "";
+  position: absolute;
+  z-index: 1;
+  left: -40px;
+  top: -20px;
+  width: 80px;
+  height: 40px;
+  background: url("/static/assets/effects/candy.webp") center/contain no-repeat;
+  filter: drop-shadow(0 0 14px rgba(255, 220, 91, .95));
+  opacity: 0;
+  animation: candy-fire-projectile .48s cubic-bezier(.15, .7, .22, 1) forwards;
+}
+
+.candy-fire-hit img {
+  position: absolute;
+  z-index: 2;
+  left: -85px;
+  top: -85px;
+  width: 170px;
+  height: 170px;
+  object-fit: contain;
+  opacity: 0;
+  filter: drop-shadow(0 0 18px rgba(231, 111, 81, .9));
+  animation: candy-fire-pop .9s .38s cubic-bezier(.18, .8, .22, 1) forwards;
+}
+
+.candy-fire-hit b {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  top: 50%;
+  color: #fff7d8;
+  font-size: 29px;
+  font-weight: 1000;
+  white-space: nowrap;
+  opacity: 0;
+  text-shadow: 0 3px 0 #9f3729, 0 0 18px rgba(255, 222, 121, .95);
+  animation: candy-fire-damage .95s .5s cubic-bezier(.18, .8, .22, 1) forwards;
+}
+
 @keyframes bomb-fireball {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(.08) rotate(-18deg); }
   18% { opacity: 1; }
@@ -354,6 +415,34 @@
   100% { opacity: 0; }
 }
 
+@keyframes candy-fire-projectile {
+  0% { opacity: 0; transform: translateX(-520px) rotate(-18deg) scale(.7); }
+  12% { opacity: 1; }
+  82% { opacity: 1; }
+  100% { opacity: 0; transform: translateX(0) rotate(24deg) scale(1); }
+}
+
+@keyframes candy-fire-pop {
+  0% { opacity: 0; transform: scale(.08) rotate(-9deg); }
+  22% { opacity: 1; transform: scale(1.04) rotate(2deg); }
+  72% { opacity: 1; transform: scale(.94); }
+  100% { opacity: 0; transform: scale(1.08); filter: blur(2px); }
+}
+
+@keyframes candy-fire-damage {
+  0% { opacity: 0; transform: translate(-50%, -15%) scale(.35); }
+  24% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+  72% { opacity: 1; transform: translate(-50%, -62%) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -105%) scale(.9); }
+}
+
+@keyframes candy-fire-target-hit {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(10px) rotate(1deg); }
+  55% { transform: translateX(-7px) rotate(-.7deg); }
+  78% { transform: translateX(4px); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bomb-explosion::before,
   .bomb-explosion::after,
@@ -364,7 +453,11 @@
   .candy-overheat i,
   .candy-overheat b,
   .candy-overheat span,
-  .candy-overheat-impact::after {
+  .candy-overheat-impact::after,
+  .candy-fire-hit::before,
+  .candy-fire-hit img,
+  .candy-fire-hit b,
+  .projection-roster span.candy-fire-target {
     animation-duration: .01ms !important;
   }
 

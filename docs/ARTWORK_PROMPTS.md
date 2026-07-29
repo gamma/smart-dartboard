@@ -167,7 +167,7 @@ Qualitätsstufe 90 gespeichert. Die aktuelle Bibliothek umfasst:
 | `mine.webp` | harmlose Spielzeugmine | Avoid Bomb, Dart Sweeper |
 | `coin.webp` | goldene Sternmünze | Risk It |
 | `gem.webp` | blauer Spielzeugedelstein | Treasure Hunt |
-| `candy_overheat.webp` | Zuckerstaub-Explosion mit Bonbons und Konfetti | Candy Cannon Overheat |
+| `candy_overheat.webp` | Zuckerstaub-Explosion mit Bonbons und Konfetti | Candy Cannon Overheat und kleiner FIRE-Einschlag |
 
 Für `candy_overheat.webp` wird `[SUBJECT]` im gemeinsamen Prop-Prompt durch
 folgende Effektspezifikation ersetzt:

@@ -46,11 +46,15 @@ class CandyCannonMode:
         ordered = state.players[start + 1:] + state.players[:start]
         return next(candidate for candidate in ordered if candidate.id in leaders)
 
-    def _fire(self, state: Any, player: Any) -> ThrowOutcome:
+    def _fire(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         target = self._target(state, player)
+        previous_score = target.score
         player.score += 50
         target.score = max(0, target.score - 25)
         state.mode_state["charge"][player.id] = 0
+        event["effect"] = "candy_fire"
+        event["target_player_id"] = target.id
+        event["target_score_loss"] = previous_score - target.score
         return ThrowOutcome(
             50,
             f"FIRE! {player.name} +50 · {target.name} -25",
@@ -63,7 +67,7 @@ class CandyCannonMode:
             charge = int(state.mode_state["charge"].get(player.id, 0))
             is_bull = int(event.get("field", 0)) == 25
             if is_bull and 8 <= charge <= 10:
-                outcome = self._fire(state, player)
+                outcome = self._fire(state, player, event)
             else:
                 addition = 4 if is_bull else int(event.get("multiplier", 1))
                 charge += addition

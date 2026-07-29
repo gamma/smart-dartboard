@@ -90,6 +90,12 @@ function isCandyOverheatEvent(experience,event){
     && event?.type==='hit'
     && event?.effect==='candy_overheat';
 }
+function isCandyFireEvent(experience,event){
+  return experience?.game?.game_type==='candy_cannon'
+    && event?.type==='hit'
+    && event?.effect==='candy_fire'
+    && Boolean(event?.target_player_id);
+}
 function clearScoreCountdown(){
   cancelAnimationFrame(appState.scoreCountdownFrame);
   appState.scoreCountdownFrame=null;
@@ -223,8 +229,11 @@ function updateExperience(experience, event){
     const throwWasCounted=!isThrow || (lastThrow && Number(lastThrow.seq)===Number(event.seq));
     if(throwWasCounted) playEventCue(event, experience);
     if(isThrow && throwWasCounted){
-      if(isProjector() && isBombEvent(experience,event)){
-        const playerId=lastThrow?.player_id || experience.game?.current_player_id;
+      if(isProjector() && (isBombEvent(experience,event) || isCandyFireEvent(experience,event))){
+        const candyFire=isCandyFireEvent(experience,event);
+        const playerId=candyFire
+          ? event.target_player_id
+          : lastThrow?.player_id || experience.game?.current_player_id;
         const from=previous?.game?.players?.find(player=>player.id===playerId)?.score;
         const to=experience.game?.players?.find(player=>player.id===playerId)?.score;
         if(Number.isFinite(from) && Number.isFinite(to) && from!==to){
@@ -232,8 +241,8 @@ function updateExperience(experience, event){
             playerId,
             from:Number(from),
             to:Number(to),
-            startedAt:performance.now(),
-            duration:1400,
+            startedAt:performance.now()+(candyFire?420:0),
+            duration:candyFire?850:1400,
           };
         }
       }else if(isProjector()){
@@ -886,6 +895,15 @@ function candyOverheat(game,event){
   </div>`;
 }
 
+function candyFireImpact(game,event,playerId){
+  if(!isCandyFireEvent({game},event) || event.target_player_id!==playerId) return '';
+  const loss=Math.max(0,Number(event.target_score_loss)||0);
+  return `<em class="candy-fire-hit" aria-hidden="true">
+    <img src="/static/assets/effects/candy_overheat.webp" alt="">
+    <b>${loss>0?`−${loss}`:'TREFFER!'}</b>
+  </em>`;
+}
+
 function projectorPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -904,7 +922,10 @@ function projectorPlaying(){
     ${projectorAdvice(game)}
     ${projectorOverlayPrompt(game)}
     ${projectorModePanel(game)}
-    <aside class="projection-roster">${game.players.map(item=>`<span class="${item.id===game.current_player_id?'active':''}"><b>${escapeHtml(item.name)}</b><i data-score-player="${escapeHtml(item.id)}">${item.score}</i></span>`).join('')}</aside>
+    <aside class="projection-roster">${game.players.map(item=>{
+      const fireTarget=isCandyFireEvent({game},appState.projectedEvent) && appState.projectedEvent.target_player_id===item.id;
+      return `<span class="${item.id===game.current_player_id?'active':''} ${fireTarget?'candy-fire-target':''}"><b>${escapeHtml(item.name)}</b><i data-score-player="${escapeHtml(item.id)}">${item.score}</i>${candyFireImpact(game,appState.projectedEvent,item.id)}</span>`;
+    }).join('')}</aside>
     ${testMode?'<div class="projector-test-tools"><b>TESTMODUS</b><span>Scheibensegment anklicken</span><button data-action="test-miss">MISS</button><button class="switch-player" data-action="next-player">SPIELER WECHSELN</button></div>':''}
   </section>`;
 }
@@ -1183,6 +1204,11 @@ function playEventCue(event,experience){
     tone(360,.16,.08,'triangle',.13);
     tone(220,.28,.18,'sawtooth',.1);
     tone(110,.34,.28,'sine',.08);
+  } else if(event.type==='hit' && isCandyFireEvent(experience,event)){
+    tone(720,.12,0,'square',.08);
+    tone(940,.1,.12,'triangle',.07);
+    tone(190,.24,.38,'sawtooth',.12);
+    tone(520,.16,.42,'square',.06);
   } else if(event.type==='hit'){
     const base=event.multiplier===3?themeBase*1.45:event.multiplier===2?themeBase*1.22:event.field===25?themeBase*1.7:themeBase;
     tone(base,.16,0,'triangle',.16); tone(base*1.5,.2,.08,'sine',.1);
