@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict
 
 from .arcade import choose_targets, finish_round_game, overlay_item, same_target
@@ -24,7 +23,8 @@ class SimonSaysMode:
         instructions=[
             InstructionStep("Sequenz merken", "Die leuchtenden Felder sind deine Reihenfolge.", "memory"),
             InstructionStep("Richtig treffen", "Jeder Treffer muss zum nächsten Sequenzziel passen.", "target"),
-            InstructionStep("Sequenz wächst", "Erfolg macht die nächste Aufgabe länger.", "grow"),
+            InstructionStep("Sequenz wächst", "Die gemeinsame Aufgabe wächst über die ersten drei Runden.", "grow"),
+            InstructionStep("Gleiche Chancen", "Alle spielen in einer Runde exakt dieselbe Sequenz.", "shuffle"),
         ],
         sound_theme="arcade",
     )
@@ -33,18 +33,25 @@ class SimonSaysMode:
         player.score = 0; player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        seq = choose_targets(1, str(options.get("difficulty", "easy")))
-        state.mode_state = {"sequence": seq, "position": 0}
+        state.mode_state = {}
+        self._generate_round_sequence(state)
         state.message = "Merke die Sequenz!"
 
-    def _extend(self, state: Any) -> None:
-        seq = list(state.mode_state.get("sequence", []))
-        if len(seq) < 3:
-            seq.extend(choose_targets(1, str(state.options.get("difficulty", "easy")), exclude=[item["label"] for item in seq]))
-        else:
-            seq = choose_targets(1, str(state.options.get("difficulty", "easy")))
-        state.mode_state["sequence"] = seq
+    def _generate_round_sequence(self, state: Any) -> None:
+        length = min(3, state.round_number)
+        state.mode_state["sequence"] = choose_targets(
+            length,
+            str(state.options.get("difficulty", "easy")),
+        )
+        state.mode_state["sequence_round"] = state.round_number
         state.mode_state["position"] = 0
+
+    def on_turn_start(self, state: Any, player: Any) -> None:
+        del player
+        if int(state.mode_state.get("sequence_round", 0)) != state.round_number:
+            self._generate_round_sequence(state)
+        else:
+            state.mode_state["position"] = 0
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         seq = state.mode_state.get("sequence", [])
@@ -66,7 +73,7 @@ class SimonSaysMode:
         if pos + 1 >= len(seq):
             points = 25 * len(seq)
             player.score += points
-            self._extend(state)
+            state.mode_state["position"] = 0
             return finish_round_game(
                 state,
                 ThrowOutcome(
@@ -75,7 +82,6 @@ class SimonSaysMode:
                     force_hold=True,
                 ),
                 "{winner} gewinnt Simon Says!",
-                darts_per_turn=1,
             )
         return ThrowOutcome(turn_value=0, message=f"Weiter: {seq[pos+1]['label']}")
 

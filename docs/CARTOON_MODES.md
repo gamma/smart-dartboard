@@ -12,14 +12,17 @@ sind nicht Bestandteil von V1.
 Alle Modi sind eigenständige Game-Plugins. Ein Koop-Sieg gibt jedem Spieler der
 aktuellen Session einen Sieg und drei Sessionpunkte; ein MVP ist rein visuell.
 Das gilt ebenfalls für den bereits vorhandenen Koop-Modus `boss_fight`.
+Für kompetitive Zufallsmechaniken gilt zusätzlich die verbindliche
+[Fairness-Regel](FAIRNESS.md): Alle Spieler erhalten innerhalb einer Runde
+dieselben zufällig erzeugten Bedingungen.
 
 | Plugin | Verbindliche Kurzregel |
 | --- | --- |
 | `heart_chase` | 2–8 Spieler, 2/3/5 Herzen. Drei Darts müssen die aktuelle Turn-Punktzahl strikt übertreffen; sonst geht ein Herz verloren. Die tatsächlich erzielte Punktzahl wird immer die nächste Messlatte. Letzter aktiver Spieler gewinnt. Keine V1-Varianten. |
 | `robin_hood` | Drei zufällige Sheriff-Ziele starten das Spiel. Jedes Ziel ist ein eigener Pfeil und kann genau einmal gesplittet werden; Duplikate bleiben getrennt. Standard trifft das exakte Segment, Easy dieselbe Zahl. Fünf Runden, höchste Punktzahl gewinnt. Authentic Robin Hood bleibt zurückgestellt. |
-| `dragon_eggs` | Sichtbare Eier geben +30, sichtbare Schuppen −15 und ein persönliches Heat. Beim dritten Heat wird zusätzlich die Hälfte der positiven Punkte des aktuellen Turns abgezogen, danach Heat auf null. Ziele wechseln je Turn. 5/8 Runden, höchste Punktzahl. |
-| `ghost_chase` | Exaktes wechselndes Ziel. Treffer 1/2/3 eines Turns geben 40/50/60. Ein erfolgloser Turn setzt Combo zurück und erhöht Escape; nach drei Fehlschlägen zieht der Geist um, wird aber nicht schwerer. Easy/Normal/Hard, 5/8 Runden. |
-| `cookie_monster` | Pro Turn: 2 goldene Cookies +50, 3 blaue +25, 4 grüne +10, 3 schimmelige −30. Cookie- und Milch-Props liegen direkt auf den Zielsegmenten; dieselbe grafische Legende erscheint auf Controller und Projektor. Bull-Milch verdoppelt einen positiven Turn oder neutralisiert einen negativen. Drei gute Cookies laden Sugar Rush; der nächste gute Cookie zählt doppelt. 5/8 Runden. |
+| `dragon_eggs` | Pro Runde spielen alle dasselbe Layout. Sichtbare Eier geben +30, sichtbare Schuppen −15 und ein persönliches Heat. Beim dritten Heat wird zusätzlich die Hälfte der positiven Punkte des aktuellen Turns abgezogen, danach Heat auf null. 5/8 Runden, höchste Punktzahl. |
+| `ghost_chase` | Alle spielen pro Runde denselben Geisterpfad. Treffer 1/2/3 eines Turns geben 40/50/60. Persönliche Fehlschläge laden Escape; nach drei Fehlschlägen zieht der eigene Geist weiter, wird aber nicht schwerer. Easy/Normal/Hard, 5/8 Runden. |
+| `cookie_monster` | Pro Runde spielen alle dasselbe Layout: 2 goldene Cookies +50, 3 blaue +25, 4 grüne +10, 3 schimmelige −30. Cookie- und Milch-Props liegen direkt auf den Zielsegmenten; dieselbe grafische Legende erscheint auf Controller und Projektor. Bull-Milch verdoppelt einen positiven Turn oder neutralisiert einen negativen. Drei gute Cookies laden Sugar Rush; der nächste gute Cookie zählt doppelt. 5/8 Runden. |
 | `space_defender` | Koop: exakte Schiffe, Ringmultiplikator entspricht Schaden, Bull trifft alle. Bei zehn aktiven Schiffen verliert das Team. Nach der letzten Welle gibt es genau eine Aufräumrunde. Erfolgreiches Team: +3 für alle. |
 | `candy_cannon` | Persönliche Ladung bleibt über Turns: Single +1, Double +2, Triple +3, Bull +4. Bei 8–10 wird Bull zum Abzug: Der nächste SBull- oder DBull-Treffer feuert automatisch, gibt +50 und zieht dem führenden Gegner 25 ab (Minimum null; Gleichstand nach Turn-Reihenfolge). Andere Treffer können weiter überladen; über 10 setzt die Ladung auf null. Kein Control-Button. 5/8 Runden, mindestens zwei Spieler. |
 | `mini_golf` | Alle spielen dasselbe Loch. Easy: Zahl genügt; Normal: exaktes Single/Double; Hard: exaktes Double/Triple/Bull. Treffer mit Dart 1/2/3 zählt 1/2/3 Schläge, kompletter Fehlschlag 4. 6/9 Löcher, niedrigster Score. |
@@ -34,6 +37,7 @@ Das gilt ebenfalls für den bereits vorhandenen Koop-Modus `boss_fight`.
 - Der Projector führt die Spieler visuell: Ziel = Cyan/Grün, Bonus = Gold, Gefahr = Rot/Magenta.
 - Jeder Modus benötigt ein klares, großes Feedback nach jedem Dart.
 - Wo physische Ereignisse vom Board nicht automatisch erkannt werden können, braucht es eine faire Control-UI-Bestätigung.
+- Kompetitive Zufallsziele und Zufallsfolgen sind pro Runde für alle Spieler identisch; Details und Ausnahmen stehen in [FAIRNESS.md](FAIRNESS.md).
 
 ---
 
@@ -291,7 +295,8 @@ aktueller Turn Score halbiert
 Heat Meter reset
 ```
 
-- Nach einer Aufnahme erscheinen neue Eier.
+- Nachdem alle Spieler geworfen haben, erscheint für die nächste Runde ein
+  neues gemeinsames Eier- und Schuppenlayout.
 
 ### Projector
 
@@ -339,7 +344,8 @@ Geist bleibt
 Geist bekommt eine Fluchtladung
 ```
 
-- Bei drei Fluchtladungen springt der Geist auf einen schwierigeren Double-/Triple-Ring.
+- Bei drei persönlichen Fluchtladungen springt der Geist zum nächsten Ziel des
+  gemeinsamen Rundenpfads. Die gewählte Schwierigkeit bleibt unverändert.
 
 ### Varianten
 
@@ -373,7 +379,8 @@ Moldy Cookie: -30
 Milk / Bull: verdoppelt aktuellen Turn Score
 ```
 
-- Farben werden nach jeder Aufnahme gemischt.
+- Cookie-Felder werden erst nach einer vollständigen Runde neu gemischt; alle
+  Spieler sehen innerhalb der Runde dasselbe Layout.
 - Bei drei guten Cookies in Folge: `SUGAR RUSH`, nächster guter Cookie zählt doppelt.
 
 ### Warum sinnvoll

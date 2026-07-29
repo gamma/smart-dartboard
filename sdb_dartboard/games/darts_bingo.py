@@ -33,16 +33,30 @@ class DartsBingoMode:
         instructions=[
             InstructionStep("Karte füllen", "Jeder Treffer kann eine Aufgabe markieren.", "grid"),
             InstructionStep("Siegziel beachten", "Je nach Auswahl zählt die erste Linie oder die volle Karte.", "line"),
-            InstructionStep("Jeder hat eigene Karte", "Aufgaben sind pro Spieler individuell.", "cards"),
+            InstructionStep("Gleiche Chancen", "Alle spielen dieselbe zufällig erzeugte Aufgabenkarte.", "cards"),
         ],
         sound_theme="arcade",
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
         player.score = 0
+        player.marks = {}
+
+    def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
+        del options
         # Gameplay variety only; not used for a security decision.
         tasks = random.sample(TASK_POOL, 9)  # nosec B311
-        player.marks = {str(i): {"task": tasks[i]["id"], "label": tasks[i]["label"], "done": False} for i in range(9)}
+        for player in state.players:
+            player.marks = {
+                str(index): {
+                    "task": task["id"],
+                    "label": task["label"],
+                    "done": False,
+                }
+                for index, task in enumerate(tasks)
+            }
+        state.mode_state = {"bingo_candidates": []}
+        state.message = "Für alle liegt dieselbe Bingo-Karte bereit!"
 
     def _task_by_id(self, task_id: str) -> Dict[str, Any]:
         return next(t for t in TASK_POOL if t["id"] == task_id)
@@ -52,9 +66,38 @@ class DartsBingoMode:
         lines = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
         return any(all(done[i] for i in line) for line in lines)
 
+    def _finish_candidates(
+        self,
+        state: Any,
+        outcome: ThrowOutcome,
+    ) -> ThrowOutcome:
+        candidates = list(state.mode_state.get("bingo_candidates", []))
+        is_last_player = state.current_player_index == len(state.players) - 1
+        is_turn_end = state.darts_in_turn == 2 or outcome.force_hold
+        if not candidates or not (is_last_player and is_turn_end):
+            return outcome
+        names = [
+            player.name for player in state.players
+            if player.id in candidates
+        ]
+        outcome.finished = True
+        outcome.winner_ids = candidates
+        outcome.winner_id = candidates[0] if len(candidates) == 1 else None
+        outcome.result_type = "individual_win" if len(candidates) == 1 else "draw"
+        outcome.force_hold = False
+        outcome.message = (
+            f"{names[0]} ruft BINGO!"
+            if len(names) == 1
+            else f"Gleichzeitiges BINGO: {' · '.join(names)}"
+        )
+        return outcome
+
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         if event.get("type") != "hit":
-            return ThrowOutcome(turn_value=0, message="Miss – kein Bingo")
+            return self._finish_candidates(
+                state,
+                ThrowOutcome(turn_value=0, message="Miss – kein Bingo"),
+            )
         marked = []
         for idx, cell in player.marks.items():
             if cell["done"]:
@@ -65,7 +108,10 @@ class DartsBingoMode:
                 marked.append(cell["label"])
                 player.score += 1
         if not marked:
-            return ThrowOutcome(turn_value=0, message="Keine Bingo-Aufgabe getroffen")
+            return self._finish_candidates(
+                state,
+                ThrowOutcome(turn_value=0, message="Keine Bingo-Aufgabe getroffen"),
+            )
         full_card = all(cell["done"] for cell in player.marks.values())
         target_reached = (
             full_card
@@ -73,8 +119,24 @@ class DartsBingoMode:
             else self._has_line(player)
         )
         if target_reached:
-            return ThrowOutcome(turn_value=len(marked), message=f"{player.name} ruft BINGO!", finished=True, winner_id=player.id)
-        return ThrowOutcome(turn_value=len(marked), message=f"Bingo markiert: {' · '.join(marked)}")
+            candidates = state.mode_state.setdefault("bingo_candidates", [])
+            if player.id not in candidates:
+                candidates.append(player.id)
+            return self._finish_candidates(
+                state,
+                ThrowOutcome(
+                    turn_value=len(marked),
+                    message=f"{player.name} hat BINGO · Ausgleichsrunde läuft",
+                    force_hold=True,
+                ),
+            )
+        return self._finish_candidates(
+            state,
+            ThrowOutcome(
+                turn_value=len(marked),
+                message=f"Bingo markiert: {' · '.join(marked)}",
+            ),
+        )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         player = state.current_player()

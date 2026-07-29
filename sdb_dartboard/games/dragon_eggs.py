@@ -43,6 +43,7 @@ class DragonEggsMode:
         state.mode_state = {
             "heat": {player.id: 0 for player in state.players},
             "turn_positive": {player.id: 0 for player in state.players},
+            "layout_round": state.round_number,
         }
         self._shuffle(state)
 
@@ -55,7 +56,9 @@ class DragonEggsMode:
 
     def on_turn_start(self, state: Any, player: Any) -> None:
         state.mode_state["turn_positive"][player.id] = 0
-        self._shuffle(state)
+        if int(state.mode_state.get("layout_round", 0)) != state.round_number:
+            self._shuffle(state)
+            state.mode_state["layout_round"] = state.round_number
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         eggs = state.mode_state.get("eggs", [])

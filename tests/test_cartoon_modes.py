@@ -115,20 +115,49 @@ class CartoonModeTests(unittest.TestCase):
         self.assertEqual(0, player.score)
         self.assertIn("DRAGON AWAKES", engine.state.message)
 
+    def test_dragon_layout_is_identical_for_every_player_in_a_round(self):
+        engine = GameEngine()
+        engine.reset("dragon_eggs", ["Ada", "Bob"])
+        eggs = engine.state.mode_state["eggs"]
+        scales = engine.state.mode_state["scales"]
+
+        for seq in range(3):
+            engine.handle_event(MISS | {"seq": seq})
+        engine.continue_turn()
+
+        self.assertIs(eggs, engine.state.mode_state["eggs"])
+        self.assertIs(scales, engine.state.mode_state["scales"])
+
+        for seq in range(3, 6):
+            engine.handle_event(MISS | {"seq": seq})
+        engine.continue_turn()
+
+        self.assertEqual(2, engine.state.mode_state["layout_round"])
+        self.assertIsNot(eggs, engine.state.mode_state["eggs"])
+        self.assertIsNot(scales, engine.state.mode_state["scales"])
+
     def test_ghost_combo_and_escape(self):
         engine = GameEngine()
-        engine.reset("ghost_chase", ["Ada"], options={"rounds": 5, "difficulty": "easy"})
-        first = dict(engine.state.mode_state["target"])
+        engine.reset(
+            "ghost_chase",
+            ["Ada", "Bob"],
+            options={"rounds": 5, "difficulty": "easy"},
+        )
+        path = list(engine.state.mode_state["path"])
+        first = dict(path[0])
         engine.handle_event({"type": "hit", "seq": 1, **first})
-        second = dict(engine.state.mode_state["target"])
+        second = dict(path[1])
         engine.handle_event({"type": "hit", "seq": 2, **second})
         self.assertEqual(90, engine.state.players[0].score)
-        old = dict(engine.state.mode_state["target"])
         engine.handle_event(MISS | {"seq": 3})
         engine.continue_turn()
-        engine.handle_event(MISS | {"seq": 4})
-        engine.handle_event(MISS | {"seq": 5})
-        self.assertNotEqual(old["label"], engine.state.mode_state["target"]["label"])
+
+        self.assertEqual(
+            path[0]["label"],
+            engine.state.as_dict()["overlay"]["targets"][0]["id"],
+        )
+        self.assertEqual(0, engine.state.mode_state["path_index"][engine.state.players[1].id])
+        self.assertEqual(0, engine.state.mode_state["escape"][engine.state.players[1].id])
 
     def test_cookie_sugar_rush_and_milk_rescue(self):
         engine = GameEngine()
@@ -174,6 +203,23 @@ class CartoonModeTests(unittest.TestCase):
             },
         )
         self.assertEqual(5, len(overlay["visual_legend"]))
+
+    def test_cookie_layout_is_identical_for_every_player_in_a_round(self):
+        engine = GameEngine()
+        engine.reset("cookie_monster", ["Ada", "Bob"])
+        cookies = engine.state.mode_state["cookies"]
+
+        for seq in range(3):
+            engine.handle_event(MISS | {"seq": seq})
+        engine.continue_turn()
+        self.assertIs(cookies, engine.state.mode_state["cookies"])
+
+        for seq in range(3, 6):
+            engine.handle_event(MISS | {"seq": seq})
+        engine.continue_turn()
+
+        self.assertEqual(2, engine.state.mode_state["cookie_round"])
+        self.assertIsNot(cookies, engine.state.mode_state["cookies"])
 
     def test_space_defender_team_win_has_all_winners(self):
         engine = GameEngine()

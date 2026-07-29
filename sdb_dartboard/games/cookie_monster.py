@@ -52,6 +52,7 @@ class CookieMonsterMode:
         state.mode_state = {
             "streak": {player.id: 0 for player in state.players},
             "sugar": {player.id: False for player in state.players},
+            "cookie_round": state.round_number,
         }
         self._shuffle(state)
 
@@ -66,7 +67,10 @@ class CookieMonsterMode:
         }
 
     def on_turn_start(self, state: Any, player: Any) -> None:
-        self._shuffle(state)
+        del player
+        if int(state.mode_state.get("cookie_round", 0)) != state.round_number:
+            self._shuffle(state)
+            state.mode_state["cookie_round"] = state.round_number
 
     def _reset_streak(self, state: Any, player: Any) -> None:
         state.mode_state["streak"][player.id] = 0

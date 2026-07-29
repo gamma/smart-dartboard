@@ -52,8 +52,11 @@ die eine Aufnahme beenden, verwenden entsprechend
 `finish_action_round_game(...)`.
 
 Ein optionaler Hook `on_turn_start(state, player)` wird nach dem
-Spielerwechsel ausgeführt. Er eignet sich beispielsweise zum Mischen von
-Farben oder zum Erzeugen einer neuen Aufgabe.
+Spielerwechsel ausgeführt. Kompetitive Zufallsbedingungen dürfen dort nur neu
+erzeugt werden, wenn `state.round_number` gewechselt hat. Innerhalb einer Runde
+müssen alle Spieler dasselbe Layout beziehungsweise dieselbe Aufgabenfolge
+erhalten. Die verbindliche Regel und Ausnahmen stehen in
+[`FAIRNESS.md`](FAIRNESS.md).
 
 Eliminierungsmodi können zusätzlich
 `is_player_active(state, player) -> bool` anbieten. Der Core überspringt
@@ -107,5 +110,7 @@ Das Event enthält bei einem Treffer typischerweise:
   Richtungssymbole sind `left`, `right`, `rotate_left`, `rotate_right` und
   `drop`; dargestellt wird immer Symbol → Farbe → Bezeichnung.
 - Jede neue Regel benötigt Tests für Normalfall, Randfall, Sieg und Undo.
+- Jeder kompetitive Zufallsmodus benötigt einen Mehrspieler-Test, der gleiche
+  Bedingungen innerhalb der Runde und den Wechsel zur nächsten Runde prüft.
 - Jeder Modus mit Cover folgt dem Basis-Prompt in
   `docs/ARTWORK_PROMPTS.md`; Bildtitel gehören in die UI, nicht in das Artwork.

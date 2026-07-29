@@ -86,6 +86,15 @@ Zuschauer müssen jederzeit erkennen:
 
 Der Projector ist primär Showfläche, nicht Admin-UI.
 
+### 1.6 Chancengleichheit
+
+Kompetitive Zufallsbedingungen werden einmal pro Runde erzeugt und für jeden
+Spieler identisch wiederholt. Das gilt auch für mehrstufige Folgen über Dart 1,
+2 und 3. Persönliche Zustände bleiben individuell. Ausnahmen für asymmetrische
+oder gemeinsam fortlaufende Spielwelten müssen ausdrücklich Teil der
+Spielregel sein. Die verbindliche Auditliste steht in
+[FAIRNESS.md](FAIRNESS.md).
+
 ---
 
 ## 2. Technisches Overlay-Modell
@@ -316,7 +325,8 @@ Muss pro Spielmodus definiert werden.
 
 ### Kurzbeschreibung
 
-Triff das aktuell leuchtende Ziel. Nach einem Treffer erscheint sofort ein neues Ziel.
+Triff das aktuell leuchtende Ziel. Pro Runde spielen alle dieselbe vorbereitete
+Folge aus drei Zielen.
 
 ### Zielgruppe
 
@@ -329,7 +339,8 @@ Alle Spieler, auch Anfänger. Perfekter erster Party-Modus.
 - Treffer auf exakt dieses Segment gibt volle Punkte.
 - Treffer auf das richtige Zahlenfeld, aber falschen Ring, gibt kleine „Almost“-Punkte.
 - Miss gibt 0 und bricht Combo.
-- Nach Zieltreffer wird sofort ein neues Ziel generiert.
+- Nach jedem Dart erscheint das nächste Ziel der gemeinsamen Dreierfolge.
+- Beim nächsten Spieler beginnt dieselbe Folge wieder bei Ziel 1.
 
 ### Scoring
 
@@ -690,7 +701,8 @@ Merke dir eine Zielsequenz und triff sie in Reihenfolge.
 
 - Sequenz wird angezeigt oder vorgespielt.
 - Spieler muss Ziele in Reihenfolge treffen.
-- Jeder Erfolg verlängert Sequenz.
+- Runde 1 hat ein Ziel, Runde 2 zwei Ziele, ab Runde 3 sind es drei.
+- Alle Spieler erhalten innerhalb einer Runde exakt dieselbe Sequenz.
 - Fehler beendet Runde oder setzt Sequenz zurück.
 
 ### Visual Incentives
@@ -706,7 +718,7 @@ Merke dir eine Zielsequenz und triff sie in Reihenfolge.
 
 ### Kurzbeschreibung
 
-Jeder Spieler hat eine Bingo-Karte mit Dartaufgaben.
+Alle Spieler haben dieselbe Bingo-Karte mit Dartaufgaben.
 
 ### Regeln
 
@@ -714,6 +726,8 @@ Jeder Spieler hat eine Bingo-Karte mit Dartaufgaben.
 - Felder enthalten Ziele oder Bedingungen.
 - Treffer erfüllt passende Karte.
 - Bingo-Linie gewinnt oder gibt Bonus.
+- Nach dem ersten Bingo dürfen die übrigen Spieler der laufenden Runde noch
+  ausgleichen; mehrere Bingos ergeben einen Gleichstand.
 
 ### Beispiel-Felder
 

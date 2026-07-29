@@ -371,6 +371,69 @@ class GameEngineTests(unittest.TestCase):
         engine.handle_event({"type": "miss", "score": 0, "seq": 5})
         self.assertEqual(layouts[2], engine.state.mode_state["colors"])
 
+    def test_target_rush_sequence_repeats_for_every_player(self):
+        engine = GameEngine()
+        engine.reset(
+            "target_rush",
+            ["Ada", "Bob"],
+            options={"rounds": 3, "difficulty": "easy"},
+        )
+        targets = list(engine.state.mode_state["round_targets"])
+
+        for seq in range(3):
+            self.assertEqual(
+                targets[seq]["label"],
+                engine.state.mode_state["target"]["label"],
+            )
+            engine.handle_event({"type": "miss", "score": 0, "seq": seq})
+        engine.continue_turn()
+
+        self.assertEqual(targets, engine.state.mode_state["round_targets"])
+        self.assertEqual(targets[0], engine.state.mode_state["target"])
+
+    def test_darts_bingo_uses_the_same_card_for_every_player(self):
+        engine = GameEngine()
+        engine.reset("darts_bingo", ["Ada", "Bob"])
+
+        ada, bob = engine.state.players
+        self.assertEqual(
+            [
+                (cell["task"], cell["label"])
+                for cell in ada.marks.values()
+            ],
+            [
+                (cell["task"], cell["label"])
+                for cell in bob.marks.values()
+            ],
+        )
+        self.assertIsNot(ada.marks, bob.marks)
+
+    def test_darts_bingo_waits_for_equal_attempts_after_first_bingo(self):
+        engine = GameEngine()
+        engine.reset("darts_bingo", ["Ada", "Bob"])
+        ada, bob = engine.state.players
+        for player in (ada, bob):
+            player.marks = {
+                str(index): {
+                    "task": "field_20",
+                    "label": "Any 20",
+                    "done": index not in (0, 1, 2),
+                }
+                for index in range(9)
+            }
+
+        event = hit(20, 70, field=20, label="S20")
+        event["ring"] = "single_outer"
+        engine.handle_event(event)
+        self.assertEqual("hold", engine.state.status)
+        self.assertEqual([ada.id], engine.state.mode_state["bingo_candidates"])
+
+        engine.continue_turn()
+        engine.handle_event(event | {"seq": 71})
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual("draw", engine.state.result_type)
+        self.assertEqual({ada.id, bob.id}, set(engine.state.winner_ids))
+
     def test_darts_bingo_full_card_does_not_finish_on_line(self):
         engine = GameEngine()
         engine.reset("darts_bingo", ["Ada"], options={"points": "full"})
@@ -425,6 +488,26 @@ class GameEngineTests(unittest.TestCase):
         engine.continue_turn()
         engine.handle_event({"type": "miss", "score": 0, "seq": 211})
         self.assertNotEqual(first_task, engine.state.mode_state["task_id"])
+
+    def test_simon_sequence_is_identical_for_every_player_in_a_round(self):
+        engine = GameEngine()
+        engine.reset(
+            "simon_says",
+            ["Ada", "Bob"],
+            options={"rounds": 5, "difficulty": "easy"},
+        )
+        sequence = list(engine.state.mode_state["sequence"])
+        target = dict(sequence[0])
+
+        engine.handle_event({"type": "hit", "seq": 220, **target})
+        engine.continue_turn()
+        self.assertEqual(sequence, engine.state.mode_state["sequence"])
+        self.assertEqual(0, engine.state.mode_state["position"])
+
+        engine.handle_event({"type": "hit", "seq": 221, **target})
+        engine.continue_turn()
+        self.assertEqual(2, engine.state.round_number)
+        self.assertEqual(2, len(engine.state.mode_state["sequence"]))
 
     def test_risk_it_bank_can_finish_final_round(self):
         engine = GameEngine()

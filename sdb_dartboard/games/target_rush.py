@@ -8,7 +8,6 @@ from .arcade import (
     overlay_item,
     same_field,
     same_target,
-    zone_id,
 )
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
@@ -31,6 +30,7 @@ class TargetRushMode:
             InstructionStep("Ziel leuchtet", "Triff das cyan markierte Segment.", "target"),
             InstructionStep("Almost zählt", "Gleiche Zahl im falschen Ring gibt kleine Punkte.", "spark"),
             InstructionStep("Combo sammeln", "Exakte Treffer in Folge bringen Bonus.", "combo"),
+            InstructionStep("Gleiche Chancen", "Alle spielen pro Runde dieselbe Folge aus drei Zielen.", "shuffle"),
         ],
         sound_theme="arcade",
     )
@@ -40,16 +40,33 @@ class TargetRushMode:
         player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        target = choose_targets(1, str(options.get("difficulty", "normal")))[0]
-        state.mode_state = {"target": target, "combo": {}, "last_result": ""}
-        state.message = f"Triff {target['label']}!"
+        state.mode_state = {"combo": {}, "last_result": ""}
+        self._generate_round_targets(state)
 
-    def _next_target(self, state: Any) -> Dict[str, Any]:
-        current = state.mode_state.get("target", {})
-        target = choose_targets(1, str(state.options.get("difficulty", "normal")), exclude=[zone_id(current)])[0]
+    def _generate_round_targets(self, state: Any) -> None:
+        targets = choose_targets(
+            3,
+            str(state.options.get("difficulty", "normal")),
+        )
+        state.mode_state["target_round"] = state.round_number
+        state.mode_state["round_targets"] = targets
+        self._select_target(state, 0)
+
+    def _select_target(self, state: Any, index: int) -> Dict[str, Any]:
+        targets = state.mode_state["round_targets"]
+        selected = max(0, min(index, len(targets) - 1))
+        target = targets[selected]
+        state.mode_state["target_index"] = selected
         state.mode_state["target"] = target
         state.message = f"Triff {target['label']}!"
         return target
+
+    def on_turn_start(self, state: Any, player: Any) -> None:
+        del player
+        if int(state.mode_state.get("target_round", 0)) != state.round_number:
+            self._generate_round_targets(state)
+        else:
+            self._select_target(state, 0)
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         target = state.mode_state.get("target") or choose_targets(1)[0]
@@ -62,7 +79,6 @@ class TargetRushMode:
             player.score += points
             state.mode_state["combo"][player.id] = combo + 1
             old = target["label"]
-            self._next_target(state)
             outcome = ThrowOutcome(turn_value=points, message=f"Perfect {old}! +{points}")
         elif same_field(event, target):
             player.score += 10
@@ -71,6 +87,8 @@ class TargetRushMode:
         else:
             state.mode_state["combo"][player.id] = 0
             outcome = ThrowOutcome(turn_value=0, message=f"Falsches Feld: {event.get('label', '')}")
+        if state.darts_in_turn + 1 < 3:
+            self._select_target(state, state.darts_in_turn + 1)
         return finish_round_game(
             state, outcome, "{winner} gewinnt den Target Rush!"
         )
