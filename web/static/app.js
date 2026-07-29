@@ -63,6 +63,14 @@ function escapeHtml(value){
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
   })[char]);
 }
+function promptMarkup(value){
+  const parts=String(value ?? '')
+    .split(/\s+·\s+|\s+[–—]\s+|\n+/)
+    .map(part=>part.trim())
+    .filter(Boolean);
+  if(parts.length<2) return escapeHtml(parts[0] || '');
+  return `<i class="stacked-prompt">${parts.map(part=>`<em>${escapeHtml(part)}</em>`).join('\n')}</i>`;
+}
 function modeBySlug(slug){
   return appState.experience?.modes.find(mode => mode.slug === slug);
 }
@@ -528,7 +536,7 @@ function controlModePrompt(game){
       : '';
   return `<aside class="control-mode-prompt">
     <span>AKTUELLE AUFGABE</span>
-    <b>${escapeHtml(overlay.prompt)}</b>
+    <b>${promptMarkup(overlay.prompt)}</b>
     ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
   </aside>`;
 }
@@ -825,7 +833,7 @@ function projectorOverlayPrompt(game){
     ? 'Jetzt aus dem Kopf!'
     : overlay.prompt;
   const label=game.game_type==='simon_says' && !appState.memoryHidden ? '3 SEKUNDEN MERKEN' : 'ZIEL';
-  return `<aside class="projector-advice arcade"><span>${label}</span><b>${escapeHtml(prompt)}</b><small>${escapeHtml(overlay.combo?.count ? `Combo ×${overlay.combo.count}` : '')}</small></aside>`;
+  return `<aside class="projector-advice arcade"><span>${label}</span><b>${promptMarkup(prompt)}</b><small>${escapeHtml(overlay.combo?.count ? `Combo ×${overlay.combo.count}` : '')}</small></aside>`;
 }
 function projectorModePanel(game){
   const overlay = game.overlay || {};

@@ -117,6 +117,22 @@
   color: var(--muted);
 }
 
+.stacked-prompt {
+  display: flex;
+  flex-direction: column;
+  gap: .16em;
+  font-style: normal;
+}
+
+.stacked-prompt em {
+  display: block;
+  font-style: normal;
+}
+
+.projector-advice.arcade .stacked-prompt {
+  gap: .24em;
+}
+
 .projection-game.test-mode .seg {
   cursor: pointer;
 }
