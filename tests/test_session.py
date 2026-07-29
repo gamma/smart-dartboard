@@ -53,10 +53,55 @@ class SessionControllerTests(unittest.TestCase):
 
     def test_finishing_session_keeps_summary_statistics(self):
         self._start_game()
+        self.controller.abort_game()
         self.controller.end_session()
         state = self.controller.public_state()
         self.assertEqual("session_summary", state["screen"])
         self.assertEqual("finished", state["session"]["status"])
+
+    def test_session_cannot_end_directly_from_running_game(self):
+        self._start_game()
+        with self.assertRaisesRegex(ValueError, "game selection"):
+            self.controller.end_session()
+
+    def test_calibration_reset_is_centered_and_square_for_projector(self):
+        for width, height in ((1600, 900), (900, 1600), (1024, 768)):
+            with self.subTest(width=width, height=height):
+                self.controller.report_projector_geometry(width, height)
+                calibration = self.controller.reset_calibration()
+                corners = calibration["corners"]
+                projected_width = (corners[1]["x"] - corners[0]["x"]) * width
+                projected_height = (corners[3]["y"] - corners[0]["y"]) * height
+                self.assertAlmostEqual(projected_width, projected_height)
+                self.assertAlmostEqual(min(width, height) * 0.9, projected_width)
+                self.assertAlmostEqual(
+                    0.5, (corners[0]["x"] + corners[1]["x"]) / 2
+                )
+                self.assertAlmostEqual(
+                    0.5, (corners[0]["y"] + corners[3]["y"]) / 2
+                )
+                self.assertEqual(1.0, calibration["scale"])
+                self.assertEqual(0.0, calibration["offset_x"])
+                self.assertEqual(0.0, calibration["offset_y"])
+
+    def test_projector_sound_setting_and_status_are_persisted(self):
+        self.controller.set_sound_enabled(True)
+        self.assertEqual(
+            {"enabled": True, "status": "starting"},
+            self.controller.public_state()["sound"],
+        )
+        self.controller.report_sound_status("ready")
+        self.controller.close()
+        self.controller = SessionController(self.database)
+        self.assertEqual(
+            {"enabled": True, "status": "starting"},
+            self.controller.public_state()["sound"],
+        )
+        self.controller.set_sound_enabled(False)
+        self.assertEqual(
+            {"enabled": False, "status": "disabled"},
+            self.controller.public_state()["sound"],
+        )
 
     def test_finished_game_cannot_be_returned_to_playing_screen(self):
         self._start_game()
@@ -89,6 +134,8 @@ class SessionControllerTests(unittest.TestCase):
         self.assertEqual(2, stats["games"])
         self.assertEqual(2, stats["wins"])
         self.assertEqual(6, stats["darts"])
+        session_stats = self.controller.public_state()["session_statistics"][0]
+        self.assertEqual(6, session_stats["session_points"])
 
     def test_correction_rewrites_persisted_statistics(self):
         ada, _ = self._start_game()
@@ -110,6 +157,62 @@ class SessionControllerTests(unittest.TestCase):
         }
         self.assertEqual(60, stats[ada["id"]]["total_points"])
         self.assertEqual(2, stats[ada["id"]]["darts"])
+
+    def test_finishing_game_via_plugin_action_updates_session_and_screen(self):
+        player = self.controller.create_player("Ada", "robot", "#28e7ff")
+        self.controller.start_session([player["id"]])
+        self.controller.prepare_game("risk_it", {"rounds": 1})
+        self.controller.start_game()
+        self.controller.set_screen("playing")
+        self.controller.process_event(
+            {
+                "type": "hit",
+                "label": "T20",
+                "score": 60,
+                "seq": 501,
+                "field": 20,
+                "ring": "triple",
+                "multiplier": 3,
+            }
+        )
+        self.controller.game_action("bank")
+        self.assertEqual("game_result", self.controller.screen)
+        self.assertEqual("finished", self.controller.engine.state.status)
+        self.assertEqual(
+            "finished", self.controller.store.get_game(self.controller.game_id)["status"]
+        )
+
+    def test_aborted_game_returns_to_selection_and_is_not_counted(self):
+        player = self.controller.create_player("Ada", "robot", "#28e7ff")
+        self.controller.start_session([player["id"]])
+        self.controller.prepare_game("countup", {"rounds": 1})
+        self.controller.start_game()
+        aborted_game_id = self.controller.game_id
+        self.controller.set_screen("playing")
+        self.controller.process_event(
+            {
+                "type": "hit",
+                "label": "T20",
+                "score": 60,
+                "seq": 601,
+                "field": 20,
+                "ring": "triple",
+                "multiplier": 3,
+            }
+        )
+
+        self.controller.abort_game()
+
+        state = self.controller.public_state()
+        self.assertEqual("game_select", state["screen"])
+        self.assertIsNone(state["game_id"])
+        self.assertEqual("idle", state["game"]["status"])
+        self.assertEqual("aborted", self.controller.store.get_game(aborted_game_id)["status"])
+        self.assertEqual(0, state["session_statistics"][0]["games"])
+        self.assertEqual(0, state["session_statistics"][0]["wins"])
+        self.assertEqual(0, state["session_statistics"][0]["darts"])
+        self.assertEqual(0, state["session_statistics"][0]["session_points"])
+        self.assertEqual(0, state["statistics"][0]["darts"])
 
 
 class EventPipelineTests(unittest.IsolatedAsyncioTestCase):

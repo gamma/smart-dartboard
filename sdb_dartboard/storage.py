@@ -208,6 +208,18 @@ class DartboardStore:
                 (winner_id, utc_now(), game_id),
             )
 
+    def abort_game(self, game_id: str) -> None:
+        """Keep an audit record while excluding the game from all statistics."""
+        with self._lock, self._connection:
+            self._connection.execute(
+                """
+                UPDATE games
+                SET status='aborted', winner_id=NULL, ended_at=?
+                WHERE id=? AND status='running'
+                """,
+                (utc_now(), game_id),
+            )
+
     def reopen_game(self, game_id: str) -> None:
         with self._lock, self._connection:
             self._connection.execute(
@@ -302,7 +314,8 @@ class DartboardStore:
             FROM players p
             LEFT JOIN session_players sp ON sp.player_id=p.id
             LEFT JOIN games g ON g.session_id=sp.session_id
-            LEFT JOIN throws t ON t.game_id=g.id AND t.player_id=p.id
+            LEFT JOIN throws t
+              ON t.game_id=g.id AND t.player_id=p.id AND g.status!='aborted'
             {where}
             GROUP BY p.id
             ORDER BY wins DESC, total_points DESC, lower(p.name)
@@ -316,5 +329,43 @@ class DartboardStore:
                 item["total_points"] / item["darts"] * 3, 2
             ) if item["darts"] else 0
             item["win_rate"] = round(item["wins"] / item["games"] * 100, 1) if item["games"] else 0
+            result.append(item)
+        return result
+
+    def session_statistics(self, session_id: str) -> List[Dict[str, Any]]:
+        """Return a clean leaderboard for one session.
+
+        Only completed games count. A win awards three session points; aborted
+        and currently running games contribute neither games, darts nor points.
+        """
+        query = """
+            SELECT p.id, p.name, p.avatar, p.color,
+                   COUNT(DISTINCT g.id) AS games,
+                   COUNT(DISTINCT CASE WHEN g.winner_id=p.id THEN g.id END) AS wins,
+                   COUNT(t.id) AS darts,
+                   COALESCE(SUM(CAST(json_extract(t.event_json, '$.score') AS INTEGER)), 0) AS total_points,
+                   COALESCE(MAX(CAST(json_extract(t.event_json, '$.score') AS INTEGER)), 0) AS best_dart,
+                   COALESCE(SUM(CASE WHEN json_extract(t.event_json, '$.type')='miss' THEN 1 ELSE 0 END), 0) AS misses
+            FROM session_players sp
+            JOIN players p ON p.id=sp.player_id
+            LEFT JOIN games g
+              ON g.session_id=sp.session_id AND g.status='finished'
+            LEFT JOIN throws t ON t.game_id=g.id AND t.player_id=p.id
+            WHERE sp.session_id=?
+            GROUP BY p.id
+            ORDER BY wins DESC, total_points DESC, lower(p.name)
+        """
+        with self._lock:
+            rows = self._connection.execute(query, (session_id,)).fetchall()
+        result = []
+        for row in rows:
+            item = dict(row)
+            item["session_points"] = int(item["wins"]) * 3
+            item["three_dart_average"] = round(
+                item["total_points"] / item["darts"] * 3, 2
+            ) if item["darts"] else 0
+            item["win_rate"] = round(
+                item["wins"] / item["games"] * 100, 1
+            ) if item["games"] else 0
             result.append(item)
         return result

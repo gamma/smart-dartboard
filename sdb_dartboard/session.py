@@ -44,6 +44,8 @@ class SessionController:
             "offset_x": 0.0,
             "offset_y": 0.0,
         }
+        self.projector_geometry = {"width": 1600, "height": 900}
+        self.sound = {"enabled": False, "status": "disabled"}
         self.hardware: Dict[str, Any] = {"enabled": False, "status": "disabled"}
         self._restore()
 
@@ -62,6 +64,12 @@ class SessionController:
         if checkpoint:
             self.engine.import_state(checkpoint)
         self.calibration = self.store.get_runtime_value("calibration", self.calibration)
+        stored_sound = self.store.get_runtime_value("sound", self.sound)
+        sound_enabled = bool(stored_sound.get("enabled", False))
+        self.sound = {
+            "enabled": sound_enabled,
+            "status": "starting" if sound_enabled else "disabled",
+        }
 
     def _persist(self) -> None:
         self.store.set_runtime_value(
@@ -89,7 +97,14 @@ class SessionController:
             "modes": registry.as_dicts(),
             "players": self.store.list_players(),
             "statistics": self.store.statistics(player_ids or None),
+            "session_statistics": (
+                self.store.session_statistics(self.session_id)
+                if self.session_id
+                else []
+            ),
             "calibration": self.calibration,
+            "projector_geometry": self.projector_geometry,
+            "sound": self.sound,
             "hardware": self.hardware,
         }
 
@@ -117,8 +132,14 @@ class SessionController:
         if not self.session_id:
             raise ValueError("Start a session before selecting a game")
         mode = registry.get(game_type)
-        defaults = {option.key: option.default for option in mode.metadata.options}
-        defaults.update(options)
+        defaults = mode.metadata.resolve_options(options)
+        session = self.store.get_session(self.session_id)
+        player_count = len(session["players"]) if session else 0
+        if not mode.metadata.min_players <= player_count <= mode.metadata.max_players:
+            raise ValueError(
+                f"{mode.metadata.title} supports "
+                f"{mode.metadata.min_players}–{mode.metadata.max_players} players"
+            )
         self.selected_mode = game_type
         self.selected_options = defaults
         self.screen = "instructions"
@@ -226,9 +247,27 @@ class SessionController:
 
     def game_action(self, action: str, payload: Dict[str, Any] | None = None) -> None:
         self.engine.handle_action(action, payload or {})
+        if self.engine.state.status == "finished" and self.game_id:
+            self.store.finish_game(self.game_id, self.engine.state.winner_id)
+            self.screen = "game_result"
         self._persist()
 
     def next_game(self) -> None:
+        self.engine.clear()
+        self.game_id = None
+        self.selected_mode = None
+        self.selected_options = {}
+        self.screen = "game_select"
+        self._persist()
+
+    def abort_game(self) -> None:
+        if not self.session_id or not self.game_id:
+            raise ValueError("There is no active game to abort")
+        game = self.store.get_game(self.game_id)
+        if not game or game["status"] != "running":
+            raise ValueError("Only a running game can be aborted")
+        self.store.abort_game(self.game_id)
+        self.engine.clear()
         self.game_id = None
         self.selected_mode = None
         self.selected_options = {}
@@ -236,6 +275,8 @@ class SessionController:
         self._persist()
 
     def end_session(self) -> None:
+        if self.screen != "game_select":
+            raise ValueError("Return to the game selection before ending the session")
         if self.session_id:
             self.store.end_session(self.session_id)
         self.screen = "session_summary"
@@ -263,6 +304,46 @@ class SessionController:
             "offset_y": float(calibration.get("offset_y", 0.0)),
         }
         self.store.set_runtime_value("calibration", self.calibration)
+
+    def report_projector_geometry(self, width: int, height: int) -> None:
+        self.projector_geometry = {
+            "width": max(320, int(width)),
+            "height": max(240, int(height)),
+        }
+
+    def reset_calibration(self) -> Dict[str, Any]:
+        """Center the projection as the largest safe square for the viewport."""
+        width = float(self.projector_geometry["width"])
+        height = float(self.projector_geometry["height"])
+        side = min(width, height) * 0.9
+        half_x = side / width / 2
+        half_y = side / height / 2
+        calibration = {
+            "corners": [
+                {"x": 0.5 - half_x, "y": 0.5 - half_y},
+                {"x": 0.5 + half_x, "y": 0.5 - half_y},
+                {"x": 0.5 + half_x, "y": 0.5 + half_y},
+                {"x": 0.5 - half_x, "y": 0.5 + half_y},
+            ],
+            "scale": 1.0,
+            "offset_x": 0.0,
+            "offset_y": 0.0,
+        }
+        self.save_calibration(calibration)
+        return self.calibration
+
+    def set_sound_enabled(self, enabled: bool) -> None:
+        self.sound = {
+            "enabled": bool(enabled),
+            "status": "starting" if enabled else "disabled",
+        }
+        self.store.set_runtime_value("sound", self.sound)
+
+    def report_sound_status(self, status: str) -> None:
+        if status not in {"ready", "blocked", "unavailable"}:
+            raise ValueError(f"Unknown sound status: {status}")
+        self.sound = {**self.sound, "status": status}
+        self.store.set_runtime_value("sound", self.sound)
 
 
 class EventPipeline:

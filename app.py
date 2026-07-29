@@ -127,6 +127,19 @@ class CalibrationRequest(BaseModel):
     offset_y: float = Field(default=0.0, ge=-1.0, le=1.0)
 
 
+class ProjectorGeometryRequest(BaseModel):
+    width: int = Field(ge=320, le=16384)
+    height: int = Field(ge=240, le=16384)
+
+
+class SoundSettingsRequest(BaseModel):
+    enabled: bool
+
+
+class SoundStatusRequest(BaseModel):
+    status: str = Field(pattern=r"^(ready|blocked|unavailable)$")
+
+
 class ThrowCorrectionRequest(BaseModel):
     turn_index: int = Field(ge=0, le=2)
     event: Dict[str, Any]
@@ -254,10 +267,52 @@ async def next_game():
     return controller.public_state()
 
 
+@app.post("/api/game/abort")
+async def abort_game():
+    controller.abort_game()
+    await publish_state({"type": "game_aborted"})
+    return controller.public_state()
+
+
 @app.post("/api/calibration")
 async def save_calibration(req: CalibrationRequest):
     controller.save_calibration(req.model_dump())
     await publish_state({"type": "calibration_saved"})
+    return controller.public_state()
+
+
+@app.post("/api/calibration/reset")
+async def reset_calibration():
+    controller.reset_calibration()
+    await publish_state({"type": "calibration_reset"})
+    return controller.public_state()
+
+
+@app.post("/api/projector/geometry")
+async def projector_geometry(req: ProjectorGeometryRequest):
+    controller.report_projector_geometry(req.width, req.height)
+    await publish_state({"type": "projector_geometry"})
+    return controller.public_state()
+
+
+@app.post("/api/sound/settings")
+async def sound_settings(req: SoundSettingsRequest):
+    controller.set_sound_enabled(req.enabled)
+    await publish_state({"type": "sound_settings", "enabled": req.enabled})
+    return controller.public_state()
+
+
+@app.post("/api/sound/status")
+async def sound_status(req: SoundStatusRequest):
+    controller.report_sound_status(req.status)
+    await publish_state({"type": "sound_status", "status": req.status})
+    return controller.public_state()
+
+
+@app.post("/api/sound/test")
+async def sound_test():
+    sequence = int(asyncio.get_running_loop().time() * 1000)
+    await publish_state({"type": "sound_test", "seq": sequence})
     return controller.public_state()
 
 
