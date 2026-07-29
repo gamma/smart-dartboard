@@ -4,6 +4,18 @@ from sdb_dartboard.games.x01_advisor import x01_advice
 
 
 class X01AdvisorTest(unittest.TestCase):
+    def test_advice_stays_hidden_above_setup_range(self):
+        for score in (301, 201):
+            with self.subTest(score=score):
+                advice = x01_advice(score, 3, "double")
+                self.assertEqual(advice["status"], "none")
+                self.assertIsNone(advice["primary"])
+
+    def test_setup_advice_starts_at_200(self):
+        advice = x01_advice(200, 3, "double")
+        self.assertEqual(advice["status"], "setup")
+        self.assertIsNotNone(advice["primary"])
+
     def test_checkout_40_double_out(self):
         advice = x01_advice(40, 3, "double")
         self.assertEqual(advice["status"], "checkout")

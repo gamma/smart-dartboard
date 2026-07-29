@@ -67,6 +67,7 @@ SETUP_LEAVE_PRIORITY = [40, 32, 36, 24, 16, 20, 10, 8, 4, 2, 50, 60, 80, 100, 12
 SETUP_RANK = {leave: index for index, leave in enumerate(SETUP_LEAVE_PRIORITY)}
 PREFERENCE = {"T20":1000,"T19":990,"T18":980,"T17":970,"T16":960,"T15":950,"DBull":940,
               "D20":900,"D16":890,"D18":880,"D12":870,"D10":860,"D8":850,"D4":840,"D2":830,"D1":820}
+ADVICE_MAX_SCORE = 200
 
 
 def _sequence(labels: List[str]) -> List[Dict[str, Any]]:
@@ -219,7 +220,7 @@ def x01_advice(score: int, darts_left: int, out_rule: str = "double") -> Dict[st
         "sequence": [],
         "setup": None,
     }
-    if score <= 0 or darts_left <= 0:
+    if score <= 0 or darts_left <= 0 or score > ADVICE_MAX_SCORE:
         return result
 
     checkout = checkout_sequence(score, darts_left, out_rule)
