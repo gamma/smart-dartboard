@@ -167,3 +167,17 @@ Qualitätsstufe 90 gespeichert. Die aktuelle Bibliothek umfasst:
 | `mine.webp` | harmlose Spielzeugmine | Avoid Bomb, Dart Sweeper |
 | `coin.webp` | goldene Sternmünze | Risk It |
 | `gem.webp` | blauer Spielzeugedelstein | Treasure Hunt |
+| `candy_overheat.webp` | Zuckerstaub-Explosion mit Bonbons und Konfetti | Candy Cannon Overheat |
+
+Für `candy_overheat.webp` wird `[SUBJECT]` im gemeinsamen Prop-Prompt durch
+folgende Effektspezifikation ersetzt:
+
+```text
+A compact radial Candy Cannon overheat explosion: a large burst-shaped cloud
+of thick cream-colored sugar dust and cotton-candy puffs with a hot coral-orange
+center, several small wrapped candies and colorful paper confetti bursting
+outward. Energetic and unmistakably explosive, but playful, family-friendly
+and made from tactile felt, painted clay and paper. Keep the complete silhouette
+inside the square canvas with generous margin. No cannon, dartboard, text,
+realistic fire, dark soot or translucent smoke.
+```

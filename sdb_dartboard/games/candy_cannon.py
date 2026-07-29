@@ -69,6 +69,7 @@ class CandyCannonMode:
                 charge += addition
                 if charge > 10:
                     state.mode_state["charge"][player.id] = 0
+                    event["effect"] = "candy_overheat"
                     outcome = ThrowOutcome(0, "OVERHEAT! Ladung verloren")
                 else:
                     state.mode_state["charge"][player.id] = charge

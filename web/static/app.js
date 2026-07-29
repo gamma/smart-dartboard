@@ -84,6 +84,11 @@ function isBombEvent(experience,event){
     Number(item.field)===Number(event.field) && String(item.ring)===String(event.ring)
   ));
 }
+function isCandyOverheatEvent(experience,event){
+  return experience?.game?.game_type==='candy_cannon'
+    && event?.type==='hit'
+    && event?.effect==='candy_overheat';
+}
 function clearScoreCountdown(){
   cancelAnimationFrame(appState.scoreCountdownFrame);
   appState.scoreCountdownFrame=null;
@@ -860,15 +865,26 @@ function bombExplosion(game,event){
   </div>`;
 }
 
+function candyOverheat(game,event){
+  if(!isCandyOverheatEvent({game},event)) return '';
+  return `<div class="candy-overheat" aria-hidden="true">
+    <i></i>
+    <img src="/static/assets/effects/candy_overheat.webp" alt="">
+    <b>ÜBERHITZT!</b>
+    <span>LADUNG VERLOREN</span>
+  </div>`;
+}
+
 function projectorPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
   const player = currentPlayer(game) || {};
   const testMode=testModeEnabled();
   const bombImpact=isBombEvent({game},appState.projectedEvent);
-  return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
+  const candyOverheatImpact=isCandyOverheatEvent({game},appState.projectedEvent);
+  return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
     ${modeAmbience(mode,appState.projectedEvent)}
-    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}</div>
+    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}${candyOverheat(game,appState.projectedEvent)}</div>
     <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong data-score-player="${escapeHtml(player.id || '')}">${player.score ?? 0}</strong></header>
     <footer class="projection-bottom">
       <div class="throw-callout">${game.status==='hold'?'DARTS ZIEHEN':escapeHtml(appState.projectedEvent?.label || 'BEREIT')}</div>
@@ -1151,6 +1167,11 @@ function playEventCue(event,experience){
     tone(92,.38,0,'sawtooth',.18);
     tone(54,.52,.04,'sawtooth',.16);
     tone(680,.09,0,'square',.07);
+  } else if(event.type==='hit' && isCandyOverheatEvent(experience,event)){
+    tone(520,.11,0,'square',.12);
+    tone(360,.16,.08,'triangle',.13);
+    tone(220,.28,.18,'sawtooth',.1);
+    tone(110,.34,.28,'sine',.08);
   } else if(event.type==='hit'){
     const base=event.multiplier===3?themeBase*1.45:event.multiplier===2?themeBase*1.22:event.field===25?themeBase*1.7:themeBase;
     tone(base,.16,0,'triangle',.16); tone(base*1.5,.2,.08,'sine',.1);

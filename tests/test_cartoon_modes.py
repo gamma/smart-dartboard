@@ -181,6 +181,7 @@ class CartoonModeTests(unittest.TestCase):
         engine.state.mode_state["charge"][ada.id] = 9
         engine.handle_event(hit(20, "triple", 3, 5))
         self.assertEqual(0, engine.state.mode_state["charge"][ada.id])
+        self.assertEqual("candy_overheat", engine.state.last_event["effect"])
 
     def test_candy_cannon_bull_charges_until_fire_is_ready(self):
         engine = GameEngine()

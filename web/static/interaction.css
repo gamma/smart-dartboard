@@ -212,6 +212,83 @@
   animation: bomb-score-tick .16s ease-in-out infinite alternate;
 }
 
+.candy-overheat {
+  position: absolute;
+  z-index: 5;
+  left: 500px;
+  top: 500px;
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.candy-overheat img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 650px;
+  height: 650px;
+  object-fit: contain;
+  opacity: 0;
+  filter:
+    drop-shadow(0 0 22px rgba(255, 210, 86, .95))
+    drop-shadow(0 0 58px rgba(231, 111, 81, .72));
+  animation: candy-overheat-burst 1.65s cubic-bezier(.15, .78, .2, 1) forwards;
+}
+
+.candy-overheat i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 180px;
+  height: 180px;
+  border: 16px solid rgba(255, 224, 125, .9);
+  border-radius: 50%;
+  box-shadow: 0 0 32px rgba(231, 111, 81, .9);
+  animation: candy-overheat-ring 1.15s ease-out forwards;
+}
+
+.candy-overheat b,
+.candy-overheat span {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  white-space: nowrap;
+  text-align: center;
+  opacity: 0;
+  transform: translateX(-50%);
+  text-shadow: 0 5px 0 #9f3729, 0 0 26px rgba(255, 222, 121, .95);
+}
+
+.candy-overheat b {
+  top: -62px;
+  color: #fff7d8;
+  font-size: 76px;
+  font-weight: 1000;
+  letter-spacing: -.055em;
+  animation: candy-overheat-word 1.8s .12s cubic-bezier(.17, .82, .22, 1) forwards;
+}
+
+.candy-overheat span {
+  top: 26px;
+  color: #fff;
+  font-size: 23px;
+  font-weight: 1000;
+  letter-spacing: .12em;
+  animation: candy-overheat-subline 1.7s .22s ease-out forwards;
+}
+
+.candy-overheat-impact::after {
+  content: "";
+  position: absolute;
+  z-index: 7;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 243, 194, .52), rgba(231, 111, 81, .24) 38%, transparent 72%);
+  mix-blend-mode: screen;
+  animation: candy-overheat-flash .8s ease-out forwards;
+}
+
 @keyframes bomb-fireball {
   0% { opacity: 0; transform: translate(-50%, -50%) scale(.08) rotate(-18deg); }
   18% { opacity: 1; }
@@ -246,12 +323,48 @@
   to { transform: scale(1.09); filter: brightness(1.25); }
 }
 
+@keyframes candy-overheat-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.08) rotate(-8deg); }
+  14% { opacity: 1; }
+  48% { opacity: 1; transform: translate(-50%, -50%) scale(1.03) rotate(2deg); }
+  76% { opacity: 1; transform: translate(-50%, -50%) scale(.98) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.08); filter: blur(3px); }
+}
+
+@keyframes candy-overheat-ring {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(.1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(3.1); border-width: 3px; }
+}
+
+@keyframes candy-overheat-word {
+  0% { opacity: 0; transform: translate(-50%, 20px) scale(.3) rotate(-5deg); }
+  24% { opacity: 1; transform: translate(-50%, 0) scale(1.1) rotate(2deg); }
+  74% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -22px) scale(.96); }
+}
+
+@keyframes candy-overheat-subline {
+  0%, 12% { opacity: 0; transform: translate(-50%, 12px); }
+  30%, 78% { opacity: 1; transform: translate(-50%, 0); }
+  100% { opacity: 0; transform: translate(-50%, -10px); }
+}
+
+@keyframes candy-overheat-flash {
+  0% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .bomb-explosion::before,
   .bomb-explosion::after,
   .bomb-explosion i,
   .bomb-explosion b,
-  .bomb-impact::after {
+  .bomb-impact::after,
+  .candy-overheat img,
+  .candy-overheat i,
+  .candy-overheat b,
+  .candy-overheat span,
+  .candy-overheat-impact::after {
     animation-duration: .01ms !important;
   }
 
