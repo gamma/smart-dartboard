@@ -1,6 +1,7 @@
 const appState = {
   experience: null,
   wsOk: false,
+  serverInstance: null,
   selectedPlayers: new Set(),
   audio: null,
   countdownTimer: null,
@@ -157,6 +158,16 @@ function connectWs(){
   };
   ws.onmessage = message => {
     const payload = JSON.parse(message.data);
+    if(
+      payload.dev_reload
+      && appState.serverInstance
+      && payload.server_instance
+      && payload.server_instance !== appState.serverInstance
+    ){
+      location.reload();
+      return;
+    }
+    if(payload.server_instance) appState.serverInstance=payload.server_instance;
     if(payload.experience) updateExperience(payload.experience, payload.event);
   };
 }

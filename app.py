@@ -4,6 +4,7 @@ import asyncio
 import contextlib
 import logging
 import os
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -30,6 +31,8 @@ pipeline = EventPipeline(controller)
 manager = ConnectionManager()
 ble_task: Optional[asyncio.Task] = None
 ble_enabled = False
+SERVER_INSTANCE_ID = uuid.uuid4().hex
+DEV_RELOAD = os.environ.get("SDB_DEV_RELOAD", "0").lower() in {"1", "true"}
 
 
 async def publish_state(event: Optional[Dict[str, Any]] = None) -> None:
@@ -38,6 +41,8 @@ async def publish_state(event: Optional[Dict[str, Any]] = None) -> None:
         {
             "type": "experience",
             "experience": experience,
+            "server_instance": SERVER_INSTANCE_ID,
+            "dev_reload": DEV_RELOAD,
             # Compatibility with the original web client.
             "state": experience["game"],
             "event": event,
@@ -445,6 +450,8 @@ async def ws_endpoint(websocket: WebSocket):
             {
                 "type": "experience",
                 "experience": experience,
+                "server_instance": SERVER_INSTANCE_ID,
+                "dev_reload": DEV_RELOAD,
                 "state": experience["game"],
             }
         )

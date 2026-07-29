@@ -51,6 +51,25 @@ http://localhost:8000/control
 http://localhost:8000/projector
 ```
 
+### Automatischer Neustart während der Entwicklung
+
+Für die lokale Entwicklung muss der Server nur einmal gestartet werden:
+
+```bash
+./scripts/dev.sh
+```
+
+Das Skript deaktiviert BLE, erlaubt Testtreffer und beobachtet Python, HTML,
+CSS, JavaScript sowie lokale Artwork-Dateien. Nach einer Änderung startet
+Uvicorn automatisch neu; bereits geöffnete Controller- und Projektor-Seiten
+laden sich danach ebenfalls automatisch neu.
+
+Host und Port können bei Bedarf überschrieben werden:
+
+```bash
+SDB_HOST=127.0.0.1 SDB_PORT=8001 ./scripts/dev.sh
+```
+
 ## Start mit Dartboard
 
 ```bash
