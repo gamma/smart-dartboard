@@ -878,7 +878,7 @@ function projectorPlaying(){
     ${projectorOverlayPrompt(game)}
     ${projectorModePanel(game)}
     <aside class="projection-roster">${game.players.map(item=>`<span class="${item.id===game.current_player_id?'active':''}"><b>${escapeHtml(item.name)}</b><i data-score-player="${escapeHtml(item.id)}">${item.score}</i></span>`).join('')}</aside>
-    ${testMode?'<div class="projector-test-tools"><b>TESTMODUS</b><span>Scheibensegment anklicken</span><button data-action="test-miss">MISS</button></div>':''}
+    ${testMode?'<div class="projector-test-tools"><b>TESTMODUS</b><span>Scheibensegment anklicken</span><button data-action="test-miss">MISS</button><button class="switch-player" data-action="next-player">SPIELER WECHSELN</button></div>':''}
   </section>`;
 }
 function projectorResult(){

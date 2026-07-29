@@ -395,9 +395,11 @@
   z-index: 8;
   left: 3vw;
   bottom: 12vh;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
+  width: min(340px, 22vw);
   padding: 9px 12px;
   border: 1px solid rgba(40, 231, 255, .35);
   border-radius: 999px;
@@ -410,13 +412,23 @@
 
 .projector-test-tools button {
   min-height: 42px;
-  padding: 0 20px;
+  padding: 0 14px;
   border: 0;
   border-radius: 999px;
   background: var(--red);
   color: #fff;
   font-weight: 950;
   cursor: pointer;
+}
+
+.projector-test-tools button:first-of-type {
+  min-width: 78px;
+}
+
+.projector-test-tools button.switch-player {
+  background: linear-gradient(135deg, var(--cyan), #6f8cff);
+  color: #041017;
+  font-size: 11px;
 }
 
 .projector-test-tools b {
