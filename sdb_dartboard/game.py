@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
+import copy
 
 from .games import registry
 from .games.cricket import CRICKET_TARGETS
@@ -74,7 +75,7 @@ class GameState:
             "message": self.message,
             "turn_start_values": dict(self.turn_start_values),
             "round_number": self.round_number,
-            "mode_state": dict(self.mode_state),
+            "mode_state": copy.deepcopy(self.mode_state),
         }
 
     def restore_snapshot(self, snap: Dict[str, Any]) -> None:
@@ -97,7 +98,7 @@ class GameState:
         self.message = snap["message"]
         self.turn_start_values = dict(snap.get("turn_start_values", {}))
         self.round_number = int(snap.get("round_number", 1))
-        self.mode_state = dict(snap.get("mode_state", {}))
+        self.mode_state = copy.deepcopy(snap.get("mode_state", {}))
 
     def advice(self) -> Optional[Dict[str, Any]]:
         if self.game_type != "x01" or self.status not in ("running", "hold"):
