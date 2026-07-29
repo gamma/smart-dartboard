@@ -326,7 +326,7 @@ class GameEngineTests(unittest.TestCase):
                 self.assertEqual("finished", engine.state.status)
                 self.assertIsNotNone(engine.state.winner_id)
 
-    def test_color_clash_shuffle_turn_refreshes_for_next_player(self):
+    def test_color_clash_round_layout_is_identical_for_every_player(self):
         engine = GameEngine()
         engine.reset(
             "color_clash",
@@ -337,7 +337,39 @@ class GameEngineTests(unittest.TestCase):
         for seq in range(3):
             engine.handle_event({"type": "miss", "score": 0, "seq": seq})
         engine.continue_turn()
+        self.assertEqual(initial, engine.state.mode_state["colors"])
+
+        for seq in range(3, 6):
+            engine.handle_event({"type": "miss", "score": 0, "seq": seq})
+        engine.continue_turn()
+
+        self.assertEqual(2, engine.state.round_number)
         self.assertNotEqual(initial, engine.state.mode_state["colors"])
+
+    def test_color_clash_dart_layout_sequence_repeats_for_every_player(self):
+        engine = GameEngine()
+        engine.reset(
+            "color_clash",
+            ["Ada", "Bob"],
+            options={"rounds": 3, "shuffle": "dart"},
+        )
+        layouts = [
+            dict(layout) for layout in engine.state.mode_state["layouts"]
+        ]
+
+        self.assertEqual(layouts[0], engine.state.mode_state["colors"])
+        engine.handle_event({"type": "miss", "score": 0, "seq": 1})
+        self.assertEqual(layouts[1], engine.state.mode_state["colors"])
+        engine.handle_event({"type": "miss", "score": 0, "seq": 2})
+        self.assertEqual(layouts[2], engine.state.mode_state["colors"])
+        engine.handle_event({"type": "miss", "score": 0, "seq": 3})
+        engine.continue_turn()
+
+        self.assertEqual(layouts[0], engine.state.mode_state["colors"])
+        engine.handle_event({"type": "miss", "score": 0, "seq": 4})
+        self.assertEqual(layouts[1], engine.state.mode_state["colors"])
+        engine.handle_event({"type": "miss", "score": 0, "seq": 5})
+        self.assertEqual(layouts[2], engine.state.mode_state["colors"])
 
     def test_darts_bingo_full_card_does_not_finish_on_line(self):
         engine = GameEngine()

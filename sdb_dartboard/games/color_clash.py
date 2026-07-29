@@ -21,12 +21,12 @@ class ColorClashMode:
         icon="palette",
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
-            GameOption("shuffle", "Farbwechsel", "choice", "turn", [{"value":"turn","label":"Nach jeder Aufnahme"},{"value":"dart","label":"Nach jedem Dart"}]),
+            GameOption("shuffle", "Farbwechsel", "choice", "turn", [{"value":"turn","label":"Nach jeder Runde"},{"value":"dart","label":"Nach jedem Dart · gleich für alle"}]),
         ],
         instructions=[
             InstructionStep("Farben zählen", "Gold +50, Cyan +25, Grün +10, Rot -25.", "palette"),
             InstructionStep("Klassische Punkte egal", "Die Farbe des getroffenen Segments entscheidet.", "rules"),
-            InstructionStep("Board mischt sich", "Je nach Variante wechseln Farben nach Dart oder Aufnahme.", "shuffle"),
+            InstructionStep("Gleiche Chancen", "Alle spielen pro Runde dieselben Farben – fest oder als gleiche Drei-Dart-Folge.", "shuffle"),
         ],
         sound_theme="arcade",
     )
@@ -36,7 +36,8 @@ class ColorClashMode:
         player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        state.mode_state = {"colors": self._generate_colors()}
+        state.mode_state = {}
+        self._generate_round_layouts(state)
         state.message = "Gold zählt am meisten!"
 
     def _generate_colors(self) -> Dict[str, str]:
@@ -51,17 +52,41 @@ class ColorClashMode:
             colors[zone_id(dart)] = color
         return colors
 
-    def _refresh_if_needed(self, state: Any, force: bool = False) -> None:
-        if force or state.options.get("shuffle", "dart") == "dart":
-            state.mode_state["colors"] = self._generate_colors()
+    def _generate_round_layouts(self, state: Any) -> None:
+        layout_count = 3 if state.options.get("shuffle", "turn") == "dart" else 1
+        layouts = [self._generate_colors() for _ in range(layout_count)]
+        state.mode_state.update({
+            "layout_round": state.round_number,
+            "layouts": layouts,
+            "layout_index": 0,
+            "colors": dict(layouts[0]),
+        })
+
+    def _ensure_round_layouts(self, state: Any) -> None:
+        layouts = state.mode_state.get("layouts")
+        expected_count = 3 if state.options.get("shuffle", "turn") == "dart" else 1
+        if (
+            state.mode_state.get("layout_round") != state.round_number
+            or not isinstance(layouts, list)
+            or len(layouts) != expected_count
+        ):
+            self._generate_round_layouts(state)
+
+    def _select_layout(self, state: Any, index: int) -> None:
+        layouts = state.mode_state["layouts"]
+        selected = max(0, min(index, len(layouts) - 1))
+        state.mode_state["layout_index"] = selected
+        state.mode_state["colors"] = dict(layouts[selected])
 
     def on_turn_start(self, state: Any, player: Any) -> None:
-        if state.options.get("shuffle", "dart") == "turn":
-            self._refresh_if_needed(state, force=True)
+        self._ensure_round_layouts(state)
+        self._select_layout(state, 0)
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        self._ensure_round_layouts(state)
+        if state.options.get("shuffle", "turn") == "dart":
+            self._select_layout(state, state.darts_in_turn)
         if event.get("type") == "miss":
-            self._refresh_if_needed(state)
             outcome = ThrowOutcome(turn_value=0, message="Miss")
         else:
             colors = state.mode_state.get("colors", {})
@@ -69,12 +94,16 @@ class ColorClashMode:
             color = colors.get(hit_id)
             points = int(COLOR_SCORES.get(color or "", 0))
             player.score += points
-            self._refresh_if_needed(state)
             label = event.get("label", "")
             if color:
                 outcome = ThrowOutcome(turn_value=points, message=f"{label}: {color} {points:+d}")
             else:
                 outcome = ThrowOutcome(turn_value=0, message=f"{label}: neutral")
+        if (
+            state.options.get("shuffle", "turn") == "dart"
+            and state.darts_in_turn + 1 < 3
+        ):
+            self._select_layout(state, state.darts_in_turn + 1)
         return finish_round_game(
             state, outcome, "{winner} gewinnt den Color Clash!"
         )

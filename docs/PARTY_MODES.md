@@ -456,7 +456,10 @@ Das Board ist farbig. Farben bestimmen Punkte, nicht klassische Dartwerte.
 
 - Segmente werden zufällig eingefärbt.
 - Jede Farbe hat Punktewert oder Strafe.
-- Nach jedem Dart oder Turn ändern sich Farben.
+- Alle Spieler erhalten innerhalb einer Runde dieselben Farbchancen.
+- Im Rundenmodus bleibt ein gemeinsames Layout für alle Aufnahmen bestehen.
+- Im Dartmodus wird eine gemeinsame Folge aus drei Layouts erzeugt; jeder
+  Spieler sieht diese Layouts bei Dart 1, 2 und 3 in derselben Reihenfolge.
 
 ### Standardfarben
 
@@ -1028,10 +1031,13 @@ if hit colored zone:
   score += color value
 if miss:
   score += 0
-if shuffle == dart:
-  regenerate colors after every dart
-if shuffle == turn:
-  regenerate after hold/continue
+At round start:
+  pre-generate one shared layout
+  or three shared layouts for dart 1/2/3
+For every player:
+  replay the same round layout or three-layout sequence
+After every player completed the round:
+  generate the next shared layout set
 ```
 
 ### Overlay
