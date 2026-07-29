@@ -121,7 +121,10 @@
   cursor: pointer;
 }
 
-.board-pulse {
+.themed-game .board-pulse {
+  position: absolute;
+  z-index: 3;
+  inset: 9%;
   pointer-events: none;
 }
 
