@@ -35,9 +35,16 @@ No visual asset has been cleared yet.
 
 ## Pending asset groups
 
-The following groups remain excluded until their prompts, source material,
-generator terms, human contributions, and applicable third-party rights have
-been reviewed:
+The project owner has stated that the existing graphics were generated locally
+with OpenAI ImageGen, with the workflow mostly orchestrated by GPT-5.6-sol.
+GPT-5.6-sol identifies the orchestrating agent, not necessarily the underlying
+image-generation model. The exact ImageGen model, generation dates, and final
+per-asset prompts were not recorded for all legacy files.
+
+The following groups remain excluded until the rights holder and the rights to
+all reference inputs have been confirmed. Their source material, applicable
+third-party rights, and any material human post-processing must also be
+reviewed where relevant:
 
 - `web/static/assets/modes/**`
 - `web/static/assets/themes/**`

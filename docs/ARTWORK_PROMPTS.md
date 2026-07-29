@@ -122,11 +122,18 @@ Herkunft oder ungeklärte Nutzung ausdrücklich als offener Punkt zu behandeln.
 
 ### Aktueller Altbestand
 
-| Bestand | Stilrezept | Exakter finaler Prompt | Generator/Modell/Datum | Lizenznachweis |
-|---|---|---|---|---|
-| Playful-Cartoon-Cover | Basis-Prompt und Modusmotive dokumentiert | unbekannt | unbekannt | unbekannt |
-| Classic-Neon-Cover | Basis-Prompt nachträglich aus dem Referenzsatz abgeleitet | unbekannt | unbekannt | unbekannt |
-| animierte 3D-Props | gemeinsamer Prompt und Motive dokumentiert | unbekannt | unbekannt | unbekannt |
+Nach Angabe des Projektinhabers wurden alle Bestandsgrafiken lokal mit OpenAI
+ImageGen erzeugt. Der Generierungsablauf wurde überwiegend durch GPT-5.6-sol
+gesteuert. GPT-5.6-sol bezeichnet dabei das steuernde Agent-Modell und nicht
+zwingend das eigentliche Bildgenerierungsmodell. Wo dessen konkrete
+ImageGen-Modellkennung, Datum oder endgültiger Einzelprompt nicht protokolliert
+wurde, bleibt die Angabe ausdrücklich `unbekannt`.
+
+| Bestand | Stilrezept | Erzeugung | Exakter finaler Prompt | Bildmodell/Datum | Lizenznachweis |
+|---|---|---|---|---|---|
+| Playful-Cartoon-Cover | Basis-Prompt und Modusmotive dokumentiert | lokal mit OpenAI ImageGen; überwiegend durch GPT-5.6-sol gesteuert | unbekannt | unbekannt | Eingaberechte und Rechteinhaber noch zu bestätigen |
+| Classic-Neon-Cover | Basis-Prompt nachträglich aus dem Referenzsatz abgeleitet | lokal mit OpenAI ImageGen; überwiegend durch GPT-5.6-sol gesteuert | unbekannt | unbekannt | Eingaberechte und Rechteinhaber noch zu bestätigen |
+| animierte 3D-Props | gemeinsamer Prompt und Motive dokumentiert | lokal mit OpenAI ImageGen; überwiegend durch GPT-5.6-sol gesteuert | unbekannt | unbekannt | Eingaberechte und Rechteinhaber noch zu bestätigen |
 
 Der Neon-Basis-Prompt beschreibt somit reproduzierbar die sichtbare
 Bildsprache, ist aber kein behaupteter Originalprompt der historischen Bilder.
