@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, List
 
-from .arcade import TARGET_POOL_NORMAL, overlay_item, same_target, zone_id
+from .arcade import TARGET_POOL_NORMAL, finish_round_game, overlay_item, zone_id
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 COLOR_SCORES = {"gold": 50, "cyan": 25, "green": 10, "red": -25}
@@ -52,20 +52,29 @@ class ColorClashMode:
         if force or state.options.get("shuffle", "dart") == "dart":
             state.mode_state["colors"] = self._generate_colors()
 
+    def on_turn_start(self, state: Any, player: Any) -> None:
+        if state.options.get("shuffle", "dart") == "turn":
+            self._refresh_if_needed(state, force=True)
+
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         if event.get("type") == "miss":
             self._refresh_if_needed(state)
-            return ThrowOutcome(turn_value=0, message="Miss")
-        colors = state.mode_state.get("colors", {})
-        hit_id = zone_id({"label": event.get("label", ""), "field": event.get("field", 0), "ring": event.get("ring", "")})
-        color = colors.get(hit_id)
-        points = int(COLOR_SCORES.get(color or "", 0))
-        player.score += points
-        self._refresh_if_needed(state)
-        label = event.get("label", "")
-        if color:
-            return ThrowOutcome(turn_value=points, message=f"{label}: {color} {points:+d}")
-        return ThrowOutcome(turn_value=0, message=f"{label}: neutral")
+            outcome = ThrowOutcome(turn_value=0, message="Miss")
+        else:
+            colors = state.mode_state.get("colors", {})
+            hit_id = zone_id({"label": event.get("label", ""), "field": event.get("field", 0), "ring": event.get("ring", "")})
+            color = colors.get(hit_id)
+            points = int(COLOR_SCORES.get(color or "", 0))
+            player.score += points
+            self._refresh_if_needed(state)
+            label = event.get("label", "")
+            if color:
+                outcome = ThrowOutcome(turn_value=points, message=f"{label}: {color} {points:+d}")
+            else:
+                outcome = ThrowOutcome(turn_value=0, message=f"{label}: neutral")
+        return finish_round_game(
+            state, outcome, "{winner} gewinnt den Color Clash!"
+        )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         colors = state.mode_state.get("colors", {})

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .arcade import zone_id
+from .arcade import finish_round_game
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -56,22 +56,21 @@ class KingOfBoardMode:
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         if event.get("type") == "miss":
-            return ThrowOutcome(turn_value=0, message="Miss – kein Gebiet")
-        owner_id = self._ownership_id(state, event)
-        state.mode_state.setdefault("owned", {})[owner_id] = {
-            "owner_id": player.id,
-            "color": player.color,
-            "label": owner_id,
-            "field": int(event.get("field", 0) or 0),
-            "ring": event.get("ring"),
-        }
-        self._recalculate_scores(state)
-        is_last_dart = state.darts_in_turn == 2
-        is_last_player = state.current_player_index == len(state.players) - 1
-        if is_last_dart and is_last_player and state.round_number >= int(state.options.get("rounds", 5)):
-            winner = max(state.players, key=lambda candidate: candidate.score)
-            return ThrowOutcome(turn_value=1, message=f"{winner.name} regiert die Scheibe!", finished=True, winner_id=winner.id)
-        return ThrowOutcome(turn_value=1, message=f"{player.name} erobert {event.get('label', '')}")
+            outcome = ThrowOutcome(turn_value=0, message="Miss – kein Gebiet")
+        else:
+            owner_id = self._ownership_id(state, event)
+            state.mode_state.setdefault("owned", {})[owner_id] = {
+                "owner_id": player.id,
+                "color": player.color,
+                "label": owner_id,
+                "field": int(event.get("field", 0) or 0),
+                "ring": event.get("ring"),
+            }
+            self._recalculate_scores(state)
+            outcome = ThrowOutcome(turn_value=1, message=f"{player.name} erobert {event.get('label', '')}")
+        return finish_round_game(
+            state, outcome, "{winner} regiert die Scheibe!"
+        )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         owned = []
@@ -80,13 +79,19 @@ class KingOfBoardMode:
             ring = item.get("ring")
             if not field or not ring:
                 continue
-            owned.append({
-                "id": item.get("label"),
-                "field": field,
-                "ring": ring,
-                "color": item.get("color", "#28e7ff"),
-                "owner_id": item.get("owner_id"),
-            })
+            rings = [ring]
+            if state.options.get("ownership") == "field" and field != 25:
+                rings = ["single_inner", "triple", "single_outer", "double"]
+            elif state.options.get("ownership") == "field":
+                rings = ["single_bull", "double_bull"]
+            for owned_ring in rings:
+                owned.append({
+                    "id": f"{item.get('label')}-{owned_ring}",
+                    "field": field,
+                    "ring": owned_ring,
+                    "color": item.get("color", "#28e7ff"),
+                    "owner_id": item.get("owner_id"),
+                })
         return {"prompt": "Erobere die Scheibe!", "owned": owned}
 
 

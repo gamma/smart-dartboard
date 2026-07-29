@@ -39,6 +39,29 @@ class GameMetadata:
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)
 
+    def resolve_options(self, provided: Dict[str, Any] | None = None) -> Dict[str, Any]:
+        """Merge defaults and reject unknown, malformed or unsafe values."""
+        supplied = dict(provided or {})
+        known = {option.key: option for option in self.options}
+        unknown = sorted(set(supplied) - set(known))
+        if unknown:
+            raise ValueError(f"Unknown options for {self.slug}: {', '.join(unknown)}")
+
+        resolved = {option.key: option.default for option in self.options}
+        for key, value in supplied.items():
+            option = known[key]
+            expected = type(option.default)
+            if expected is int and (isinstance(value, bool) or not isinstance(value, int)):
+                raise ValueError(f"Invalid value for {key}: expected an integer")
+            if expected is str and not isinstance(value, str):
+                raise ValueError(f"Invalid value for {key}: expected text")
+            if isinstance(value, int) and not -100_000 <= value <= 100_000:
+                raise ValueError(f"Invalid value for {key}: number is outside the safe range")
+            if isinstance(value, str) and len(value) > 64:
+                raise ValueError(f"Invalid value for {key}: text is too long")
+            resolved[key] = value
+        return resolved
+
 
 @dataclass
 class ThrowOutcome:

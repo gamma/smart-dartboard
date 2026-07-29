@@ -20,7 +20,21 @@ def hit(score: int, seq: int = 1, field: int = 20, multiplier: int = 1, label: s
 class GameRegistryTests(unittest.TestCase):
     def test_builtin_modes_are_discovered(self):
         self.assertEqual(
-            {"countup", "cricket", "x01", "target_rush", "avoid_bomb", "color_clash", "risk_it", "king_of_board", "treasure_hunt"},
+            {
+                "avoid_bomb",
+                "boss_fight",
+                "color_clash",
+                "countup",
+                "cricket",
+                "darts_bingo",
+                "king_of_board",
+                "lightning_round",
+                "risk_it",
+                "simon_says",
+                "target_rush",
+                "treasure_hunt",
+                "x01",
+            },
             {mode.metadata.slug for mode in registry.all()},
         )
         for mode in registry.all():
@@ -80,6 +94,24 @@ class GameEngineTests(unittest.TestCase):
         engine.handle_event(hit(60, 2, multiplier=3, label="T20"))
         self.assertEqual(60, engine.state.players[0].score)
         self.assertEqual(3, engine.state.players[0].marks["20"])
+
+    def test_cricket_projector_overlay_shows_remaining_targets(self):
+        engine = GameEngine()
+        engine.reset("cricket", ["Ada", "Bob"])
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertEqual(7, len(overlay["cricket"]["remaining"]))
+        self.assertEqual(26, len(overlay["targets"]))
+        self.assertEqual(3, overlay["cricket"]["remaining"][0]["needed"])
+
+        event = hit(60, 77, multiplier=3, label="T20")
+        event["ring"] = "triple"
+        engine.handle_event(event)
+
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertNotIn(20, [item["field"] for item in overlay["targets"]])
+        self.assertNotIn(
+            "20", [item["label"] for item in overlay["cricket"]["remaining"]]
+        )
 
     def test_undo_restores_finished_game(self):
         engine = GameEngine()
@@ -180,6 +212,93 @@ class GameEngineTests(unittest.TestCase):
         engine.handle_event(event)
         self.assertTrue(engine.state.mode_state["revealed"])
         self.assertIsNotNone(engine.state.as_dict()["overlay"])
+
+    def test_fixed_round_arcade_modes_finish_even_on_miss(self):
+        for slug in (
+            "target_rush",
+            "avoid_bomb",
+            "color_clash",
+            "king_of_board",
+            "risk_it",
+            "treasure_hunt",
+        ):
+            with self.subTest(slug=slug):
+                engine = GameEngine()
+                engine.reset(slug, ["Ada"], options={"rounds": 3})
+                engine.state.round_number = 3
+                engine.state.darts_in_turn = 2
+                engine.handle_event(
+                    {"type": "miss", "score": 0, "seq": 100, "label": "MISS"}
+                )
+                self.assertEqual("finished", engine.state.status)
+                self.assertIsNotNone(engine.state.winner_id)
+
+    def test_color_clash_shuffle_turn_refreshes_for_next_player(self):
+        engine = GameEngine()
+        engine.reset(
+            "color_clash",
+            ["Ada", "Bob"],
+            options={"rounds": 3, "shuffle": "turn"},
+        )
+        initial = dict(engine.state.mode_state["colors"])
+        for seq in range(3):
+            engine.handle_event({"type": "miss", "score": 0, "seq": seq})
+        engine.continue_turn()
+        self.assertNotEqual(initial, engine.state.mode_state["colors"])
+
+    def test_darts_bingo_full_card_does_not_finish_on_line(self):
+        engine = GameEngine()
+        engine.reset("darts_bingo", ["Ada"], options={"points": "full"})
+        player = engine.state.players[0]
+        for index in range(9):
+            player.marks[str(index)] = {
+                "task": f"field_{20 if index == 2 else 19}",
+                "label": "Any 20" if index == 2 else "Any 19",
+                "done": index in (0, 1),
+            }
+        event = hit(20, 80, field=20, label="S20")
+        event["ring"] = "single_outer"
+        engine.handle_event(event)
+        self.assertEqual("running", engine.state.status)
+        self.assertEqual(3, sum(cell["done"] for cell in player.marks.values()))
+        self.assertEqual(9, len(engine.state.as_dict()["overlay"]["card"]))
+
+    def test_one_attempt_modes_finish_on_final_failed_attempt(self):
+        for slug in ("lightning_round", "simon_says"):
+            with self.subTest(slug=slug):
+                engine = GameEngine()
+                engine.reset(slug, ["Ada"], options={"rounds": 3})
+                engine.state.round_number = 3
+                engine.handle_event(
+                    {"type": "miss", "score": 0, "seq": 200, "label": "MISS"}
+                )
+                self.assertEqual("finished", engine.state.status)
+
+    def test_risk_it_bank_can_finish_final_round(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada"], options={"rounds": 3})
+        engine.state.round_number = 3
+        engine.handle_event(hit(60, 300, multiplier=3, label="T20"))
+        engine.handle_action("bank", {})
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual(engine.state.players[0].id, engine.state.winner_id)
+
+    def test_boss_fight_finishes_when_hp_reaches_zero(self):
+        engine = GameEngine()
+        engine.reset(
+            "boss_fight",
+            ["Ada", "Bob"],
+            options={"boss_hp": 600, "weak_points": 3},
+        )
+        engine.state.mode_state["boss_hp"] = 60
+        engine.handle_event(hit(60, 400, multiplier=3, label="T20"))
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual(0, engine.state.mode_state["boss_hp"])
+
+    def test_invalid_plugin_option_is_rejected(self):
+        engine = GameEngine()
+        with self.assertRaisesRegex(ValueError, "Unknown options"):
+            engine.reset("avoid_bomb", ["Ada"], options={"surprise": 999})
 
 
 if __name__ == "__main__":

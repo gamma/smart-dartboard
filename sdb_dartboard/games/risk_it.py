@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .arcade import overlay_item
+from .arcade import finish_action_round_game, finish_round_game
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -48,19 +48,23 @@ class RiskItMode:
             if state.options.get("miss_loses", "pot") == "half":
                 new_pot = pot // 2
                 self._set_pot(state, player.id, new_pot)
-                return ThrowOutcome(turn_value=0, message=f"Miss – Pot halbiert auf {new_pot}")
-            self._set_pot(state, player.id, 0)
-            return ThrowOutcome(turn_value=0, message="Miss – Pot verloren", force_hold=True)
-        score = int(event.get("score", 0))
-        pot += score
-        self._set_pot(state, player.id, pot)
-        is_last_dart = state.darts_in_turn == 2
-        if is_last_dart:
-            player.score += pot
-            state.mode_state["banked_last"] = pot
-            self._set_pot(state, player.id, 0)
-            return ThrowOutcome(turn_value=score, message=f"Auto-Bank +{pot}")
-        return ThrowOutcome(turn_value=score, message=f"Pot {pot} – banken oder riskieren?")
+                outcome = ThrowOutcome(turn_value=0, message=f"Miss – Pot halbiert auf {new_pot}")
+            else:
+                self._set_pot(state, player.id, 0)
+                outcome = ThrowOutcome(turn_value=0, message="Miss – Pot verloren", force_hold=True)
+        else:
+            score = int(event.get("score", 0))
+            pot += score
+            self._set_pot(state, player.id, pot)
+            is_last_dart = state.darts_in_turn == 2
+            if is_last_dart:
+                player.score += pot
+                state.mode_state["banked_last"] = pot
+                self._set_pot(state, player.id, 0)
+                outcome = ThrowOutcome(turn_value=score, message=f"Auto-Bank +{pot}")
+            else:
+                outcome = ThrowOutcome(turn_value=score, message=f"Pot {pot} – banken oder riskieren?")
+        return finish_round_game(state, outcome, "{winner} gewinnt Risk It!")
 
     def handle_action(self, state: Any, action: str, payload: Dict[str, Any]) -> None:
         if action != "bank":
@@ -74,6 +78,7 @@ class RiskItMode:
         self._set_pot(state, player.id, 0)
         state.status = "hold"
         state.message = f"{player.name} bankt +{pot}"
+        finish_action_round_game(state, "{winner} gewinnt Risk It!")
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         player = state.current_player()

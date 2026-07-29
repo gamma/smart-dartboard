@@ -24,7 +24,7 @@ class DartsBingoMode:
         slug="darts_bingo",
         title="Darts Bingo",
         tagline="Aufgaben markieren, Linie holen",
-        description="Jeder Spieler hat eine 3x3 Bingo-Karte aus Dartaufgaben. Wer eine Linie voll hat, gewinnt.",
+        description="Jeder Spieler hat eine 3x3 Bingo-Karte aus Dartaufgaben. Als Siegziel wählt ihr eine Linie oder die volle Karte.",
         accent="#ffcf33",
         accent_secondary="#9b5cff",
         visual="darts-bingo",
@@ -32,7 +32,7 @@ class DartsBingoMode:
         options=[GameOption("points", "Sieg", "choice", "line", [{"value":"line","label":"Erste Linie"},{"value":"full","label":"Volle Karte"}])],
         instructions=[
             InstructionStep("Karte füllen", "Jeder Treffer kann eine Aufgabe markieren.", "grid"),
-            InstructionStep("Linie gewinnt", "Drei in einer Reihe gewinnen sofort.", "line"),
+            InstructionStep("Siegziel beachten", "Je nach Auswahl zählt die erste Linie oder die volle Karte.", "line"),
             InstructionStep("Jeder hat eigene Karte", "Aufgaben sind pro Spieler individuell.", "cards"),
         ],
         sound_theme="arcade",
@@ -66,7 +66,13 @@ class DartsBingoMode:
                 break
         if not marked:
             return ThrowOutcome(turn_value=0, message="Keine Bingo-Aufgabe getroffen")
-        if self._has_line(player) or all(cell["done"] for cell in player.marks.values()):
+        full_card = all(cell["done"] for cell in player.marks.values())
+        target_reached = (
+            full_card
+            if state.options.get("points", "line") == "full"
+            else self._has_line(player)
+        )
+        if target_reached:
             return ThrowOutcome(turn_value=1, message=f"{player.name} ruft BINGO!", finished=True, winner_id=player.id)
         return ThrowOutcome(turn_value=1, message=f"Bingo markiert: {marked}")
 
@@ -75,7 +81,17 @@ class DartsBingoMode:
         if not player:
             return {"prompt":"Darts Bingo"}
         labels = [cell["label"] for cell in player.marks.values() if not cell["done"]]
-        return {"prompt": "Bingo: " + " · ".join(labels[:4])}
+        return {
+            "prompt": "Bingo: " + " · ".join(labels[:4]),
+            "card": [
+                {
+                    "index": int(index),
+                    "label": cell["label"],
+                    "done": bool(cell["done"]),
+                }
+                for index, cell in player.marks.items()
+            ],
+        }
 
 
 GAME_MODE = DartsBingoMode()

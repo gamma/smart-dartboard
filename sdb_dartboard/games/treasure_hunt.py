@@ -3,7 +3,13 @@ from __future__ import annotations
 import random
 from typing import Any, Dict
 
-from .arcade import TARGET_POOL_NORMAL, overlay_item, same_target, zone_id
+from .arcade import (
+    TARGET_POOL_NORMAL,
+    finish_round_game,
+    overlay_item,
+    same_target,
+    zone_id,
+)
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 REWARDS = {
@@ -53,30 +59,32 @@ class TreasureHuntMode:
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         if event.get("type") == "miss":
-            return ThrowOutcome(turn_value=0, message="Miss – kein Fund")
-        hidden = state.mode_state.get("hidden", {})
-        found_key = None
-        found = None
-        for key, item in hidden.items():
-            if same_target(event, item["dart"]):
-                found_key, found = key, item
-                break
-        if not found:
-            return ThrowOutcome(turn_value=0, message=f"{event.get('label', '')}: leer")
-        if found.get("revealed_by"):
-            return ThrowOutcome(turn_value=0, message=f"{event.get('label', '')}: bereits gefunden")
-        reward = REWARDS[found["reward"]]
-        points = int(reward["points"])
-        player.score += points
-        found["revealed_by"] = player.id
-        state.mode_state.setdefault("revealed", {})[found_key] = found
-        is_last_dart = state.darts_in_turn == 2
-        is_last_player = state.current_player_index == len(state.players) - 1
-        if is_last_dart and is_last_player and state.round_number >= int(state.options.get("rounds", 5)):
-            winner = max(state.players, key=lambda candidate: candidate.score)
-            return ThrowOutcome(turn_value=points, message=f"{winner.name} findet den größten Schatz!", finished=True, winner_id=winner.id)
-        label = reward["label"]
-        return ThrowOutcome(turn_value=points, message=f"{event.get('label', '')}: {label}")
+            outcome = ThrowOutcome(turn_value=0, message="Miss – kein Fund")
+        else:
+            hidden = state.mode_state.get("hidden", {})
+            found_key = None
+            found = None
+            for key, item in hidden.items():
+                if same_target(event, item["dart"]):
+                    found_key, found = key, item
+                    break
+            if not found:
+                outcome = ThrowOutcome(turn_value=0, message=f"{event.get('label', '')}: leer")
+            elif found.get("revealed_by"):
+                outcome = ThrowOutcome(turn_value=0, message=f"{event.get('label', '')}: bereits gefunden")
+            else:
+                reward = REWARDS[found["reward"]]
+                points = int(reward["points"])
+                player.score += points
+                found["revealed_by"] = player.id
+                state.mode_state.setdefault("revealed", {})[found_key] = found
+                outcome = ThrowOutcome(
+                    turn_value=points,
+                    message=f"{event.get('label', '')}: {reward['label']}",
+                )
+        return finish_round_game(
+            state, outcome, "{winner} findet den größten Schatz!"
+        )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         revealed = state.mode_state.get("revealed", {})

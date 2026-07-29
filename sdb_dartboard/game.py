@@ -165,6 +165,11 @@ class GameEngine:
     def __init__(self) -> None:
         self.state = GameState(players=[Player(id=str(uuid4()), name="Player 1")])
 
+    def clear(self) -> GameState:
+        """Discard the transient board state when leaving a game."""
+        self.state = GameState(status="idle", players=[])
+        return self.state
+
     def reset(
         self,
         game_type: str = "countup",
@@ -195,12 +200,14 @@ class GameEngine:
         if not resolved_players:
             resolved_players = [Player(id=str(uuid4()), name="Player 1")]
 
-        resolved_options = {
-            option.key: option.default for option in mode.metadata.options
-        }
-        resolved_options.update(options or {})
+        resolved_options = mode.metadata.resolve_options(options)
         if game_type == "x01" and "start_score" not in (options or {}):
             resolved_options["start_score"] = x01_start_score
+        if not mode.metadata.min_players <= len(resolved_players) <= mode.metadata.max_players:
+            raise ValueError(
+                f"{mode.metadata.title} supports "
+                f"{mode.metadata.min_players}–{mode.metadata.max_players} players"
+            )
         for player in resolved_players:
             mode.initialize_player(player, resolved_options)
 
@@ -370,6 +377,10 @@ class GameEngine:
         player = self.state.current_player()
         if player:
             self.state.turn_start_values[player.id] = player.score
+            mode = registry.get(self.state.game_type)
+            hook = getattr(mode, "on_turn_start", None)
+            if hook is not None:
+                hook(self.state, player)
 
     def _hold_after_turn(self) -> None:
         if self.state.status == "running" and self.state.darts_in_turn >= 3:

@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, List
 
-from .arcade import DARTS, overlay_item
+from .arcade import DARTS, finish_round_game, overlay_item
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 TASKS = [
@@ -62,11 +62,13 @@ class LightningRoundMode:
         msg = "SUCCESS +25" if success else "FAIL"
         self._next_task(state)
         # one dart only: force hold after each throw
-        is_last_player = state.current_player_index == len(state.players) - 1
-        if is_last_player and state.round_number >= int(state.options.get("rounds", 8)):
-            winner = max(state.players, key=lambda candidate: candidate.score)
-            return ThrowOutcome(turn_value=points, message=f"{winner.name} gewinnt Lightning!", finished=True, winner_id=winner.id)
-        return ThrowOutcome(turn_value=points, message=msg, force_hold=True)
+        outcome = ThrowOutcome(turn_value=points, message=msg, force_hold=True)
+        return finish_round_game(
+            state,
+            outcome,
+            "{winner} gewinnt Lightning!",
+            darts_per_turn=1,
+        )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         task = self._task(state)

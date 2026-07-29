@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .arcade import choose_targets, overlay_item, same_target, zone_id
+from .arcade import choose_targets, finish_round_game, overlay_item, same_target
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -46,15 +46,19 @@ class AvoidBombMode:
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         bombs = state.mode_state.get("bombs", [])
         if event.get("type") == "miss":
-            return ThrowOutcome(turn_value=0, message="Miss")
-        if any(same_target(event, bomb) for bomb in bombs):
+            outcome = ThrowOutcome(turn_value=0, message="Miss")
+        elif any(same_target(event, bomb) for bomb in bombs):
             penalty = int(state.options.get("penalty", -50))
             player.score += penalty
             self._refresh_bombs(state)
-            return ThrowOutcome(turn_value=penalty, message=f"BOMB! {penalty}")
-        score = int(event.get("score", 0))
-        player.score += score
-        return ThrowOutcome(turn_value=score, message=f"Safe {event.get('label', '')} +{score}")
+            outcome = ThrowOutcome(turn_value=penalty, message=f"BOMB! {penalty}")
+        else:
+            score = int(event.get("score", 0))
+            player.score += score
+            outcome = ThrowOutcome(turn_value=score, message=f"Safe {event.get('label', '')} +{score}")
+        return finish_round_game(
+            state, outcome, "{winner} überlebt Avoid the Bomb!"
+        )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         bombs = state.mode_state.get("bombs", [])

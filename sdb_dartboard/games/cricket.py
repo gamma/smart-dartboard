@@ -55,5 +55,46 @@ class CricketMode:
             return ThrowOutcome(turn_value=scored, message=f"{player.name} gewinnt!", finished=True)
         return ThrowOutcome(turn_value=scored, message=f"{player.name}: {event.get('label', '')}")
 
+    def get_overlay(self, state: Any) -> Dict[str, Any]:
+        player = state.current_player()
+        if not player:
+            return {"prompt": "Cricket"}
+        remaining = []
+        targets = []
+        for field in CRICKET_TARGETS:
+            marks = min(3, int(player.marks.get(str(field), 0)))
+            needed = 3 - marks
+            if needed <= 0:
+                continue
+            remaining.append(
+                {
+                    "field": field,
+                    "label": "BULL" if field == 25 else str(field),
+                    "marks": marks,
+                    "needed": needed,
+                }
+            )
+            rings = (
+                ["single_bull", "double_bull"]
+                if field == 25
+                else ["single_inner", "triple", "single_outer", "double"]
+            )
+            targets.extend(
+                {
+                    "id": f"cricket-{field}-{ring}",
+                    "field": field,
+                    "ring": ring,
+                    "color": "green",
+                    "label": "",
+                    "pulse": False,
+                }
+                for ring in rings
+            )
+        return {
+            "prompt": "Offene Cricket-Ziele",
+            "targets": targets,
+            "cricket": {"remaining": remaining},
+        }
+
 
 GAME_MODE = CricketMode()

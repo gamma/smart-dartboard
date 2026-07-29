@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict
 
-from .arcade import choose_targets, overlay_item, same_target
+from .arcade import choose_targets, finish_round_game, overlay_item, same_target
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -52,17 +52,31 @@ class SimonSaysMode:
         target = seq[pos] if pos < len(seq) else None
         if event.get("type") != "hit" or not target or not same_target(event, target):
             state.mode_state["position"] = 0
-            return ThrowOutcome(turn_value=0, message="Falsches Feld – Sequenz reset", force_hold=True)
+            return finish_round_game(
+                state,
+                ThrowOutcome(
+                    turn_value=0,
+                    message="Falsches Feld – Sequenz reset",
+                    force_hold=True,
+                ),
+                "{winner} gewinnt Simon Says!",
+                darts_per_turn=1,
+            )
         state.mode_state["position"] = pos + 1
         if pos + 1 >= len(seq):
             points = 25 * len(seq)
             player.score += points
             self._extend(state)
-            is_last_player = state.current_player_index == len(state.players) - 1
-            if is_last_player and state.round_number >= int(state.options.get("rounds", 5)):
-                winner = max(state.players, key=lambda candidate: candidate.score)
-                return ThrowOutcome(turn_value=points, message=f"{winner.name} gewinnt Simon Says!", finished=True, winner_id=winner.id)
-            return ThrowOutcome(turn_value=points, message=f"Sequenz geschafft +{points}", force_hold=True)
+            return finish_round_game(
+                state,
+                ThrowOutcome(
+                    turn_value=points,
+                    message=f"Sequenz geschafft +{points}",
+                    force_hold=True,
+                ),
+                "{winner} gewinnt Simon Says!",
+                darts_per_turn=1,
+            )
         return ThrowOutcome(turn_value=0, message=f"Weiter: {seq[pos+1]['label']}")
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:

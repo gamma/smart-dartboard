@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .arcade import choose_targets, overlay_item, same_field, same_target, zone_id
+from .arcade import (
+    choose_targets,
+    finish_round_game,
+    overlay_item,
+    same_field,
+    same_target,
+    zone_id,
+)
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -49,20 +56,24 @@ class TargetRushMode:
         combo = int(state.mode_state.setdefault("combo", {}).get(player.id, 0))
         if event.get("type") == "miss":
             state.mode_state["combo"][player.id] = 0
-            return ThrowOutcome(turn_value=0, message="Miss – Combo reset")
-        if same_target(event, target):
+            outcome = ThrowOutcome(turn_value=0, message="Miss – Combo reset")
+        elif same_target(event, target):
             points = 50 + combo * 10
             player.score += points
             state.mode_state["combo"][player.id] = combo + 1
             old = target["label"]
             self._next_target(state)
-            return ThrowOutcome(turn_value=points, message=f"Perfect {old}! +{points}")
-        if same_field(event, target):
+            outcome = ThrowOutcome(turn_value=points, message=f"Perfect {old}! +{points}")
+        elif same_field(event, target):
             player.score += 10
             state.mode_state["combo"][player.id] = 0
-            return ThrowOutcome(turn_value=10, message=f"Almost {event.get('label')} +10")
-        state.mode_state["combo"][player.id] = 0
-        return ThrowOutcome(turn_value=0, message=f"Falsches Feld: {event.get('label', '')}")
+            outcome = ThrowOutcome(turn_value=10, message=f"Almost {event.get('label')} +10")
+        else:
+            state.mode_state["combo"][player.id] = 0
+            outcome = ThrowOutcome(turn_value=0, message=f"Falsches Feld: {event.get('label', '')}")
+        return finish_round_game(
+            state, outcome, "{winner} gewinnt den Target Rush!"
+        )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         target = state.mode_state.get("target")

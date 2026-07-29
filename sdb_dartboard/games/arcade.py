@@ -3,6 +3,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, Iterable, List
 
+from .base import ThrowOutcome
 from .x01_advisor import DARTS
 
 TARGET_POOL_BASIC = [d for d in DARTS if d["field"] != 25 and d["ring"] in {"single_outer", "single_inner"}]
@@ -38,3 +39,45 @@ def choose_targets(count: int, difficulty: str = "normal", exclude: Iterable[str
 
 def overlay_item(dart: Dict[str, Any], color: str, label: str = "", pulse: bool = True) -> Dict[str, Any]:
     return {"id": zone_id(dart), "field": dart["field"], "ring": dart["ring"], "color": color, "label": label, "pulse": pulse}
+
+
+def finish_round_game(
+    state: Any,
+    outcome: ThrowOutcome,
+    winner_message: str,
+    *,
+    darts_per_turn: int = 3,
+) -> ThrowOutcome:
+    """Finish a fixed-round arcade game after every player's final attempt.
+
+    This helper is called before the core increments ``darts_in_turn``.
+    Keeping the boundary rule in one place prevents misses and neutral hits from
+    accidentally extending a configured game forever.
+    """
+    is_turn_end = state.darts_in_turn + 1 >= darts_per_turn or outcome.force_hold
+    is_last_player = bool(
+        state.players and state.current_player_index == len(state.players) - 1
+    )
+    rounds = int(state.options.get("rounds", 1))
+    if is_turn_end and is_last_player and state.round_number >= rounds:
+        winner = max(state.players, key=lambda candidate: candidate.score)
+        outcome.finished = True
+        outcome.winner_id = winner.id
+        outcome.force_hold = False
+        outcome.message = winner_message.format(winner=winner.name)
+    return outcome
+
+
+def finish_action_round_game(state: Any, winner_message: str) -> bool:
+    """Finish a fixed-round game when a controller action ends the turn."""
+    is_last_player = bool(
+        state.players and state.current_player_index == len(state.players) - 1
+    )
+    rounds = int(state.options.get("rounds", 1))
+    if is_last_player and state.round_number >= rounds:
+        winner = max(state.players, key=lambda candidate: candidate.score)
+        state.status = "finished"
+        state.winner_id = winner.id
+        state.message = winner_message.format(winner=winner.name)
+        return True
+    return False
