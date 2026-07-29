@@ -964,8 +964,9 @@ function renderBoardEvent(event){
     const index=BOARD_ORDER.indexOf(Number(item.field));
     const radii={double:222,triple:129,single_inner:78,single_outer:176,single_bull:30,double_bull:0};
     const radius=radii[item.ring];
-    if(index<0 || radius===undefined) return;
-    const [x,y]=polar(250,250,radius,index*18);
+    const isBull=Number(item.field)===25;
+    if(radius===undefined || (!isBull && index<0)) return;
+    const [x,y]=isBull ? [250,250] : polar(250,250,radius,index*18);
     labelLayer.insertAdjacentHTML('beforeend',`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(item.label)}</text>`);
   };
   const paint = (items, cls) => (items || []).forEach(item => {

@@ -21,7 +21,7 @@ Das gilt ebenfalls für den bereits vorhandenen Koop-Modus `boss_fight`.
 | `ghost_chase` | Exaktes wechselndes Ziel. Treffer 1/2/3 eines Turns geben 40/50/60. Ein erfolgloser Turn setzt Combo zurück und erhöht Escape; nach drei Fehlschlägen zieht der Geist um, wird aber nicht schwerer. Easy/Normal/Hard, 5/8 Runden. |
 | `cookie_monster` | Pro Turn: 2 goldene Cookies +50, 3 blaue +25, 4 grüne +10, 3 schimmelige −30. Bull-Milch verdoppelt einen positiven Turn oder neutralisiert einen negativen. Drei gute Cookies laden Sugar Rush; der nächste gute Cookie zählt doppelt. 5/8 Runden. |
 | `space_defender` | Koop: exakte Schiffe, Ringmultiplikator entspricht Schaden, Bull trifft alle. Bei zehn aktiven Schiffen verliert das Team. Nach der letzten Welle gibt es genau eine Aufräumrunde. Erfolgreiches Team: +3 für alle. |
-| `candy_cannon` | Persönliche Ladung bleibt über Turns: Single +1, Double +2, Triple +3, Bull +4. Manuelles Feuern bei 8–10 gibt +50 und zieht dem führenden Gegner 25 ab (Minimum null; Gleichstand nach Turn-Reihenfolge). Über 10 überhitzt und setzt auf null. 5/8 Runden, mindestens zwei Spieler. |
+| `candy_cannon` | Persönliche Ladung bleibt über Turns: Single +1, Double +2, Triple +3, Bull +4. Bei 8–10 wird Bull zum Abzug: Der nächste SBull- oder DBull-Treffer feuert automatisch, gibt +50 und zieht dem führenden Gegner 25 ab (Minimum null; Gleichstand nach Turn-Reihenfolge). Andere Treffer können weiter überladen; über 10 setzt die Ladung auf null. Kein Control-Button. 5/8 Runden, mindestens zwei Spieler. |
 | `mini_golf` | Alle spielen dasselbe Loch. Easy: Zahl genügt; Normal: exaktes Single/Double; Hard: exaktes Double/Triple/Bull. Treffer mit Dart 1/2/3 zählt 1/2/3 Schläge, kompletter Fehlschlag 4. 6/9 Löcher, niedrigster Score. |
 | `eight_ball` | Exakt zwei Spieler. Spieler 1 räumt Singles 1–7, Spieler 2 Singles 9–15. Richtig +20 und bis maximal drei Darts weiterspielen; falsches Feld oder Miss beendet den Turn. Double Bull gewinnt erst nach Abräumen, zu frühes Double Bull schenkt dem Gegner den Sieg. |
 | `block_drop` | Koop ohne Timer auf 5×8 Raster. Vier zusammenhängende Farbbögen steuern links/rechts sowie links/rechts drehen. SBull und DBull setzen den Stein sofort; DBull gibt zusätzlich +25. Standardmäßig darf der Spieler mit verbleibenden Darts am neuen Stein weiterwerfen; optional beendet ein Drop den Zug. Miss macht nichts. Erst nachdem alle Spieler dran waren, fällt der Stein automatisch eine Zeile. Fünf Linien gewinnen, Top-out verliert; Blockpunkte zählen für alle. |
@@ -435,7 +435,8 @@ Triple +3
 Bull +4
 ```
 
-- Bei Ladung 8 kann der Spieler per Control UI `FIRE` drücken.
+- Bei Ladung 8–10 wird Bull zum Abzug. Der nächste Single- oder Double-Bull-
+  Treffer feuert automatisch.
 - Fire:
 
 ```text
@@ -450,13 +451,8 @@ Ladung auf 0
 keine Belohnung
 ```
 
-### Technische Voraussetzung
-
-Benötigt dieselbe Generic Game Action wie Risk It:
-
-```text
-fire
-```
+Auf dem Board werden beide Bull-Ringe bei Feuerbereitschaft deutlich als
+`FIRE` markiert. Ein separater Control-Button ist nicht erforderlich.
 
 ---
 
@@ -506,7 +502,6 @@ Cookie Monster
 
 ```text
 Risk It                 -> bereits vorhanden: bank
-Candy Cannon            -> fire
 Authentic Robin Hood    -> robin_confirm
 ```
 

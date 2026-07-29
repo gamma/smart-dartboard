@@ -174,13 +174,39 @@ class CartoonModeTests(unittest.TestCase):
         ada, bob = engine.state.players
         bob.score = 100
         engine.state.mode_state["charge"][ada.id] = 8
-        engine.handle_action("fire", {})
+        engine.handle_event(hit(25, "single_bull", 1, 4))
         self.assertEqual(50, ada.score)
         self.assertEqual(75, bob.score)
         self.assertEqual(0, engine.state.mode_state["charge"][ada.id])
         engine.state.mode_state["charge"][ada.id] = 9
-        engine.handle_event(hit(25, "single_bull", 1, 5))
+        engine.handle_event(hit(20, "triple", 3, 5))
         self.assertEqual(0, engine.state.mode_state["charge"][ada.id])
+
+    def test_candy_cannon_bull_charges_until_fire_is_ready(self):
+        engine = GameEngine()
+        engine.reset("candy_cannon", ["Ada", "Bob"])
+        ada = engine.state.players[0]
+
+        engine.handle_event(hit(25, "double_bull", 2, 1))
+
+        self.assertEqual(4, engine.state.mode_state["charge"][ada.id])
+        self.assertEqual(0, ada.score)
+        self.assertEqual([], engine.state.as_dict()["overlay"]["targets"])
+
+    def test_candy_cannon_ready_overlay_marks_both_bulls_without_action(self):
+        engine = GameEngine()
+        engine.reset("candy_cannon", ["Ada", "Bob"])
+        ada = engine.state.players[0]
+        engine.state.mode_state["charge"][ada.id] = 8
+
+        overlay = engine.state.as_dict()["overlay"]
+
+        self.assertNotIn("actions", overlay)
+        self.assertEqual(
+            {"single_bull", "double_bull"},
+            {target["ring"] for target in overlay["targets"]},
+        )
+        self.assertIn("BULL", overlay["prompt"])
 
     def test_mini_golf_same_hole_and_low_score_wins(self):
         engine = GameEngine()
