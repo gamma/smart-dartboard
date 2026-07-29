@@ -31,6 +31,11 @@ SHAPES: Dict[str, List[List[Tuple[int, int]]]] = {
     ],
 }
 LINE_POINTS = {1: 50, 2: 120, 3: 250, 4: 500}
+CONTROL_ZONES = {
+    "left": [3, 19, 7, 16, 8, 11, 14],
+    "rotate": [9, 12, 5, 20, 1, 18],
+    "right": [4, 13, 6, 10, 15, 2, 17],
+}
 
 
 class BlockDropMode:
@@ -44,8 +49,9 @@ class BlockDropMode:
         visual="block-drop",
         icon="blocks",
         instructions=[
-            InstructionStep("Mit Zahlen steuern", "1–5 links, 6–10 rechts, 11–15 drehen und 16–20 droppen.", "controls"),
-            InstructionStep("Bull Power Drop", "Bull droppt sofort und gibt 25 Bonuspunkte. Miss lässt den Stein fallen.", "power"),
+            InstructionStep("Drei große Flächen", "Triff den linken, oberen oder rechten Farbbogen: links, drehen oder rechts.", "controls"),
+            InstructionStep("Bull ist Drop", "Single Bull senkt eine Zeile. Double Bull setzt den Stein sofort.", "power"),
+            InstructionStep("Gemeinsamer Takt", "Erst nachdem alle gespielt haben, fällt der Stein automatisch eine Zeile.", "round"),
             InstructionStep("Fünf Linien", "Löscht gemeinsam fünf Linien, bevor ein Stein oben herausragt.", "blocks"),
         ],
         sound_theme="arcade",
@@ -61,6 +67,7 @@ class BlockDropMode:
             "lines": 0,
             "seed": random.randint(0, 2**31 - 1),  # nosec B311
             "piece_index": 0,
+            "gravity_round": 1,
         }
         self._spawn(state)
 
@@ -158,43 +165,86 @@ class BlockDropMode:
             result_type="team_win" if won else "challenge_loss",
         )
 
+    def _award_team(self, state: Any, points: int) -> None:
+        for member in state.players:
+            member.score += points
+
+    def _finish_state(self, state: Any, won: bool, message: str) -> None:
+        state.status = "finished"
+        state.winner_id = None
+        state.winner_ids = [player.id for player in state.players] if won else []
+        state.result_type = "team_win" if won else "challenge_loss"
+        state.message = message
+
+    def _lock_piece(
+        self,
+        state: Any,
+        *,
+        power_bonus: int = 0,
+    ) -> Tuple[int, int, bool]:
+        cleared, can_continue = self._lock(state)
+        points = 10 + LINE_POINTS.get(cleared, 0) + power_bonus
+        self._award_team(state, points)
+        return cleared, points, can_continue
+
+    def on_turn_start(self, state: Any, player: Any) -> None:
+        del player
+        gravity_round = int(state.mode_state.get("gravity_round", 1))
+        if state.round_number <= gravity_round:
+            return
+        state.mode_state["gravity_round"] = state.round_number
+        if self._soft_drop(state):
+            state.message = f"Runde {state.round_number}: Stein fällt eine Zeile"
+            return
+
+        cleared, points, can_continue = self._lock_piece(state)
+        lines = int(state.mode_state["lines"])
+        if lines >= 5:
+            self._finish_state(
+                state,
+                True,
+                f"FÜNF LINIEN! Das Team gewinnt mit {lines} Linien",
+            )
+        elif not can_continue:
+            self._finish_state(state, False, "BLOCK OUT! Das Feld ist voll")
+        else:
+            detail = f" · {cleared} Linie{'n' if cleared != 1 else ''}!" if cleared else ""
+            state.message = f"Rundendrop setzt den Stein · +{points}{detail}"
+
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         force_lock = False
         power_bonus = 0
         if event.get("type") != "hit":
-            if not self._soft_drop(state):
-                force_lock = True
-            action = "MISS · Stein fällt"
+            action = "MISS · keine Aktion"
         elif int(event.get("field", 0)) == 25:
-            self._hard_drop(state)
-            force_lock = True
-            power_bonus = 25
-            action = "POWER DROP!"
-        else:
-            field = int(event.get("field", 0))
-            if field <= 5:
-                self._move(state, -1)
-                action = "LINKS"
-            elif field <= 10:
-                self._move(state, 1)
-                action = "RECHTS"
-            elif field <= 15:
-                self._rotate(state)
-                action = "DREHEN"
-            else:
+            if event.get("ring") == "double_bull":
                 self._hard_drop(state)
                 force_lock = True
-                action = "HARD DROP"
+                power_bonus = 25
+                action = "DOUBLE BULL · POWER DROP!"
+            else:
+                if not self._soft_drop(state):
+                    force_lock = True
+                action = "BULL · EINE ZEILE"
+        else:
+            field = int(event.get("field", 0))
+            if field in CONTROL_ZONES["left"]:
+                self._move(state, -1)
+                action = "LINKS"
+            elif field in CONTROL_ZONES["right"]:
+                self._move(state, 1)
+                action = "RECHTS"
+            else:
+                self._rotate(state)
+                action = "DREHEN"
 
-        if state.darts_in_turn == 2:
-            self._hard_drop(state)
-            force_lock = True
         if not force_lock:
             return ThrowOutcome(0, action)
 
-        cleared, can_continue = self._lock(state)
-        points = 10 + LINE_POINTS.get(cleared, 0) + power_bonus
-        player.score += points
+        cleared, points, can_continue = self._lock_piece(
+            state,
+            power_bonus=power_bonus,
+        )
         lines = int(state.mode_state["lines"])
         if lines >= 5:
             return self._finish(state, True, f"FÜNF LINIEN! Das Team gewinnt mit {lines} Linien", points)
@@ -216,23 +266,36 @@ class BlockDropMode:
                     "state": "active" if value == 2 else "filled" if value == 1 else "",
                 })
         control_colors = {
-            range(1, 6): "#e9c46a",
-            range(6, 11): "#81b29a",
-            range(11, 16): "#f4a261",
-            range(16, 21): "#e76f51",
+            "left": "#e9c46a",
+            "rotate": "#f4a261",
+            "right": "#81b29a",
         }
         zones = []
-        for fields, color in control_colors.items():
-            for field in fields:
+        for action, color in control_colors.items():
+            for field in CONTROL_ZONES[action]:
                 zones.append({
                     "field": field,
                     "rings": ["single_inner", "triple", "single_outer", "double"],
                     "role": "control",
                     "color": color,
                 })
+        zones.extend([
+            {
+                "field": 25,
+                "rings": ["single_bull"],
+                "role": "control",
+                "color": "#f4a261",
+            },
+            {
+                "field": 25,
+                "rings": ["double_bull"],
+                "role": "control",
+                "color": "#e76f51",
+            },
+        ])
         lines = int(state.mode_state.get("lines", 0))
         return {
-            "prompt": "1–5 ← · 6–10 → · 11–15 ↻ · 16–20 DROP",
+            "prompt": "GELB ← · ORANGE ↻ · GRÜN → · BULL DROP",
             "zones": zones,
             "panel": {
                 "title": "BLOCK DROP",

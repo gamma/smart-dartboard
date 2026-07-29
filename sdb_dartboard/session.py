@@ -285,10 +285,28 @@ class SessionController:
 
     def continue_turn(self) -> None:
         self.engine.continue_turn()
+        if self.engine.state.status == "finished" and self.game_id:
+            game = self.store.get_game(self.game_id)
+            if game and game["status"] != "finished":
+                self.store.finish_game(
+                    self.game_id,
+                    self.engine.state.winner_id,
+                    self.engine.state.winner_ids,
+                )
+            self.screen = "game_result"
         self._persist()
 
     def next_player(self) -> None:
         self.engine.next_player()
+        if self.engine.state.status == "finished" and self.game_id:
+            game = self.store.get_game(self.game_id)
+            if game and game["status"] != "finished":
+                self.store.finish_game(
+                    self.game_id,
+                    self.engine.state.winner_id,
+                    self.engine.state.winner_ids,
+                )
+            self.screen = "game_result"
         self._persist()
 
     def undo(self) -> None:

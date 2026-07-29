@@ -943,7 +943,7 @@ else:
 {
   "difficulty": "normal",
   "bomb_count": 4,
-  "bomb_change": "turn",
+  "bomb_growth": "one_per_full_round",
   "penalty": -50,
   "turn_ends_on_bomb": false,
   "hidden_bombs": false
@@ -955,6 +955,7 @@ else:
 ```json
 {
   "bombs": ["D1", "T5", "S20", "DBULL"],
+  "bomb_round": 1,
   "message": "Meide Rot!"
 }
 ```
@@ -970,13 +971,17 @@ else if hit:
   score += dart score
 else miss:
   score += 0
+
+after every player has completed the round:
+  keep all existing bombs
+  add exactly one new bomb
 ```
 
 ### Overlay
 
 ```json
 {
-  "prompt": "Sammle Punkte – meide Rot!",
+  "prompt": "Runde 2: 5 Bomben – meide Rot!",
   "danger": [
     {"id": "D1", "color": "red", "label": "BOMB", "pulse": true},
     {"id": "T5", "color": "red", "label": "BOMB", "pulse": true}

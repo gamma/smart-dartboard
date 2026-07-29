@@ -228,6 +228,35 @@ class SessionControllerTests(unittest.TestCase):
         self.assertEqual(3, standings[ada["id"]]["session_points"])
         self.assertEqual(0, standings[bob["id"]]["session_points"])
 
+    def test_round_start_hook_can_finish_block_drop_session_game(self):
+        ada = self.controller.create_player("Ada", "nova", "#ff00aa")
+        bob = self.controller.create_player("Bob", "comet", "#28e7ff")
+        self.controller.start_session([ada["id"], bob["id"]])
+        self.controller.prepare_game("block_drop", {})
+        self.controller.start_game()
+        self.controller.set_screen("playing")
+
+        state = self.controller.engine.state
+        state.current_player_index = 1
+        state.status = "hold"
+        state.mode_state["lines"] = 5
+        state.mode_state["piece"] = {
+            "kind": "O",
+            "rotation": 0,
+            "x": 1,
+            "y": 6,
+        }
+
+        self.controller.continue_turn()
+
+        self.assertEqual("finished", state.status)
+        self.assertEqual("team_win", state.result_type)
+        self.assertEqual("game_result", self.controller.screen)
+        self.assertEqual(
+            "finished",
+            self.controller.store.get_game(self.controller.game_id)["status"],
+        )
+
     def test_rematch_confirmation_expires(self):
         now = [200.0]
         self.controller._clock = lambda: now[0]

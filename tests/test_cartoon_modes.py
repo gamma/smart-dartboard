@@ -212,11 +212,62 @@ class CartoonModeTests(unittest.TestCase):
         engine = GameEngine()
         engine.reset("block_drop", ["Ada", "Bob"])
         engine.state.mode_state["lines"] = 5
-        engine.handle_event(hit(20, "single_outer", 1, 1))
+        engine.handle_event(hit(25, "double_bull", 2, 1))
         self.assertEqual("team_win", engine.state.result_type)
+        self.assertEqual(
+            engine.state.players[0].score,
+            engine.state.players[1].score,
+        )
         engine.undo()
         self.assertEqual("running", engine.state.status)
         self.assertEqual(5, engine.state.mode_state["lines"])
+
+    def test_block_drop_gravity_runs_once_after_every_player(self):
+        engine = GameEngine()
+        engine.reset("block_drop", ["Ada", "Bob"])
+        start_y = engine.state.mode_state["piece"]["y"]
+
+        for seq in range(3):
+            engine.handle_event({**MISS, "seq": seq})
+        engine.continue_turn()
+        self.assertEqual(start_y, engine.state.mode_state["piece"]["y"])
+
+        for seq in range(3, 6):
+            engine.handle_event({**MISS, "seq": seq})
+        engine.continue_turn()
+        self.assertEqual(2, engine.state.round_number)
+        self.assertEqual(start_y + 1, engine.state.mode_state["piece"]["y"])
+        self.assertIn("eine Zeile", engine.state.message)
+
+    def test_block_drop_uses_bulls_for_drop_actions(self):
+        engine = GameEngine()
+        engine.reset("block_drop", ["Ada"])
+        piece_index = engine.state.mode_state["piece_index"]
+        start_y = engine.state.mode_state["piece"]["y"]
+
+        engine.handle_event(hit(25, "single_bull", 1, 1))
+        self.assertEqual(start_y + 1, engine.state.mode_state["piece"]["y"])
+        self.assertEqual(piece_index, engine.state.mode_state["piece_index"])
+
+        engine.handle_event(hit(25, "double_bull", 2, 2))
+        self.assertEqual(piece_index + 1, engine.state.mode_state["piece_index"])
+
+    def test_block_drop_overlay_uses_three_contiguous_color_areas(self):
+        engine = GameEngine()
+        engine.reset("block_drop", ["Ada"])
+        zones = engine.state.as_dict()["overlay"]["zones"]
+        normal = [zone for zone in zones if zone["field"] != 25]
+        fields_by_color = {}
+        for zone in normal:
+            fields_by_color.setdefault(zone["color"], []).append(zone["field"])
+        self.assertEqual(
+            {
+                "#e9c46a": [3, 19, 7, 16, 8, 11, 14],
+                "#f4a261": [9, 12, 5, 20, 1, 18],
+                "#81b29a": [4, 13, 6, 10, 15, 2, 17],
+            },
+            fields_by_color,
+        )
 
     def test_dart_sweeper_first_hit_safe_and_triple_reveals_neighbors(self):
         engine = GameEngine()

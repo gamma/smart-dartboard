@@ -285,18 +285,24 @@ class GameEngine:
 
     def continue_turn(self) -> GameState:
         if self.state.status == "hold":
+            previous_message = self.state.message
             self._advance_player()
-            self.state.status = "running"
-            self.state.message = "Next player"
             self.state.last_event = {"type": "continue"}
+            if self.state.status != "finished":
+                self.state.status = "running"
+                if self.state.message == previous_message:
+                    self.state.message = "Next player"
         return self.state
 
     def next_player(self) -> GameState:
         if self.state.status in ("running", "hold"):
+            previous_message = self.state.message
             self._advance_player()
-            self.state.status = "running"
-            self.state.message = "Next player"
             self.state.last_event = {"type": "next_player"}
+            if self.state.status != "finished":
+                self.state.status = "running"
+                if self.state.message == previous_message:
+                    self.state.message = "Next player"
         return self.state
 
     def undo(self) -> GameState:

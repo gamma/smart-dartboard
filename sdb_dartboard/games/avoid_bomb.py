@@ -18,12 +18,13 @@ class AvoidBombMode:
         icon="bomb",
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
-            GameOption("bomb_count", "Bomben", "choice", 4, [{"value":2,"label":"2 Bomben"},{"value":4,"label":"4 Bomben"},{"value":6,"label":"6 Bomben"}]),
+            GameOption("bomb_count", "Startbomben", "choice", 4, [{"value":2,"label":"2 Bomben"},{"value":4,"label":"4 Bomben"},{"value":6,"label":"6 Bomben"}]),
             GameOption("penalty", "Strafe", "choice", -50, [{"value":-25,"label":"-25"},{"value":-50,"label":"-50"},{"value":-100,"label":"-100"}]),
         ],
         instructions=[
             InstructionStep("Rot ist gefährlich", "Rote Felder sind Bomben und kosten Punkte.", "danger"),
             InstructionStep("Alles andere zählt", "Normale Treffer geben ihren Dartwert.", "score"),
+            InstructionStep("Jede Runde schwerer", "Nachdem alle gespielt haben, kommt eine neue Bombe dazu.", "growth"),
             InstructionStep("Schadenfreude", "Bombentreffer lösen eine Explosion aus.", "boom"),
         ],
         sound_theme="arcade",
@@ -36,12 +37,26 @@ class AvoidBombMode:
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
         count = int(options.get("bomb_count", 4))
         bombs = choose_targets(count, "normal")
-        state.mode_state = {"bombs": bombs}
+        state.mode_state = {"bombs": bombs, "bomb_round": 1}
         state.message = "Meide Rot!"
 
-    def _refresh_bombs(self, state: Any) -> None:
-        count = int(state.options.get("bomb_count", 4))
-        state.mode_state["bombs"] = choose_targets(count, "normal")
+    def on_turn_start(self, state: Any, player: Any) -> None:
+        del player
+        bomb_round = int(state.mode_state.get("bomb_round", 1))
+        added_bomb = False
+        while bomb_round < state.round_number:
+            bombs = state.mode_state.setdefault("bombs", [])
+            exclude = [
+                str(bomb.get("label", ""))
+                for bomb in bombs
+                if bomb.get("label")
+            ]
+            bombs.extend(choose_targets(1, "normal", exclude))
+            bomb_round += 1
+            added_bomb = True
+        state.mode_state["bomb_round"] = bomb_round
+        if added_bomb:
+            state.message = f"Runde {bomb_round}: Eine neue Bombe ist aktiv!"
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         bombs = state.mode_state.get("bombs", [])
@@ -50,7 +65,6 @@ class AvoidBombMode:
         elif any(same_target(event, bomb) for bomb in bombs):
             penalty = int(state.options.get("penalty", -50))
             player.score += penalty
-            self._refresh_bombs(state)
             outcome = ThrowOutcome(turn_value=penalty, message=f"BOMB! {penalty}")
         else:
             score = int(event.get("score", 0))
@@ -63,7 +77,7 @@ class AvoidBombMode:
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         bombs = state.mode_state.get("bombs", [])
         return {
-            "prompt": "Sammle Punkte – meide Rot!",
+            "prompt": f"Runde {state.round_number}: {len(bombs)} Bomben – meide Rot!",
             "danger": [overlay_item(bomb, "red", "BOMB", True) for bomb in bombs],
         }
 
