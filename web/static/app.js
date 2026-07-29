@@ -109,6 +109,10 @@ function updateExperience(experience, event){
     appState.projectedEvent=null;
     appState.selectedCorrectionIndex=null;
   }
+  if(previous?.screen === 'game_result' && experience.screen !== 'game_result'){
+    clearTimeout(appState.boardResetTimer);
+    appState.projectedEvent=null;
+  }
   if(event){
     const isThrow=event.type==='hit' || event.type==='miss';
     const lastThrow=experience.game?.throws?.at(-1);
@@ -120,6 +124,7 @@ function updateExperience(experience, event){
       appState.projectedEvent=event;
       clearTimeout(appState.boardResetTimer);
       appState.boardResetTimer=setTimeout(()=>{
+        if(appState.experience?.screen === 'game_result') return;
         appState.projectedEvent=null;
         if(isProjector() && appState.experience?.screen==='playing') renderProjector();
       },BOARD_EVENT_VISIBLE_MS);
@@ -507,10 +512,15 @@ function renderProjector(){
     calibration: projectorCalibration,
   };
   root.innerHTML = (renderers[screen] || projectorAttract)();
-  if(screen === 'playing' || screen === 'calibration'){
+  if(screen === 'playing' || screen === 'game_result' || screen === 'calibration'){
     buildBoard();
     applyCalibration();
-    if(screen === 'playing') renderBoardEvent(appState.projectedEvent);
+    if(screen === 'playing' || screen === 'game_result'){
+      const boardEvent = screen === 'game_result'
+        ? (appState.projectedEvent || appState.experience.game?.last_event)
+        : appState.projectedEvent;
+      renderBoardEvent(boardEvent);
+    }
   }
 }
 function projectorBackdrop(mode, inner, className=''){
@@ -557,7 +567,7 @@ function projectorOverlayPrompt(game){
 }
 function projectorModePanel(game){
   const overlay = game.overlay || {};
-  if(overlay.cricket?.remaining){
+  if(overlay.cricket?.remaining?.length){
     return `<aside class="projector-mode-panel cricket-panel">
       <span>NOCH ZU SCHLIESSEN</span>
       <div>${overlay.cricket.remaining.map(item=>`<b><i>${escapeHtml(item.label)}</i><em>${'●'.repeat(item.marks)}${'○'.repeat(item.needed)}</em><strong>×${item.needed}</strong></b>`).join('')}</div>
@@ -596,9 +606,28 @@ function projectorPlaying(){
   </section>`;
 }
 function projectorResult(){
+  const game = appState.experience.game;
   const champion = winner();
-  const mode = modeBySlug(appState.experience.game.game_type);
-  return projectorBackdrop(mode,`<div class="projector-center winner-scene"><div class="winner-crown">♛</div><div class="kicker">WINNER</div><h1>${escapeHtml(champion?.name || 'GAME OVER')}</h1><p class="result-score">+3 SESSIONSPUNKTE</p></div>`,'result-projector');
+  const mode = modeBySlug(game.game_type);
+  const lastThrow = game.throws?.at(-1);
+  return `<section class="projection-game result-board" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
+    <div id="projectionPlane" class="projection-plane">${boardSvg()}</div>
+    <header class="projection-top result-board-heading">
+      <div><div class="kicker">${escapeHtml(mode?.title || '')} · ENDERGEBNIS</div><h1>Finaler Spielstand</h1></div>
+    </header>
+    ${projectorModePanel(game)}
+    <aside class="projection-roster result-roster">${game.players.map(item=>`<span class="${item.id===game.winner_id?'winner':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
+    <div class="victory-overlay">
+      <article class="victory-card">
+        <div class="winner-crown">♛</div>
+        <div><span>SPIEL ENTSCHIEDEN</span><h1>${escapeHtml(champion?.name || 'GAME OVER')}</h1><p>${escapeHtml(game.message || 'Spiel beendet')}</p></div>
+        <footer>
+          <b>+3 SESSIONSPUNKTE</b>
+          ${lastThrow ? `<small>LETZTER DART · ${escapeHtml(lastThrow.label || 'MISS')}</small>` : ''}
+        </footer>
+      </article>
+    </div>
+  </section>`;
 }
 function projectorSummary(){
   return projectorBackdrop(null,`<div class="projector-summary"><div>${sceneHeader('SESSION COMPLETE','Was für eine Runde!','Eure Highlights')}</div><div class="projector-stats">${statCards()}</div></div>`);
@@ -666,7 +695,7 @@ function renderBoardEvent(event){
     if(segment){ segment.classList.add('overlay-owned'); segment.style.setProperty('--owner-color', item.color || '#28e7ff'); }
   });
   const gameStatus=appState.experience?.game?.status;
-  if(gameStatus === 'running' || gameStatus === 'hold'){
+  if(gameStatus === 'running' || gameStatus === 'hold' || gameStatus === 'finished'){
     paint(overlay?.targets, 'overlay-target');
     paint(overlay?.danger, 'overlay-danger');
     paint(overlay?.bonus, 'overlay-bonus');
