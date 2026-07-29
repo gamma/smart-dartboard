@@ -32,9 +32,10 @@ SHAPES: Dict[str, List[List[Tuple[int, int]]]] = {
 }
 LINE_POINTS = {1: 50, 2: 120, 3: 250, 4: 500}
 CONTROL_ZONES = {
-    "left": [3, 19, 7, 16, 8, 11, 14],
-    "rotate": [9, 12, 5, 20, 1, 18],
-    "right": [4, 13, 6, 10, 15, 2, 17],
+    "rotate_left": [12, 5, 20, 1, 18],
+    "right": [4, 13, 6, 10, 15],
+    "rotate_right": [2, 17, 3, 19, 7],
+    "left": [16, 8, 11, 14, 9],
 }
 
 
@@ -49,8 +50,8 @@ class BlockDropMode:
         visual="block-drop",
         icon="blocks",
         instructions=[
-            InstructionStep("Drei große Flächen", "Triff den linken, oberen oder rechten Farbbogen: links, drehen oder rechts.", "controls"),
-            InstructionStep("Bull ist Drop", "Single Bull senkt eine Zeile. Double Bull setzt den Stein sofort.", "power"),
+            InstructionStep("Vier große Flächen", "Die vier Farbbögen bewegen links/rechts oder drehen links/rechts.", "controls"),
+            InstructionStep("Bull ist Drop", "Single Bull und Double Bull setzen den Stein sofort. Double Bull gibt +25.", "power"),
             InstructionStep("Gemeinsamer Takt", "Erst nachdem alle gespielt haben, fällt der Stein automatisch eine Zeile.", "round"),
             InstructionStep("Fünf Linien", "Löscht gemeinsam fünf Linien, bevor ein Stein oben herausragt.", "blocks"),
         ],
@@ -119,9 +120,11 @@ class BlockDropMode:
         if self._valid(state, self._cells(piece, x=x)):
             piece["x"] = x
 
-    def _rotate(self, state: Any) -> None:
+    def _rotate(self, state: Any, direction: int) -> None:
         piece = state.mode_state["piece"]
-        rotation = (int(piece["rotation"]) + 1) % len(SHAPES[piece["kind"]])
+        rotation = (
+            int(piece["rotation"]) + direction
+        ) % len(SHAPES[piece["kind"]])
         for kick in (0, -1, 1, -2, 2):
             if self._valid(
                 state,
@@ -217,15 +220,13 @@ class BlockDropMode:
         if event.get("type") != "hit":
             action = "MISS · keine Aktion"
         elif int(event.get("field", 0)) == 25:
+            self._hard_drop(state)
+            force_lock = True
             if event.get("ring") == "double_bull":
-                self._hard_drop(state)
-                force_lock = True
                 power_bonus = 25
                 action = "DOUBLE BULL · POWER DROP!"
             else:
-                if not self._soft_drop(state):
-                    force_lock = True
-                action = "BULL · EINE ZEILE"
+                action = "SINGLE BULL · DROP!"
         else:
             field = int(event.get("field", 0))
             if field in CONTROL_ZONES["left"]:
@@ -234,9 +235,12 @@ class BlockDropMode:
             elif field in CONTROL_ZONES["right"]:
                 self._move(state, 1)
                 action = "RECHTS"
+            elif field in CONTROL_ZONES["rotate_left"]:
+                self._rotate(state, -1)
+                action = "LINKS DREHEN"
             else:
-                self._rotate(state)
-                action = "DREHEN"
+                self._rotate(state, 1)
+                action = "RECHTS DREHEN"
 
         if not force_lock:
             return ThrowOutcome(0, action)
@@ -267,7 +271,8 @@ class BlockDropMode:
                 })
         control_colors = {
             "left": "#e9c46a",
-            "rotate": "#f4a261",
+            "rotate_left": "#a77bff",
+            "rotate_right": "#f4a261",
             "right": "#81b29a",
         }
         zones = []
@@ -284,7 +289,7 @@ class BlockDropMode:
                 "field": 25,
                 "rings": ["single_bull"],
                 "role": "control",
-                "color": "#f4a261",
+                "color": "#28e7ff",
             },
             {
                 "field": 25,
@@ -295,7 +300,7 @@ class BlockDropMode:
         ])
         lines = int(state.mode_state.get("lines", 0))
         return {
-            "prompt": "GELB ← · ORANGE ↻ · GRÜN → · BULL DROP",
+            "prompt": "GELB ← · LILA ↶ · ORANGE ↷ · GRÜN → · BULL DROP",
             "zones": zones,
             "panel": {
                 "title": "BLOCK DROP",

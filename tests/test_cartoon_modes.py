@@ -243,16 +243,15 @@ class CartoonModeTests(unittest.TestCase):
         engine = GameEngine()
         engine.reset("block_drop", ["Ada"])
         piece_index = engine.state.mode_state["piece_index"]
-        start_y = engine.state.mode_state["piece"]["y"]
 
         engine.handle_event(hit(25, "single_bull", 1, 1))
-        self.assertEqual(start_y + 1, engine.state.mode_state["piece"]["y"])
-        self.assertEqual(piece_index, engine.state.mode_state["piece_index"])
-
-        engine.handle_event(hit(25, "double_bull", 2, 2))
         self.assertEqual(piece_index + 1, engine.state.mode_state["piece_index"])
 
-    def test_block_drop_overlay_uses_three_contiguous_color_areas(self):
+        engine.continue_turn()
+        engine.handle_event(hit(25, "double_bull", 2, 2))
+        self.assertEqual(piece_index + 2, engine.state.mode_state["piece_index"])
+
+    def test_block_drop_overlay_uses_four_contiguous_color_areas(self):
         engine = GameEngine()
         engine.reset("block_drop", ["Ada"])
         zones = engine.state.as_dict()["overlay"]["zones"]
@@ -262,12 +261,29 @@ class CartoonModeTests(unittest.TestCase):
             fields_by_color.setdefault(zone["color"], []).append(zone["field"])
         self.assertEqual(
             {
-                "#e9c46a": [3, 19, 7, 16, 8, 11, 14],
-                "#f4a261": [9, 12, 5, 20, 1, 18],
-                "#81b29a": [4, 13, 6, 10, 15, 2, 17],
+                "#a77bff": [12, 5, 20, 1, 18],
+                "#81b29a": [4, 13, 6, 10, 15],
+                "#f4a261": [2, 17, 3, 19, 7],
+                "#e9c46a": [16, 8, 11, 14, 9],
             },
             fields_by_color,
         )
+
+    def test_block_drop_rotates_in_both_directions(self):
+        engine = GameEngine()
+        engine.reset("block_drop", ["Ada"])
+        engine.state.mode_state["piece"] = {
+            "kind": "T",
+            "rotation": 0,
+            "x": 1,
+            "y": 0,
+        }
+
+        engine.handle_event(hit(20, seq=1))
+        self.assertEqual(3, engine.state.mode_state["piece"]["rotation"])
+
+        engine.handle_event(hit(3, seq=2))
+        self.assertEqual(0, engine.state.mode_state["piece"]["rotation"])
 
     def test_dart_sweeper_first_hit_safe_and_triple_reveals_neighbors(self):
         engine = GameEngine()
