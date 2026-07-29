@@ -338,7 +338,7 @@ function controlInstructions(){
 
 function controlCountdown(){
   return `<section class="control-scene centered-scene">
-    <div class="radar-loader"><i></i><b>3</b></div>
+    <div class="radar-loader"><i></i><b id="countdownValue" aria-live="polite">3</b></div>
     <div class="kicker">PROJEKTOR LÄUFT</div>
     <h1>Spiel startet …</h1>
     <p>Alle Spieler bereit an die Linie.</p>
@@ -699,7 +699,7 @@ function projectorInstructions(){
 }
 function projectorCountdown(){
   const mode = modeBySlug(appState.experience.selected_mode);
-  return projectorBackdrop(mode,`<div class="projector-center"><div id="projectorCountdown" class="giant-countdown">3</div><div class="kicker">GET READY</div></div>`,'countdown-projector');
+  return projectorBackdrop(mode,`<div class="projector-center"><div id="countdownValue" class="giant-countdown" aria-live="polite">3</div><div class="kicker">GET READY</div></div>`,'countdown-projector');
 }
 
 function boardSvg(){
@@ -1056,7 +1056,7 @@ function startCountdown(){
   clearInterval(appState.countdownTimer);
   let value=3;
   const tick=()=>{
-    const element=$('projectorCountdown');
+    const element=$('countdownValue');
     if(element) element.textContent=value>0?value:'GO';
     if(isProjector()) tone(value>0?330+(3-value)*110:660,.16,0,'triangle',.12);
     if(value<0){
