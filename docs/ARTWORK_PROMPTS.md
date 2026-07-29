@@ -172,7 +172,8 @@ wartbare Zusammenfassung und kein behaupteter wortgleicher Originalprompt.
 Die zugehörigen Git-Commits sind `179cf40` für die ersten drei Cover,
 `e5f3192` für die ergänzten Neon-Artworks, `475d23f` für das vollständige
 Cartoon-Pack, `84b65ba` für die Wiederherstellung des Neon-Packs, `ef75121` für
-die zwölf Ambient-Props und `bd67109` für `candy_overheat`.
+die zwölf Ambient-Props, `bd67109` für `candy_overheat` und `88ee789` für
+`cookie_moldy` und `milk`.
 
 ### Website-Screenshots
 

@@ -33,6 +33,8 @@ This prevents the repository from offering rights it may not own.
 | `web/static/assets/modes/*.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; text-only Cartoon anchor and project-internal references; provenance commit `0069737` | 2026-07-30 |
 | `web/static/assets/themes/neon/modes/*.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; text-only Neon anchors and project-internal references; provenance commit `0069737` | 2026-07-30 |
 | `web/static/assets/effects/*.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; project-internal references and local chroma-key processing; provenance commit `0069737` | 2026-07-30 |
+| `web/static/assets/effects/cookie_moldy.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; `heart_chase.webp` and `cookie.webp` as project-internal references; provenance commit `88ee789` | 2026-07-30 |
+| `web/static/assets/effects/milk.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; `heart_chase.webp` and `cookie.webp` as project-internal references; provenance commit `88ee789` | 2026-07-30 |
 | `website/assets/modes/*.webp` | Gerry Weißbach (gamma / gamma production) | Copies of the cleared Cartoon covers | 2026-07-30 |
 | `website/assets/neon/*.webp` | Gerry Weißbach (gamma / gamma production) | Copies of the cleared Classic-Neon covers | 2026-07-30 |
 | `website/assets/screenshots/*.jpg` | Gerry Weißbach (gamma / gamma production) | Local Playwright/WebKit captures of the cleared project UI and artworks | 2026-07-30 |
@@ -46,7 +48,7 @@ treated as cleared.
 The cleared graphics were generated locally with OpenAI ImageGen, with the
 workflow orchestrated by GPT-5.6-sol. The local generation records and
 surviving source PNGs identify the generator as OpenAI `gpt-image` version 2.0.
-The repository contains 50 selected ImageGen assets: 37 covers and 13 effects.
+The repository contains 52 selected ImageGen assets: 37 covers and 15 effects.
 All supplied image references point to assets created earlier within this
 project; no external image reference appears in the recorded calls. The
 Website screenshots were captured locally with Playwright and WebKit. Detailed
