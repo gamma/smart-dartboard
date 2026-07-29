@@ -15,6 +15,17 @@ Danach ist die lokale Vorschau unter `http://localhost:8080` erreichbar.
 `dist/` ist ausschließlich ein generiertes Build-Verzeichnis und wird nicht
 versioniert.
 
+Für eine schnelle Vorschau direkt aus dem Quellbaum:
+
+```bash
+python3 -m http.server 8080
+```
+
+Dann `http://localhost:8080/website/` öffnen. Die auf der Landingpage
+verwendeten Cover liegen zusätzlich unter `website/assets/`, damit diese
+Vorschau keine fehlenden Bilder zeigt. Der Pages-Build übernimmt weiterhin die
+kanonischen Originale aus `web/static/assets/`.
+
 Der Workflow `.github/workflows/pages.yml` verwendet die offiziellen
 GitHub-Pages-Actions und wird bewusst nur manuell über `workflow_dispatch`
 ausgelöst. Vor dem ersten Lauf muss unter **Settings → Pages → Build and
