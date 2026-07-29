@@ -33,7 +33,7 @@ class X01Mode:
         ],
         instructions=[
             InstructionStep("Herunterspielen", "Jeder Treffer wird von deinem Restscore abgezogen.", "subtract"),
-            InstructionStep("Exakt Null", "Du musst deinen Score genau auf null bringen.", "zero"),
+            InstructionStep("Exakt Null", "Du musst deinen Score genau auf null bringen. Bei Double Out muss der letzte Dart ein Double sein.", "zero"),
             InstructionStep("Bust", "Überwirfst du dich, wird die komplette Aufnahme zurückgesetzt.", "bust"),
         ],
         sound_theme="championship",
@@ -66,6 +66,7 @@ class X01Mode:
                 turn_value=score,
                 message=f"{player.name} gewinnt!",
                 finished=True,
+                winner_id=player.id,
             )
         return ThrowOutcome(turn_value=score, message=f"{player.name}: {event.get('label', '')}")
 

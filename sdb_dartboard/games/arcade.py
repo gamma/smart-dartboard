@@ -34,11 +34,32 @@ def choose_targets(count: int, difficulty: str = "normal", exclude: Iterable[str
     available = [d for d in pool if zone_id(d) not in excluded]
     if len(available) < count:
         available = [d for d in TARGET_POOL_NORMAL if zone_id(d) not in excluded]
-    return random.sample(available, min(count, len(available)))
+    # Gameplay variety only; no security decision depends on this randomness.
+    return random.sample(available, min(count, len(available)))  # nosec B311
 
 
 def overlay_item(dart: Dict[str, Any], color: str, label: str = "", pulse: bool = True) -> Dict[str, Any]:
     return {"id": zone_id(dart), "field": dart["field"], "ring": dart["ring"], "color": color, "label": label, "pulse": pulse}
+
+
+def score_winner(players: Iterable[Any]) -> tuple[Any | None, List[Any]]:
+    candidates = list(players)
+    if not candidates:
+        return None, []
+    best_score = max(player.score for player in candidates)
+    leaders = [player for player in candidates if player.score == best_score]
+    return (leaders[0] if len(leaders) == 1 else None), leaders
+
+
+def result_message(
+    players: Iterable[Any],
+    winner_message: str,
+) -> tuple[str | None, str]:
+    winner, leaders = score_winner(players)
+    if winner:
+        return winner.id, winner_message.format(winner=winner.name)
+    names = " · ".join(player.name for player in leaders)
+    return None, f"Unentschieden: {names}"
 
 
 def finish_round_game(
@@ -60,11 +81,11 @@ def finish_round_game(
     )
     rounds = int(state.options.get("rounds", 1))
     if is_turn_end and is_last_player and state.round_number >= rounds:
-        winner = max(state.players, key=lambda candidate: candidate.score)
+        winner_id, message = result_message(state.players, winner_message)
         outcome.finished = True
-        outcome.winner_id = winner.id
+        outcome.winner_id = winner_id
         outcome.force_hold = False
-        outcome.message = winner_message.format(winner=winner.name)
+        outcome.message = message
     return outcome
 
 
@@ -75,9 +96,9 @@ def finish_action_round_game(state: Any, winner_message: str) -> bool:
     )
     rounds = int(state.options.get("rounds", 1))
     if is_last_player and state.round_number >= rounds:
-        winner = max(state.players, key=lambda candidate: candidate.score)
+        winner_id, message = result_message(state.players, winner_message)
         state.status = "finished"
-        state.winner_id = winner.id
-        state.message = winner_message.format(winner=winner.name)
+        state.winner_id = winner_id
+        state.message = message
         return True
     return False

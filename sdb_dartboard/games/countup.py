@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from .arcade import result_message
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -45,12 +46,14 @@ class CountUpMode:
         is_last_dart = state.darts_in_turn == 2
         is_last_player = state.current_player_index == len(state.players) - 1
         if is_last_dart and is_last_player and state.round_number >= int(state.options.get("rounds", 8)):
-            winner = max(state.players, key=lambda candidate: candidate.score)
+            winner_id, message = result_message(
+                state.players, "{winner} gewinnt Count Up!"
+            )
             return ThrowOutcome(
                 turn_value=score,
-                message=f"{winner.name} gewinnt!",
+                message=message,
                 finished=True,
-                winner_id=winner.id,
+                winner_id=winner_id,
             )
         return ThrowOutcome(turn_value=score, message=f"{player.name}: {event.get('label', '')}")
 

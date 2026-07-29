@@ -21,6 +21,7 @@ class CricketMode:
             InstructionStep("Ziele treffen", "Nur 15, 16, 17, 18, 19, 20 und Bull zählen.", "targets"),
             InstructionStep("Dreimal schließen", "Single zählt eins, Double zwei und Triple drei Marks.", "marks"),
             InstructionStep("Offen punkten", "Weitere Treffer punkten, solange ein Gegner das Feld offen hat.", "lock"),
+            InstructionStep("Sieg", "Du gewinnst, wenn alle Ziele geschlossen sind und du nicht weniger Punkte als ein Gegner hast.", "trophy"),
         ],
         sound_theme="club",
     )
@@ -52,7 +53,12 @@ class CricketMode:
             default=0,
         )
         if closed_all and leading:
-            return ThrowOutcome(turn_value=scored, message=f"{player.name} gewinnt!", finished=True)
+            return ThrowOutcome(
+                turn_value=scored,
+                message=f"{player.name} gewinnt!",
+                finished=True,
+                winner_id=player.id,
+            )
         return ThrowOutcome(turn_value=scored, message=f"{player.name}: {event.get('label', '')}")
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:

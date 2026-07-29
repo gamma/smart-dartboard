@@ -21,7 +21,7 @@ class ColorClashMode:
         icon="palette",
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
-            GameOption("shuffle", "Farbwechsel", "choice", "dart", [{"value":"dart","label":"Nach jedem Dart"},{"value":"turn","label":"Nach jeder Aufnahme"}]),
+            GameOption("shuffle", "Farbwechsel", "choice", "turn", [{"value":"turn","label":"Nach jeder Aufnahme"},{"value":"dart","label":"Nach jedem Dart"}]),
         ],
         instructions=[
             InstructionStep("Farben zählen", "Gold +50, Cyan +25, Grün +10, Rot -25.", "palette"),
@@ -40,7 +40,10 @@ class ColorClashMode:
         state.message = "Gold zählt am meisten!"
 
     def _generate_colors(self) -> Dict[str, str]:
-        pool = random.sample(TARGET_POOL_NORMAL, min(21, len(TARGET_POOL_NORMAL)))
+        # Gameplay variety only; not used for a security decision.
+        pool = random.sample(  # nosec B311
+            TARGET_POOL_NORMAL, min(21, len(TARGET_POOL_NORMAL))
+        )
         colors: Dict[str, str] = {}
         distribution = ["gold"] * 3 + ["cyan"] * 6 + ["green"] * 8 + ["red"] * 4
         random.shuffle(distribution)

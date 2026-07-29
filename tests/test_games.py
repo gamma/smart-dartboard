@@ -56,7 +56,8 @@ class GameEngineTests(unittest.TestCase):
 
     def test_countup_finishes_after_configured_rounds(self):
         engine = GameEngine()
-        engine.reset("countup", ["Ada", "Bob"], options={"rounds": 1})
+        engine.reset("countup", ["Ada", "Bob"], options={"rounds": 5})
+        engine.state.round_number = 5
         for seq in range(3):
             engine.handle_event(hit(20, seq))
         engine.continue_turn()
@@ -65,9 +66,24 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual("finished", engine.state.status)
         self.assertEqual(engine.state.players[0].id, engine.state.winner_id)
 
+    def test_fixed_round_tie_has_no_arbitrary_winner(self):
+        engine = GameEngine()
+        engine.reset("countup", ["Ada", "Bob"], options={"rounds": 5})
+        engine.state.round_number = 5
+        for seq in range(3):
+            engine.handle_event(hit(20, seq))
+        engine.continue_turn()
+        for seq in range(3, 6):
+            engine.handle_event(hit(20, seq))
+        self.assertEqual("finished", engine.state.status)
+        self.assertIsNone(engine.state.winner_id)
+        self.assertIn("Unentschieden", engine.state.message)
+
     def test_x01_bust_restores_complete_turn_and_holds(self):
         engine = GameEngine()
-        engine.reset("x01", ["Ada", "Bob"], options={"start_score": 101})
+        engine.reset("x01", ["Ada", "Bob"], options={"start_score": 301})
+        engine.state.players[0].score = 101
+        engine.state.turn_start_values[engine.state.players[0].id] = 101
         engine.handle_event(hit(60, 1, multiplier=3, label="T20"))
         engine.handle_event(hit(60, 2, multiplier=3, label="T20"))
         self.assertEqual(101, engine.state.players[0].score)
@@ -81,8 +97,10 @@ class GameEngineTests(unittest.TestCase):
         engine.reset(
             "x01",
             ["Ada"],
-            options={"start_score": 40, "out_rule": "double"},
+            options={"start_score": 301, "out_rule": "double"},
         )
+        engine.state.players[0].score = 40
+        engine.state.turn_start_values[engine.state.players[0].id] = 40
         engine.handle_event(hit(40, 1, field=20, multiplier=2, label="D20"))
         self.assertEqual("finished", engine.state.status)
         self.assertEqual(engine.state.players[0].id, engine.state.winner_id)
@@ -115,7 +133,9 @@ class GameEngineTests(unittest.TestCase):
 
     def test_undo_restores_finished_game(self):
         engine = GameEngine()
-        engine.reset("x01", ["Ada"], options={"start_score": 40})
+        engine.reset("x01", ["Ada"], options={"start_score": 301})
+        engine.state.players[0].score = 40
+        engine.state.turn_start_values[engine.state.players[0].id] = 40
         engine.handle_event(hit(40, 1, multiplier=2, label="D20"))
         engine.undo()
         self.assertEqual("running", engine.state.status)
@@ -139,7 +159,9 @@ class GameEngineTests(unittest.TestCase):
 
     def test_x01_correction_recalculates_later_throws(self):
         engine = GameEngine()
-        engine.reset("x01", ["Ada"], options={"start_score": 101})
+        engine.reset("x01", ["Ada"], options={"start_score": 301})
+        engine.state.players[0].score = 101
+        engine.state.turn_start_values[engine.state.players[0].id] = 101
         engine.handle_event(hit(20, 1, label="S20"))
         engine.handle_event(hit(20, 2, label="S20"))
         self.assertEqual(61, engine.state.players[0].score)
@@ -192,6 +214,15 @@ class GameEngineTests(unittest.TestCase):
         engine.handle_action("bank", {})
         self.assertEqual(60, engine.state.players[0].score)
         self.assertEqual("hold", engine.state.status)
+
+    def test_risk_it_half_miss_auto_banks_on_third_dart(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada"], options={"miss_loses": "half"})
+        engine.handle_event(hit(60, 1, multiplier=3, label="T20"))
+        engine.handle_event(hit(40, 2, multiplier=2, label="D20"))
+        engine.handle_event({"type": "miss", "score": 0, "seq": 3})
+        self.assertEqual(50, engine.state.players[0].score)
+        self.assertEqual(0, engine.state.mode_state["pot"][engine.state.players[0].id])
 
     def test_king_of_board_tracks_owned_segments(self):
         engine = GameEngine()
@@ -263,16 +294,43 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual(3, sum(cell["done"] for cell in player.marks.values()))
         self.assertEqual(9, len(engine.state.as_dict()["overlay"]["card"]))
 
+    def test_darts_bingo_marks_every_matching_open_task(self):
+        engine = GameEngine()
+        engine.reset("darts_bingo", ["Ada"])
+        player = engine.state.players[0]
+        tasks = ("double", "even", "field_20")
+        for index, task in enumerate(tasks):
+            label = {"double": "Any Double", "even": "Even", "field_20": "Any 20"}[task]
+            player.marks[str(index)] = {"task": task, "label": label, "done": False}
+        completed_before = sum(cell["done"] for cell in player.marks.values())
+        event = hit(40, 81, field=20, multiplier=2, label="D20")
+        event["ring"] = "double"
+        engine.handle_event(event)
+        self.assertTrue(all(player.marks[str(index)]["done"] for index in range(3)))
+        completed_after = sum(cell["done"] for cell in player.marks.values())
+        self.assertEqual(completed_after - completed_before, player.score)
+
     def test_one_attempt_modes_finish_on_final_failed_attempt(self):
         for slug in ("lightning_round", "simon_says"):
             with self.subTest(slug=slug):
                 engine = GameEngine()
-                engine.reset(slug, ["Ada"], options={"rounds": 3})
-                engine.state.round_number = 3
+                rounds = 5 if slug == "lightning_round" else 3
+                engine.reset(slug, ["Ada"], options={"rounds": rounds})
+                engine.state.round_number = rounds
                 engine.handle_event(
                     {"type": "miss", "score": 0, "seq": 200, "label": "MISS"}
                 )
                 self.assertEqual("finished", engine.state.status)
+
+    def test_lightning_uses_same_task_for_every_player_in_round(self):
+        engine = GameEngine()
+        engine.reset("lightning_round", ["Ada", "Bob"], options={"rounds": 5})
+        first_task = engine.state.mode_state["task_id"]
+        engine.handle_event({"type": "miss", "score": 0, "seq": 210})
+        self.assertEqual(first_task, engine.state.mode_state["task_id"])
+        engine.continue_turn()
+        engine.handle_event({"type": "miss", "score": 0, "seq": 211})
+        self.assertNotEqual(first_task, engine.state.mode_state["task_id"])
 
     def test_risk_it_bank_can_finish_final_round(self):
         engine = GameEngine()
@@ -295,10 +353,29 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual("finished", engine.state.status)
         self.assertEqual(0, engine.state.mode_state["boss_hp"])
 
+    def test_boss_fight_can_be_lost_at_round_limit(self):
+        engine = GameEngine()
+        engine.reset(
+            "boss_fight",
+            ["Ada"],
+            options={"boss_hp": 600, "weak_points": 3, "rounds": 5},
+        )
+        engine.state.round_number = 5
+        engine.state.darts_in_turn = 2
+        engine.handle_event({"type": "miss", "score": 0, "seq": 401})
+        self.assertEqual("finished", engine.state.status)
+        self.assertIsNone(engine.state.winner_id)
+        self.assertIn("Boss gewinnt", engine.state.message)
+
     def test_invalid_plugin_option_is_rejected(self):
         engine = GameEngine()
         with self.assertRaisesRegex(ValueError, "Unknown options"):
             engine.reset("avoid_bomb", ["Ada"], options={"surprise": 999})
+
+    def test_plugin_option_outside_declared_choices_is_rejected(self):
+        engine = GameEngine()
+        with self.assertRaisesRegex(ValueError, "choose one of"):
+            engine.reset("avoid_bomb", ["Ada"], options={"rounds": 999})
 
 
 if __name__ == "__main__":

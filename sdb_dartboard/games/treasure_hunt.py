@@ -47,9 +47,13 @@ class TreasureHuntMode:
         player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        pool = random.sample(TARGET_POOL_NORMAL, min(36, len(TARGET_POOL_NORMAL)))
+        # Gameplay variety only; not used for a security decision.
+        pool = random.sample(  # nosec B311
+            TARGET_POOL_NORMAL, len(TARGET_POOL_NORMAL)
+        )
         trap_count = int(options.get("traps", 5))
-        reward_types = ["gold"] * 4 + ["silver"] * 8 + ["coin"] * 16 + ["trap"] * trap_count
+        special = ["gold"] * 4 + ["silver"] * 8 + ["trap"] * trap_count
+        reward_types = special + ["coin"] * (len(pool) - len(special))
         random.shuffle(reward_types)
         hidden = {}
         for dart, reward in zip(pool, reward_types):

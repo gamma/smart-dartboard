@@ -40,7 +40,8 @@ class DartsBingoMode:
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
         player.score = 0
-        tasks = random.sample(TASK_POOL, 9)
+        # Gameplay variety only; not used for a security decision.
+        tasks = random.sample(TASK_POOL, 9)  # nosec B311
         player.marks = {str(i): {"task": tasks[i]["id"], "label": tasks[i]["label"], "done": False} for i in range(9)}
 
     def _task_by_id(self, task_id: str) -> Dict[str, Any]:
@@ -54,16 +55,15 @@ class DartsBingoMode:
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         if event.get("type") != "hit":
             return ThrowOutcome(turn_value=0, message="Miss – kein Bingo")
-        marked = None
+        marked = []
         for idx, cell in player.marks.items():
             if cell["done"]:
                 continue
             task = self._task_by_id(cell["task"])
             if task["accept"](event):
                 cell["done"] = True
-                marked = cell["label"]
+                marked.append(cell["label"])
                 player.score += 1
-                break
         if not marked:
             return ThrowOutcome(turn_value=0, message="Keine Bingo-Aufgabe getroffen")
         full_card = all(cell["done"] for cell in player.marks.values())
@@ -73,8 +73,8 @@ class DartsBingoMode:
             else self._has_line(player)
         )
         if target_reached:
-            return ThrowOutcome(turn_value=1, message=f"{player.name} ruft BINGO!", finished=True, winner_id=player.id)
-        return ThrowOutcome(turn_value=1, message=f"Bingo markiert: {marked}")
+            return ThrowOutcome(turn_value=len(marked), message=f"{player.name} ruft BINGO!", finished=True, winner_id=player.id)
+        return ThrowOutcome(turn_value=len(marked), message=f"Bingo markiert: {' · '.join(marked)}")
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         player = state.current_player()

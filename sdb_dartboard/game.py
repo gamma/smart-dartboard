@@ -414,7 +414,7 @@ class GameEngine:
         self.state.message = outcome.message
         if outcome.finished:
             self.state.status = "finished"
-            self.state.winner_id = outcome.winner_id or player.id
+            self.state.winner_id = outcome.winner_id
         elif outcome.force_hold:
             self.state.status = "hold"
         else:

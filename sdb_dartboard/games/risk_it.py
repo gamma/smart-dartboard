@@ -24,6 +24,7 @@ class RiskItMode:
             InstructionStep("Pot sammeln", "Jeder Treffer erhöht deinen Aufnahme-Pot.", "pot"),
             InstructionStep("Bank drücken", "Sichere den Pot über den Control-Screen.", "bank"),
             InstructionStep("Miss tut weh", "Ein Miss verliert oder halbiert den Pot.", "risk"),
+            InstructionStep("Dritter Dart", "Nach dem dritten Dart wird der verbliebene Pot automatisch gesichert.", "finish"),
         ],
         sound_theme="arcade",
     )
@@ -47,8 +48,18 @@ class RiskItMode:
         if event.get("type") == "miss":
             if state.options.get("miss_loses", "pot") == "half":
                 new_pot = pot // 2
-                self._set_pot(state, player.id, new_pot)
-                outcome = ThrowOutcome(turn_value=0, message=f"Miss – Pot halbiert auf {new_pot}")
+                is_last_dart = state.darts_in_turn == 2
+                if is_last_dart:
+                    player.score += new_pot
+                    state.mode_state["banked_last"] = new_pot
+                    self._set_pot(state, player.id, 0)
+                    outcome = ThrowOutcome(
+                        turn_value=0,
+                        message=f"Miss – halbierter Pot automatisch gebankt +{new_pot}",
+                    )
+                else:
+                    self._set_pot(state, player.id, new_pot)
+                    outcome = ThrowOutcome(turn_value=0, message=f"Miss – Pot halbiert auf {new_pot}")
             else:
                 self._set_pot(state, player.id, 0)
                 outcome = ThrowOutcome(turn_value=0, message="Miss – Pot verloren", force_hold=True)
@@ -79,6 +90,10 @@ class RiskItMode:
         state.status = "hold"
         state.message = f"{player.name} bankt +{pot}"
         finish_action_round_game(state, "{winner} gewinnt Risk It!")
+
+    def on_turn_start(self, state: Any, player: Any) -> None:
+        # A manually skipped turn must never carry an old Aufnahme-Pot forward.
+        self._set_pot(state, player.id, 0)
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         player = state.current_player()

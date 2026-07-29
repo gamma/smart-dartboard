@@ -113,8 +113,9 @@ class SessionControllerTests(unittest.TestCase):
         player = self.controller.create_player("Ada", "nova", "#ff00aa")
         self.controller.start_session([player["id"]])
         for game_number in range(2):
-            self.controller.prepare_game("countup", {"rounds": 1})
+            self.controller.prepare_game("countup", {"rounds": 5})
             self.controller.start_game()
+            self.controller.engine.state.round_number = 5
             self.controller.set_screen("playing")
             for dart in range(3):
                 self.controller.process_event(
@@ -136,6 +137,43 @@ class SessionControllerTests(unittest.TestCase):
         self.assertEqual(6, stats["darts"])
         session_stats = self.controller.public_state()["session_statistics"][0]
         self.assertEqual(6, session_stats["session_points"])
+
+    def test_draw_finishes_without_awarding_session_points(self):
+        self._start_game()
+        self.controller.selected_options = {"rounds": 5}
+        self.controller.engine.state.options = {"rounds": 5}
+        self.controller.engine.state.round_number = 5
+        for seq in range(3):
+            self.controller.process_event(
+                {
+                    "type": "hit",
+                    "label": "S20",
+                    "score": 20,
+                    "seq": 700 + seq,
+                    "field": 20,
+                    "ring": "single_outer",
+                    "multiplier": 1,
+                }
+            )
+        self.controller.continue_turn()
+        for seq in range(3):
+            self.controller.process_event(
+                {
+                    "type": "hit",
+                    "label": "S20",
+                    "score": 20,
+                    "seq": 710 + seq,
+                    "field": 20,
+                    "ring": "single_outer",
+                    "multiplier": 1,
+                }
+            )
+        state = self.controller.public_state()
+        self.assertEqual("game_result", state["screen"])
+        self.assertIsNone(state["game"]["winner_id"])
+        self.assertTrue(
+            all(player["session_points"] == 0 for player in state["session_statistics"])
+        )
 
     def test_correction_rewrites_persisted_statistics(self):
         ada, _ = self._start_game()
@@ -161,8 +199,9 @@ class SessionControllerTests(unittest.TestCase):
     def test_finishing_game_via_plugin_action_updates_session_and_screen(self):
         player = self.controller.create_player("Ada", "robot", "#28e7ff")
         self.controller.start_session([player["id"]])
-        self.controller.prepare_game("risk_it", {"rounds": 1})
+        self.controller.prepare_game("risk_it", {"rounds": 3})
         self.controller.start_game()
+        self.controller.engine.state.round_number = 3
         self.controller.set_screen("playing")
         self.controller.process_event(
             {
@@ -185,8 +224,9 @@ class SessionControllerTests(unittest.TestCase):
     def test_aborted_game_returns_to_selection_and_is_not_counted(self):
         player = self.controller.create_player("Ada", "robot", "#28e7ff")
         self.controller.start_session([player["id"]])
-        self.controller.prepare_game("countup", {"rounds": 1})
+        self.controller.prepare_game("countup", {"rounds": 5})
         self.controller.start_game()
+        self.controller.engine.state.round_number = 5
         aborted_game_id = self.controller.game_id
         self.controller.set_screen("playing")
         self.controller.process_event(

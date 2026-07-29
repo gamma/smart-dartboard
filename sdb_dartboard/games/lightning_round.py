@@ -39,7 +39,8 @@ class LightningRoundMode:
         player.score = 0; player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        task = random.choice(TASKS)
+        # Gameplay variety only; not used for a security decision.
+        task = random.choice(TASKS)  # nosec B311
         state.mode_state = {"task_id": task["id"]}
         state.message = task["prompt"]
 
@@ -50,7 +51,7 @@ class LightningRoundMode:
     def _next_task(self, state: Any) -> None:
         current = state.mode_state.get("task_id")
         pool = [t for t in TASKS if t["id"] != current]
-        task = random.choice(pool)
+        task = random.choice(pool)  # nosec B311
         state.mode_state["task_id"] = task["id"]
         state.message = task["prompt"]
 
@@ -60,7 +61,9 @@ class LightningRoundMode:
         points = 25 if success else 0
         player.score += points
         msg = "SUCCESS +25" if success else "FAIL"
-        self._next_task(state)
+        # Every player receives the same challenge in a round.
+        if state.current_player_index == len(state.players) - 1:
+            self._next_task(state)
         # one dart only: force hold after each throw
         outcome = ThrowOutcome(turn_value=points, message=msg, force_hold=True)
         return finish_round_game(

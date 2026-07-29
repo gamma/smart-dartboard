@@ -59,6 +59,12 @@ class GameMetadata:
                 raise ValueError(f"Invalid value for {key}: number is outside the safe range")
             if isinstance(value, str) and len(value) > 64:
                 raise ValueError(f"Invalid value for {key}: text is too long")
+            allowed = [choice["value"] for choice in option.choices]
+            if allowed and value not in allowed:
+                raise ValueError(
+                    f"Invalid value for {key}: choose one of "
+                    + ", ".join(str(item) for item in allowed)
+                )
             resolved[key] = value
         return resolved
 

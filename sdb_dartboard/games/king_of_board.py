@@ -59,6 +59,12 @@ class KingOfBoardMode:
             outcome = ThrowOutcome(turn_value=0, message="Miss – kein Gebiet")
         else:
             owner_id = self._ownership_id(state, event)
+            old_owner = (
+                state.mode_state.setdefault("owned", {})
+                .get(owner_id, {})
+                .get("owner_id")
+            )
+            before_score = player.score
             state.mode_state.setdefault("owned", {})[owner_id] = {
                 "owner_id": player.id,
                 "color": player.color,
@@ -67,7 +73,12 @@ class KingOfBoardMode:
                 "ring": event.get("ring"),
             }
             self._recalculate_scores(state)
-            outcome = ThrowOutcome(turn_value=1, message=f"{player.name} erobert {event.get('label', '')}")
+            score_change = player.score - before_score
+            action = "hält" if old_owner == player.id else "erobert"
+            outcome = ThrowOutcome(
+                turn_value=score_change,
+                message=f"{player.name} {action} {event.get('label', '')}",
+            )
         return finish_round_game(
             state, outcome, "{winner} regiert die Scheibe!"
         )

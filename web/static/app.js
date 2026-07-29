@@ -7,8 +7,12 @@ const appState = {
   lastCueKey: null,
   projectedEvent: null,
   boardResetTimer: null,
+  memoryRevealTimer: null,
+  memoryRevealKey: '',
+  memoryHidden: false,
   selectedCorrectionIndex: null,
   abortArmed: false,
+  skipArmed: false,
   geometryTimer: null,
   reportedGeometry: '',
   reportedAudioStatus: '',
@@ -108,6 +112,23 @@ function updateExperience(experience, event){
     clearTimeout(appState.boardResetTimer);
     appState.projectedEvent=null;
     appState.selectedCorrectionIndex=null;
+    appState.skipArmed=false;
+  }
+  const memoryKey=experience.game?.game_type==='simon_says' && experience.game?.status==='running'
+    ? `${experience.game.round_number}:${experience.game.current_player_id}`
+    : '';
+  if(memoryKey && memoryKey!==appState.memoryRevealKey){
+    clearTimeout(appState.memoryRevealTimer);
+    appState.memoryRevealKey=memoryKey;
+    appState.memoryHidden=false;
+    appState.memoryRevealTimer=setTimeout(()=>{
+      appState.memoryHidden=true;
+      if(isProjector() && appState.experience?.screen==='playing') renderProjector();
+    },3000);
+  }else if(!memoryKey){
+    clearTimeout(appState.memoryRevealTimer);
+    appState.memoryRevealKey='';
+    appState.memoryHidden=false;
   }
   if(previous?.screen === 'game_result' && experience.screen !== 'game_result'){
     clearTimeout(appState.boardResetTimer);
@@ -121,6 +142,7 @@ function updateExperience(experience, event){
     if(isThrow && throwWasCounted){
       appState.selectedCorrectionIndex=null;
       appState.abortArmed=false;
+      appState.skipArmed=false;
       appState.projectedEvent=event;
       clearTimeout(appState.boardResetTimer);
       appState.boardResetTimer=setTimeout(()=>{
@@ -393,11 +415,21 @@ function controlPlaying(){
     <div class="scoreboard">${scoreboard(game)}</div>
     <div class="operator-panel">
       ${overlayActionButtons(game)}
-      ${game.status==='hold' ? actionButton('Weiter zum nächsten Spieler','continue','primary') : actionButton('Spieler wechseln','next-player','secondary')}
+      ${game.status==='hold' ? actionButton('Weiter zum nächsten Spieler','continue','primary') : skipPlayerControls()}
       ${actionButton('Letzten Wurf zurück','undo','danger')}
       ${abortControls()}
     </div>
   </section>`;
+}
+function skipPlayerControls(){
+  if(!appState.skipArmed){
+    return actionButton('Aufnahme vorzeitig beenden','arm-skip','secondary');
+  }
+  return `<div class="skip-confirm">
+    <b>Restliche Darts wirklich überspringen?</b>
+    ${actionButton('Spieler wechseln','next-player','danger')}
+    ${actionButton('Weiterspielen','cancel-skip','ghost')}
+  </div>`;
 }
 function abortControls(){
   if(!appState.abortArmed){
@@ -426,13 +458,24 @@ function winner(){
   const game = appState.experience.game;
   return game.players.find(player => player.id === game.winner_id);
 }
+function resultCopy(game, champion){
+  if(champion){
+    return {icon:'♛', label:'SPIEL ENTSCHIEDEN', title:champion.name, points:'+3 SESSIONSPUNKTE'};
+  }
+  const draw=String(game.message || '').startsWith('Unentschieden');
+  return draw
+    ? {icon:'=', label:'GLEICHSTAND', title:'Unentschieden', points:'KEINE SESSIONSPUNKTE'}
+    : {icon:'☠', label:'CHALLENGE VERLOREN', title:'Boss gewinnt', points:'KEINE SESSIONSPUNKTE'};
+}
 function controlGameResult(){
+  const game=appState.experience.game;
   const champion = winner();
+  const result=resultCopy(game,champion);
   return `<section class="control-scene result-control">
-    <div class="trophy-orbit">♛</div>
+    <div class="trophy-orbit">${result.icon}</div>
     <div class="kicker">GAME COMPLETE</div>
-    <h1>${escapeHtml(champion?.name || 'Spiel beendet')}</h1>
-    <p>${champion ? 'holt sich den Sieg und 3 Sessionpunkte.' : 'Das Spiel ist abgeschlossen.'}</p>
+    <h1>${escapeHtml(result.title)}</h1>
+    <p>${champion ? 'holt sich den Sieg und 3 Sessionpunkte.' : escapeHtml(game.message || 'Keine Sessionpunkte in diesem Spiel.')}</p>
     ${sessionScoreStrip()}
     <div class="result-actions">
       ${actionButton('Zurück zur Spielauswahl','next-game')}
@@ -563,7 +606,11 @@ function projectorAdvice(game){
 function projectorOverlayPrompt(game){
   const overlay = game.overlay;
   if(!overlay?.prompt || game.status === 'hold' || game.game_type === 'x01' || overlay.card || overlay.boss || overlay.cricket || Number.isFinite(overlay.pot)) return '';
-  return `<aside class="projector-advice arcade"><span>ZIEL</span><b>${escapeHtml(overlay.prompt)}</b><small>${escapeHtml(overlay.combo?.count ? `Combo ×${overlay.combo.count}` : '')}</small></aside>`;
+  const prompt=game.game_type==='simon_says' && appState.memoryHidden
+    ? 'Jetzt aus dem Kopf!'
+    : overlay.prompt;
+  const label=game.game_type==='simon_says' && !appState.memoryHidden ? '3 SEKUNDEN MERKEN' : 'ZIEL';
+  return `<aside class="projector-advice arcade"><span>${label}</span><b>${escapeHtml(prompt)}</b><small>${escapeHtml(overlay.combo?.count ? `Combo ×${overlay.combo.count}` : '')}</small></aside>`;
 }
 function projectorModePanel(game){
   const overlay = game.overlay || {};
@@ -608,6 +655,7 @@ function projectorPlaying(){
 function projectorResult(){
   const game = appState.experience.game;
   const champion = winner();
+  const result = resultCopy(game,champion);
   const mode = modeBySlug(game.game_type);
   const lastThrow = game.throws?.at(-1);
   return `<section class="projection-game result-board" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
@@ -618,11 +666,11 @@ function projectorResult(){
     ${projectorModePanel(game)}
     <aside class="projection-roster result-roster">${game.players.map(item=>`<span class="${item.id===game.winner_id?'winner':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
     <div class="victory-overlay">
-      <article class="victory-card">
-        <div class="winner-crown">♛</div>
-        <div><span>SPIEL ENTSCHIEDEN</span><h1>${escapeHtml(champion?.name || 'GAME OVER')}</h1><p>${escapeHtml(game.message || 'Spiel beendet')}</p></div>
+      <article class="victory-card ${champion?'':'no-winner'}">
+        <div class="winner-crown">${result.icon}</div>
+        <div><span>${result.label}</span><h1>${escapeHtml(result.title)}</h1><p>${escapeHtml(game.message || 'Spiel beendet')}</p></div>
         <footer>
-          <b>+3 SESSIONSPUNKTE</b>
+          <b>${result.points}</b>
           ${lastThrow ? `<small>LETZTER DART · ${escapeHtml(lastThrow.label || 'MISS')}</small>` : ''}
         </footer>
       </article>
@@ -694,8 +742,16 @@ function renderBoardEvent(event){
     const segment = $(boardSegmentId(ringToZone(item.ring), item.field));
     if(segment){ segment.classList.add('overlay-owned'); segment.style.setProperty('--owner-color', item.color || '#28e7ff'); }
   });
-  const gameStatus=appState.experience?.game?.status;
-  if(gameStatus === 'running' || gameStatus === 'hold' || gameStatus === 'finished'){
+  const game=appState.experience?.game;
+  const gameStatus=game?.status;
+  const activeTargetsHidden = (
+    (gameStatus === 'hold' || gameStatus === 'finished')
+    && ['target_rush','lightning_round','simon_says'].includes(game?.game_type)
+  ) || (game?.game_type === 'simon_says' && appState.memoryHidden);
+  if(
+    (gameStatus === 'running' || gameStatus === 'hold' || gameStatus === 'finished')
+    && !activeTargetsHidden
+  ){
     paint(overlay?.targets, 'overlay-target');
     paint(overlay?.danger, 'overlay-danger');
     paint(overlay?.bonus, 'overlay-bonus');
@@ -850,8 +906,10 @@ function playEventCue(event,experience){
   } else if(event.type==='miss') tone(110,.28,0,'sawtooth',.08);
   else if(event.type==='continue'||event.type==='next_player') tone(330,.14);
   else if(event.type==='hardware_status'&&event.status==='error') tone(95,.4,0,'sawtooth',.06);
-  if(experience.game.status==='finished'){
+  if(experience.game.status==='finished' && experience.game.winner_id){
     [392,523,659,784].forEach((frequency,index)=>tone(frequency,.35,index*.12,'triangle',.13));
+  }else if(experience.game.status==='finished'){
+    [180,145,110].forEach((frequency,index)=>tone(frequency,.3,index*.12,'sawtooth',.07));
   }
 }
 function startCountdown(){
@@ -906,7 +964,9 @@ document.addEventListener('click',async event=>{
   if(name==='back-games'){ await action('/api/game/next'); return; }
   if(name==='start-game'){ await action('/api/game/start'); return; }
   if(name==='continue'){ await action('/api/continue'); return; }
-  if(name==='next-player'){ await action('/api/next-player'); return; }
+  if(name==='arm-skip'){ appState.skipArmed=true; renderControl(); return; }
+  if(name==='cancel-skip'){ appState.skipArmed=false; renderControl(); return; }
+  if(name==='next-player'){ appState.skipArmed=false; await action('/api/next-player'); return; }
   if(name==='undo'){ await action('/api/undo'); return; }
   if(name==='arm-abort'){ appState.abortArmed=true; renderControl(); return; }
   if(name==='cancel-abort'){ appState.abortArmed=false; renderControl(); return; }
