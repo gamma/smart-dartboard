@@ -18,10 +18,12 @@ Das aktive Artwork-Theme wird im Board-Setup gewählt und dauerhaft gespeichert:
 - `neon` verwendet die erhaltenen Bestandscover unter
   `web/static/assets/themes/neon/modes/<slug>.webp`.
 
-Das Classic-Neon-Pack enthält die 13 historischen Cover. Modi, die erst danach
-entstanden sind, fallen im Neon-Theme automatisch auf ihr Cartoon-Cover zurück.
-Dadurch bleibt das historische Pack unverändert erhalten, ohne für neue Modi
-künstlich Neonbilder erzeugen zu müssen.
+Das Classic-Neon-Pack enthält 13 historische Cover und elf am 30.07.2026
+ergänzte Cover. Damit besitzen alle 24 aktuellen Modi ein eigenes Cover in
+beiden Theme-Packs. Die historischen Cover blieben unverändert.
+
+Die vollständigen finalen Prompts und Referenzen der Neon-Erweiterung stehen in
+`docs/NEON_ARTWORK_2026-07-30.md`.
 
 Der projektlokale Skill
 `.agents/skills/smart-dartboard-artwork/SKILL.md` beschreibt den verbindlichen
@@ -127,16 +129,15 @@ ImageGen erzeugt. Der Generierungsablauf wurde überwiegend durch GPT-5.6-sol
 gesteuert. Die lokale Codex-Sitzung und die noch vorhandenen
 ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 
-- 54 direkte ImageGen-Aufrufe sowie ein anfänglicher Batch mit drei
-  ImageGen-Aufrufen liefen in einer mit `gpt-5.6-sol` gesteuerten
+- Alle ImageGen-Aufrufe liefen in einer mit `gpt-5.6-sol` gesteuerten
   Codex-Sitzung.
 - Die C2PA-Manifeste der geprüften Original-PNGs nennen
   `OpenAI Media Service API`, den Software-Agenten `gpt-image` in Version `2.0`
   und den digitalen Quelltyp `trainedAlgorithmicMedia`.
-- Aus insgesamt 57 erzeugten Ergebnissen wurden die heute vorhandenen 37 Cover
-  und 17 Effekte ausgewählt; drei Cover-Kandidaten wurden verworfen oder
-  ersetzt. Sämtliche übergebenen Bildreferenzen zeigen auf bereits lokal
-  erzeugte Dateien dieses Projekts. Fremde Bilder, Logos oder
+- Aus insgesamt 68 erzeugten Ergebnissen wurden die heute vorhandenen 48 Cover
+  und 16 Effekte ausgewählt; drei Cover-Kandidaten und die frühere Mine wurden
+  verworfen oder ersetzt. Sämtliche übergebenen Bildreferenzen zeigen auf
+  bereits lokal erzeugte Dateien dieses Projekts. Fremde Bilder, Logos oder
   Markenreferenzen wurden in den protokollierten Aufrufen nicht verwendet.
 - Die finalen WebP-Dateien enthalten das C2PA-Manifest nicht mehr, weil es bei
   der lokalen Konvertierung nicht übernommen wurde. Die Zuordnung bleibt über
@@ -145,8 +146,8 @@ ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 | Bestand | Erzeugung und Referenzen | Bildmodell/Datum | Nachbearbeitung | Lizenzstatus |
 |---|---|---|---|---|
 | Playful-Cartoon-Cover | 24 ImageGen-Ergebnisse; `heart_chase` nur aus Text erzeugt, danach als interne Stilreferenz für alle weiteren Cover | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | ImageMagick: mittiger Zuschnitt auf 900 × 640, WebP-Qualität 88 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
-| Classic-Neon-Cover | 13 ImageGen-Ergebnisse; `countup`, `x01` und `cricket` nur aus Text, danach als interne Stilreferenzen für die weiteren Neon-Cover | `gpt-image` 2.0; 28.–29.07.2026; gesteuert mit `gpt-5.6-sol` | historische Versionen aus Git-Commit `54ba4a3` wiederhergestellt, mittig auf 900 × 640 gebracht und als WebP mit Qualität 88 exportiert | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
-| animierte 3D-Props | 17 ImageGen-Ergebnisse; zwölf ursprüngliche Props mit `heart_chase`, mode-spezifische Ergänzungen zusätzlich mit passenden projektinternen Props | `gpt-image` 2.0; 29.–30.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt und als Alpha-WebP exportiert; Standardprops höchstens 512 × 512, große Bursts 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
+| Classic-Neon-Cover | 24 ImageGen-Ergebnisse; `countup`, `x01` und `cricket` nur aus Text, danach ausschließlich projektinterne Neon-Cover als Stilreferenzen | `gpt-image` 2.0; 28.–30.07.2026; gesteuert mit `gpt-5.6-sol` | historische Versionen aus Git-Commit `54ba4a3` wiederhergestellt; elf ergänzende Cover neu erzeugt; alle mittig auf 900 × 640 gebracht und als WebP mit Qualität 88 exportiert | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
+| animierte 3D-Props | 16 aktuelle ImageGen-Ergebnisse; zwölf ursprüngliche Props mit `heart_chase`, mode-spezifische Ergänzungen zusätzlich mit passenden projektinternen Props; die ursprüngliche Mine wurde ersetzt | `gpt-image` 2.0; 29.–30.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt und als Alpha-WebP exportiert; Standardprops höchstens 512 × 512, große Bursts 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 
 Der Neon-Basis-Prompt beschreibt somit reproduzierbar die sichtbare
 Bildsprache. Die historischen Einzelprompts sind zusätzlich in der lokalen
@@ -171,6 +172,9 @@ wartbare Zusammenfassung und kein behaupteter wortgleicher Originalprompt.
 7. Ebenfalls am 30.07.2026 wurden `mine` neu gerendert und
    `mine_explosion` ergänzt; Referenzen waren ausschließlich das eigene
    Heart-Chase-Cover und der vorherige Mine-Prop.
+8. Ebenfalls am 30.07.2026 entstanden elf ergänzende Classic-Neon-Cover mit
+   `countup` als primärer und `target_rush`, `treasure_hunt` oder `boss_fight`
+   als zweiter projektinterner Akzentreferenz.
 
 Die zugehörigen Git-Commits sind `179cf40` für die ersten drei Cover,
 `e5f3192` für die ergänzten Neon-Artworks, `475d23f` für das vollständige

@@ -41,9 +41,11 @@ const AVATARS = [
 ];
 const COLORS = ['#28e7ff','#ffb52b','#3dff91','#ff4f79','#a77bff','#ffffff'];
 const NEON_MODE_ASSETS = new Set([
-  'avoid_bomb','boss_fight','color_clash','countup','cricket','darts_bingo',
-  'king_of_board','lightning_round','risk_it','simon_says','target_rush',
-  'treasure_hunt','x01',
+  'avoid_bomb','block_drop','boss_fight','candy_cannon','color_clash',
+  'cookie_monster','countup','cricket','dart_sweeper','darts_bingo',
+  'dragon_eggs','eight_ball','ghost_chase','heart_chase','king_of_board',
+  'lightning_round','mini_golf','risk_it','robin_hood','simon_says',
+  'space_defender','target_rush','treasure_hunt','x01',
 ]);
 const MODE_AMBIENCE = {
   avoid_bomb:'mines', block_drop:'blocks', boss_fight:'embers',
