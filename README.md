@@ -124,6 +124,16 @@ docker compose config --quiet
 - [Reproduzierbare Artwork-Prompts](docs/ARTWORK_PROMPTS.md)
 - [Website und Publishing](docs/PUBLISHING.md)
 
+## Lizenzierung
+
+Der Softwarecode, die Konfiguration und die Dokumentation stehen unter der
+[Apache License 2.0](LICENSE). Visuelle Assets verwenden einen getrennten,
+provenienzbasierten Freigabeprozess in [ASSETS_LICENSE.md](ASSETS_LICENSE.md);
+ungeklärte Bestandsbilder sind derzeit nicht zur Wiederverwendung freigegeben.
+Name und Markenauftritt bleiben gemäß [TRADEMARKS.md](TRADEMARKS.md)
+vorbehalten. Hinweise zu Abhängigkeiten enthält
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
 ## Datenfluss
 
 ```text

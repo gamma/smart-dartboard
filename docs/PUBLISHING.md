@@ -59,10 +59,14 @@ Vor einer öffentlichen Veröffentlichung:
 3. Alle Links, Alternativtexte und den Lightbox-Dialog testen.
 4. `node --check website/app.js` ausführen.
 5. Die Aussagen zu Moduszahl und Funktionen mit `README.md` abgleichen.
-6. Lizenz für den Quellcode festlegen.
-7. Herkunft und Nutzungsrechte aller veröffentlichten Artworks klären; der
-   aktuelle Altbestand ist in `docs/ARTWORK_PROMPTS.md` als unbekannt markiert.
+6. Den endgültigen Rechteinhaber in `NOTICE`, `ASSETS_LICENSE.md` und den
+   Attributionstexten bestätigen.
+7. Herkunft und Nutzungsrechte aller veröffentlichten Artworks klären und
+   freigegebene Pfade in die Tabelle `Cleared assets` in
+   `ASSETS_LICENSE.md` eintragen. Der aktuelle Altbestand ist in
+   `docs/ARTWORK_PROMPTS.md` als unbekannt markiert.
 8. Erst danach den manuellen Pages-Workflow starten.
 
-Die Punkte 6 und 7 sind vor einem öffentlichen Release echte Blocker und
-sollten nicht durch Vermutungen ersetzt werden.
+Apache-2.0 ist für den Code eingerichtet. Die Punkte 6 und 7 bleiben vor einem
+öffentlichen Release echte Blocker und sollten nicht durch Vermutungen ersetzt
+werden.
