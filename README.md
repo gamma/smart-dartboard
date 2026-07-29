@@ -90,6 +90,7 @@ docker compose config --quiet
 - [Betrieb und Kiosk-Setup](docs/OPERATIONS.md)
 - [Neue Spielmodule entwickeln](docs/GAME_PLUGINS.md)
 - [Party-Modi & visuelle Incentives](docs/PARTY_MODES.md)
+- [Cartoon-, Challenge- und Minesweeper-Modi](docs/CARTOON_MODES.md)
 - [X01 Checkout- und Setup-Advisor](docs/X01_ADVISOR.md)
 - [Reproduzierbare Artwork-Prompts](docs/ARTWORK_PROMPTS.md)
 
