@@ -61,10 +61,9 @@ Vor einer öffentlichen Veröffentlichung:
 5. Die Aussagen zu Moduszahl und Funktionen mit `README.md` abgleichen.
 6. Den endgültigen Rechteinhaber in `NOTICE`, `ASSETS_LICENSE.md` und den
    Attributionstexten bestätigen.
-7. Herkunft und Nutzungsrechte aller veröffentlichten Artworks klären und
-   freigegebene Pfade in die Tabelle `Cleared assets` in
-   `ASSETS_LICENSE.md` eintragen. Der aktuelle Altbestand ist in
-   `docs/ARTWORK_PROMPTS.md` als unbekannt markiert.
+7. Den rekonstruierten Herkunftsnachweis in `docs/ARTWORK_PROMPTS.md` prüfen
+   und die freigegebenen Pfade mit dem bestätigten Rechteinhaber in die Tabelle
+   `Cleared assets` in `ASSETS_LICENSE.md` eintragen.
 8. Erst danach den manuellen Pages-Workflow starten.
 
 Apache-2.0 ist für den Code eingerichtet. Die Punkte 6 und 7 bleiben vor einem

@@ -124,19 +124,71 @@ Herkunft oder ungeklärte Nutzung ausdrücklich als offener Punkt zu behandeln.
 
 Nach Angabe des Projektinhabers wurden alle Bestandsgrafiken lokal mit OpenAI
 ImageGen erzeugt. Der Generierungsablauf wurde überwiegend durch GPT-5.6-sol
-gesteuert. GPT-5.6-sol bezeichnet dabei das steuernde Agent-Modell und nicht
-zwingend das eigentliche Bildgenerierungsmodell. Wo dessen konkrete
-ImageGen-Modellkennung, Datum oder endgültiger Einzelprompt nicht protokolliert
-wurde, bleibt die Angabe ausdrücklich `unbekannt`.
+gesteuert. Die lokale Codex-Sitzung und die noch vorhandenen
+ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 
-| Bestand | Stilrezept | Erzeugung | Exakter finaler Prompt | Bildmodell/Datum | Lizenznachweis |
-|---|---|---|---|---|---|
-| Playful-Cartoon-Cover | Basis-Prompt und Modusmotive dokumentiert | lokal mit OpenAI ImageGen; überwiegend durch GPT-5.6-sol gesteuert | unbekannt | unbekannt | Eingaberechte und Rechteinhaber noch zu bestätigen |
-| Classic-Neon-Cover | Basis-Prompt nachträglich aus dem Referenzsatz abgeleitet | lokal mit OpenAI ImageGen; überwiegend durch GPT-5.6-sol gesteuert | unbekannt | unbekannt | Eingaberechte und Rechteinhaber noch zu bestätigen |
-| animierte 3D-Props | gemeinsamer Prompt und Motive dokumentiert | lokal mit OpenAI ImageGen; überwiegend durch GPT-5.6-sol gesteuert | unbekannt | unbekannt | Eingaberechte und Rechteinhaber noch zu bestätigen |
+- 50 direkte ImageGen-Aufrufe sowie ein anfänglicher Batch mit drei
+  ImageGen-Aufrufen liefen in einer mit `gpt-5.6-sol` gesteuerten
+  Codex-Sitzung.
+- Die C2PA-Manifeste der geprüften Original-PNGs nennen
+  `OpenAI Media Service API`, den Software-Agenten `gpt-image` in Version `2.0`
+  und den digitalen Quelltyp `trainedAlgorithmicMedia`.
+- Aus insgesamt 53 erzeugten Ergebnissen wurden die heute vorhandenen 37 Cover
+  und 13 Effekte ausgewählt; drei Cover-Kandidaten wurden verworfen oder
+  ersetzt. Sämtliche übergebenen Bildreferenzen zeigen auf bereits lokal
+  erzeugte Dateien dieses Projekts. Fremde Bilder, Logos oder
+  Markenreferenzen wurden in den protokollierten Aufrufen nicht verwendet.
+- Die finalen WebP-Dateien enthalten das C2PA-Manifest nicht mehr, weil es bei
+  der lokalen Konvertierung nicht übernommen wurde. Die Zuordnung bleibt über
+  ImageGen-Call-ID, Konvertierungsbefehl und Git-Commit rekonstruierbar.
+
+| Bestand | Erzeugung und Referenzen | Bildmodell/Datum | Nachbearbeitung | Offener Lizenzpunkt |
+|---|---|---|---|---|
+| Playful-Cartoon-Cover | 24 ImageGen-Ergebnisse; `heart_chase` nur aus Text erzeugt, danach als interne Stilreferenz für alle weiteren Cover | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | ImageMagick: mittiger Zuschnitt auf 900 × 640, WebP-Qualität 88 | endgültigen Rechteinhaber bestätigen |
+| Classic-Neon-Cover | 13 ImageGen-Ergebnisse; `countup`, `x01` und `cricket` nur aus Text, danach als interne Stilreferenzen für die weiteren Neon-Cover | `gpt-image` 2.0; 28.–29.07.2026; gesteuert mit `gpt-5.6-sol` | historische Versionen aus Git-Commit `54ba4a3` wiederhergestellt, mittig auf 900 × 640 gebracht und als WebP mit Qualität 88 exportiert | endgültigen Rechteinhaber bestätigen |
+| animierte 3D-Props | 13 ImageGen-Ergebnisse; zwölf Props mit `heart_chase` als interner Referenz, `candy_overheat` mit `candy_cannon` und `candy` | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt, beschnitten, auf höchstens 512 × 512 skaliert und als Alpha-WebP exportiert; `candy_overheat` 768 × 768 | endgültigen Rechteinhaber bestätigen |
 
 Der Neon-Basis-Prompt beschreibt somit reproduzierbar die sichtbare
-Bildsprache, ist aber kein behaupteter Originalprompt der historischen Bilder.
+Bildsprache. Die historischen Einzelprompts sind zusätzlich in der lokalen
+Codex-Sitzung vom 28./29.07.2026 erhalten; der Basis-Prompt ist weiterhin eine
+wartbare Zusammenfassung und kein behaupteter wortgleicher Originalprompt.
+
+### Rekonstruierte Produktionsfolge
+
+1. Am 28.07.2026 entstanden die drei textbasierten Classic-Neon-Anker
+   `countup`, `x01` und `cricket`.
+2. Am 29.07.2026 entstanden zehn weitere Neon-Cover mit ausschließlich diesen
+   drei Projektbildern als Stilreferenzen.
+3. `heart_chase` wurde anschließend in zwei textbasierten Varianten erzeugt.
+   Die ausgewählte zweite Variante wurde zum verbindlichen Cartoon-Anker.
+4. Die übrigen 23 Cartoon-Cover wurden mit diesem projektinternen
+   `heart_chase`-Bild als einziger Bildreferenz erzeugt.
+5. Zwölf Ambient-Props wurden einzeln vor Grün beziehungsweise Magenta erzeugt
+   und lokal freigestellt. Der spätere Candy-Overheat-Effekt verwendete nur das
+   eigene Candy-Cannon-Cover und den eigenen Candy-Prop als Referenzen.
+
+Die zugehörigen Git-Commits sind `179cf40` für die ersten drei Cover,
+`e5f3192` für die ergänzten Neon-Artworks, `475d23f` für das vollständige
+Cartoon-Pack, `84b65ba` für die Wiederherstellung des Neon-Packs, `ef75121` für
+die zwölf Ambient-Props und `bd67109` für `candy_overheat`.
+
+### Website-Screenshots
+
+Die fünf JPEGs unter `website/assets/screenshots/` sind keine
+ImageGen-Ergebnisse. Sie wurden am 29.07.2026 mit
+`website/capture-screenshots.mjs` aus einer frischen lokalen Spielsession
+aufgenommen:
+
+- Browser: Playwright mit WebKit, Device Scale Factor 1, dunkles Farbschema,
+- Controller-Viewports: 1440 × 1000 und 1280 × 900,
+- Projektor-Viewports: 1600 × 900 und 1920 × 1080,
+- Format: JPEG mit Qualität 88,
+- Zustände: echte lokale API-Session mit drei Testspielern und fest
+  protokollierten Testtreffern; keine statischen UI-Mockups.
+
+Die Screenshots kamen mit Commit `e01e095` in das Repository. Sie bilden
+allerdings die Spielmodus-Artworks ab und können deshalb erst zusammen mit den
+dargestellten Assets abschließend lizenziert werden.
 
 ## Animierte 3D-Props
 

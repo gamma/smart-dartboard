@@ -37,14 +37,15 @@ No visual asset has been cleared yet.
 
 The project owner has stated that the existing graphics were generated locally
 with OpenAI ImageGen, with the workflow mostly orchestrated by GPT-5.6-sol.
-GPT-5.6-sol identifies the orchestrating agent, not necessarily the underlying
-image-generation model. The exact ImageGen model, generation dates, and final
-per-asset prompts were not recorded for all legacy files.
+The local generation records and surviving source PNGs further identify the
+generator as OpenAI `gpt-image` version 2.0. The records contain 50 ImageGen
+assets selected from 53 generated results: 37 covers and 13 effects are
+currently included, while three cover candidates were discarded or replaced.
+All supplied image references point to assets created earlier within this
+project; no external image reference appears in the recorded calls.
 
-The following groups remain excluded until the rights holder and the rights to
-all reference inputs have been confirmed. Their source material, applicable
-third-party rights, and any material human post-processing must also be
-reviewed where relevant:
+The following groups remain excluded until the final rights-holder name has
+been confirmed and entered in the cleared-assets table:
 
 - `web/static/assets/modes/**`
 - `web/static/assets/themes/**`
@@ -54,8 +55,10 @@ reviewed where relevant:
 - `website/assets/screenshots/**`
 
 The Website copies do not gain a separate license merely because they duplicate
-or depict another asset. Current provenance notes are maintained in
-`docs/ARTWORK_PROMPTS.md`.
+or depict another asset. The Website screenshots were captured locally with
+Playwright and WebKit by the project workflow, but they depict the pending game
+artworks and therefore remain pending with them. Detailed provenance notes are
+maintained in `docs/ARTWORK_PROMPTS.md`.
 
 ## Excluded brand assets
 
