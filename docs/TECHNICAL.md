@@ -319,7 +319,17 @@ Homographie wird als CSS-`matrix3d` angewendet. So werden Position, Skalierung,
 Rotation, Keystone und Perspektive softwareseitig korrigiert.
 
 Atmosphärische 3D-Hintergründe bleiben von dieser präzisen Ebene getrennt.
-Treffersegmente werden auf der SVG-Geometrie hervorgehoben.
+Während des Spiels wird das Artwork des aktiven Themes abgedunkelt und weich
+als Kulisse dargestellt. Es wird so ausgerichtet, dass die im Cover enthaltene
+Scheibe hinter der kalibrierten SVG-Scheibe verschwindet. Eine mit derselben
+Homographie transformierte dunkle Schutzzone hält die echte Scheibe ruhig und
+kontrastreich.
+
+Wenige modusspezifische Ambient-Symbole bewegen sich ausschließlich außerhalb
+der Scheibe. Treffer und Miss lösen kurze Reaktionen aus; das Ergebnis friert
+die Kulisse ein. Bei `prefers-reduced-motion: reduce` bleiben alle
+Ambient-Animationen automatisch statisch. Treffersegmente selbst werden
+weiterhin ausschließlich auf der SVG-Geometrie hervorgehoben.
 
 Die Sound-Engine nutzt Web Audio und erzeugt getrennte Cues für Treffer,
 Double/Triple, Miss, Spielerwechsel, Countdown, Sieg und Boardfehler. Im

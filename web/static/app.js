@@ -42,6 +42,20 @@ const NEON_MODE_ASSETS = new Set([
   'king_of_board','lightning_round','risk_it','simon_says','target_rush',
   'treasure_hunt','x01',
 ]);
+const MODE_AMBIENCE = {
+  avoid_bomb:['💣','🛡️','✨'], block_drop:['🧱','⭐','🧩'],
+  boss_fight:['👾','❤️','⚔️'], candy_cannon:['🍬','🍭','✨'],
+  color_clash:['🎨','🔵','🟠'], cookie_monster:['🍪','🥛','✨'],
+  countup:['⭐','➕','🎯'], cricket:['🏏','🔒','🎯'],
+  dart_sweeper:['💣','🔍','⭐'], darts_bingo:['🎟️','⭐','✓'],
+  dragon_eggs:['🥚','🐉','✨'], eight_ball:['🎱','🔴','🟡'],
+  ghost_chase:['👻','🌙','✨'], heart_chase:['❤️','💛','💨'],
+  king_of_board:['👑','🏰','⭐'], lightning_round:['⚡','💨','⭐'],
+  mini_golf:['⛳','🌿','⚪'], risk_it:['⚖️','⭐','🐷'],
+  robin_hood:['🏹','🌲','✨'], simon_says:['🟢','🟡','🔵'],
+  space_defender:['🚀','🪐','⭐'], target_rush:['🎯','💨','⭐'],
+  treasure_hunt:['💎','🧭','⭐'], x01:['🎯','🏁','➖'],
+};
 
 function $(id){ return document.getElementById(id); }
 function isProjector(){ return location.pathname.includes('projector'); }
@@ -697,14 +711,24 @@ function projectorModePanel(game){
   }
   return '';
 }
+function modeAmbience(mode, event, frozen=false){
+  const symbols=MODE_AMBIENCE[mode?.slug] || ['⭐','🎯','✨'];
+  const reaction=event?.type==='hit' ? 'react-hit' : event?.type==='miss' ? 'react-miss' : '';
+  return `<div class="game-ambience ${reaction} ${frozen?'frozen':''}" aria-hidden="true" style="--game-art:url('${modeAsset(mode?.slug || 'countup')}')">
+    <div class="game-art-backdrop"></div>
+    <div class="ambient-vignette"></div>
+    <div class="ambient-sprites">${[...symbols,...symbols.slice(0,1)].map((symbol,index)=>`<i class="ambient-sprite sprite-${index+1}">${escapeHtml(symbol)}</i>`).join('')}</div>
+  </div>`;
+}
 
 function projectorPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
   const player = currentPlayer(game) || {};
   const testMode=testModeEnabled();
-  return `<section class="projection-game ${testMode?'test-mode':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
-    <div id="projectionPlane" class="projection-plane">${boardSvg()}<div id="boardPulse" class="board-pulse"></div></div>
+  return `<section class="projection-game themed-game ${testMode?'test-mode':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
+    ${modeAmbience(mode,appState.projectedEvent)}
+    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div></div>
     <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong>${player.score ?? 0}</strong></header>
     <footer class="projection-bottom">
       <div class="throw-callout">${game.status==='hold'?'DARTS ZIEHEN':escapeHtml(appState.projectedEvent?.label || 'BEREIT')}</div>
@@ -723,8 +747,9 @@ function projectorResult(){
   const result = resultCopy(game,champion);
   const mode = modeBySlug(game.game_type);
   const lastThrow = game.throws?.at(-1);
-  return `<section class="projection-game result-board" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
-    <div id="projectionPlane" class="projection-plane">${boardSvg()}</div>
+  return `<section class="projection-game themed-game result-board" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
+    ${modeAmbience(mode,null,true)}
+    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}</div>
     <header class="projection-top result-board-heading">
       <div><div class="kicker">${escapeHtml(mode?.title || '')} · ENDERGEBNIS</div><h1>Finaler Spielstand</h1></div>
     </header>
