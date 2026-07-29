@@ -198,7 +198,11 @@ class GameEngineTests(unittest.TestCase):
 
     def test_avoid_bomb_adds_one_bomb_after_every_full_player_round(self):
         engine = GameEngine()
-        engine.reset("avoid_bomb", ["Ada", "Bob"], options={"bomb_count": 2})
+        engine.reset(
+            "avoid_bomb",
+            ["Ada", "Bob"],
+            options={"bomb_count": 2, "bomb_growth": "steady"},
+        )
         initial_bombs = list(engine.state.mode_state["bombs"])
 
         for seq in range(3):
@@ -213,6 +217,20 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual(3, len(engine.state.mode_state["bombs"]))
         self.assertEqual(initial_bombs, engine.state.mode_state["bombs"][:2])
         self.assertIn("neue Bombe", engine.state.message)
+
+    def test_avoid_bomb_escalating_growth_adds_the_new_round_number(self):
+        engine = GameEngine()
+        engine.reset(
+            "avoid_bomb",
+            ["Ada"],
+            options={"bomb_count": 2, "bomb_growth": "escalating"},
+        )
+        for seq in range(3):
+            engine.handle_event({"type": "miss", "score": 0, "seq": seq})
+        engine.continue_turn()
+        self.assertEqual(2, engine.state.round_number)
+        self.assertEqual(4, len(engine.state.mode_state["bombs"]))
+        self.assertIn("2 neue Bomben", engine.state.message)
 
     def test_avoid_bomb_hit_does_not_shuffle_existing_bombs(self):
         engine = GameEngine()

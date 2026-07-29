@@ -19,13 +19,14 @@ class AvoidBombMode:
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
             GameOption("bomb_count", "Startbomben", "choice", 4, [{"value":2,"label":"2 Bomben"},{"value":4,"label":"4 Bomben"},{"value":6,"label":"6 Bomben"}]),
+            GameOption("bomb_growth", "Bombenzuwachs", "choice", "escalating", [{"value":"steady","label":"+1 pro Runde"},{"value":"escalating","label":"+ Rundennummer"}]),
             GameOption("penalty", "Strafe", "choice", -50, [{"value":-25,"label":"-25"},{"value":-50,"label":"-50"},{"value":-100,"label":"-100"}]),
         ],
         instructions=[
             InstructionStep("Rot ist gefährlich", "Rote Felder sind Bomben und kosten Punkte.", "danger"),
             InstructionStep("Alles andere zählt", "Normale Treffer geben ihren Dartwert.", "score"),
-            InstructionStep("Jede Runde schwerer", "Nachdem alle gespielt haben, kommt eine neue Bombe dazu.", "growth"),
-            InstructionStep("Schadenfreude", "Bombentreffer lösen eine Explosion aus.", "boom"),
+            InstructionStep("Jede Runde schwerer", "Nachdem alle gespielt haben, wachsen die Bomben – gleichmäßig oder um die neue Rundennummer.", "growth"),
+            InstructionStep("Schadenfreude", "Bombentreffer explodieren und zählen die Strafpunkte sichtbar herunter.", "boom"),
         ],
         sound_theme="arcade",
     )
@@ -44,19 +45,32 @@ class AvoidBombMode:
         del player
         bomb_round = int(state.mode_state.get("bomb_round", 1))
         added_bomb = False
+        added_count = 0
         while bomb_round < state.round_number:
             bombs = state.mode_state.setdefault("bombs", [])
+            next_round = bomb_round + 1
+            growth = (
+                next_round
+                if state.options.get("bomb_growth", "escalating") == "escalating"
+                else 1
+            )
             exclude = [
                 str(bomb.get("label", ""))
                 for bomb in bombs
                 if bomb.get("label")
             ]
-            bombs.extend(choose_targets(1, "normal", exclude))
-            bomb_round += 1
+            additions = choose_targets(growth, "normal", exclude)
+            bombs.extend(additions)
+            added_count += len(additions)
+            bomb_round = next_round
             added_bomb = True
         state.mode_state["bomb_round"] = bomb_round
         if added_bomb:
-            state.message = f"Runde {bomb_round}: Eine neue Bombe ist aktiv!"
+            state.message = (
+                f"Runde {bomb_round}: Eine neue Bombe ist aktiv!"
+                if added_count == 1
+                else f"Runde {bomb_round}: {added_count} neue Bomben sind aktiv!"
+            )
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         bombs = state.mode_state.get("bombs", [])

@@ -18,6 +18,8 @@ const appState = {
   geometryTimer: null,
   reportedGeometry: '',
   reportedAudioStatus: '',
+  scoreCountdown: null,
+  scoreCountdownFrame: null,
 };
 
 const BOARD_ORDER = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
@@ -75,6 +77,39 @@ function avatarEmoji(avatar){
 }
 function currentPlayer(game){
   return game?.players.find(player => player.id === game.current_player_id) || game?.players[0];
+}
+function isBombEvent(experience,event){
+  if(experience?.game?.game_type!=='avoid_bomb' || event?.type!=='hit') return false;
+  return Boolean(experience.game.overlay?.danger?.some(item=>
+    Number(item.field)===Number(event.field) && String(item.ring)===String(event.ring)
+  ));
+}
+function clearScoreCountdown(){
+  cancelAnimationFrame(appState.scoreCountdownFrame);
+  appState.scoreCountdownFrame=null;
+  appState.scoreCountdown=null;
+}
+function startScoreCountdown(){
+  cancelAnimationFrame(appState.scoreCountdownFrame);
+  const tick=now=>{
+    const countdown=appState.scoreCountdown;
+    if(!countdown) return;
+    const progress=Math.min(1,Math.max(0,(now-countdown.startedAt)/countdown.duration));
+    const eased=1-Math.pow(1-progress,3);
+    const value=Math.round(countdown.from+(countdown.to-countdown.from)*eased);
+    document.querySelectorAll('[data-score-player]').forEach(element=>{
+      if(element.dataset.scorePlayer!==countdown.playerId) return;
+      element.textContent=value;
+      element.classList.toggle('score-counting',progress<1);
+    });
+    if(progress<1){
+      appState.scoreCountdownFrame=requestAnimationFrame(tick);
+    }else{
+      appState.scoreCountdownFrame=null;
+      appState.scoreCountdown=null;
+    }
+  };
+  tick(performance.now());
 }
 function testModeEnabled(){
   return Boolean(appState.experience?.hardware?.test_events);
@@ -172,6 +207,22 @@ function updateExperience(experience, event){
     const throwWasCounted=!isThrow || (lastThrow && Number(lastThrow.seq)===Number(event.seq));
     if(throwWasCounted) playEventCue(event, experience);
     if(isThrow && throwWasCounted){
+      if(isProjector() && isBombEvent(experience,event)){
+        const playerId=lastThrow?.player_id || experience.game?.current_player_id;
+        const from=previous?.game?.players?.find(player=>player.id===playerId)?.score;
+        const to=experience.game?.players?.find(player=>player.id===playerId)?.score;
+        if(Number.isFinite(from) && Number.isFinite(to) && from!==to){
+          appState.scoreCountdown={
+            playerId,
+            from:Number(from),
+            to:Number(to),
+            startedAt:performance.now(),
+            duration:1400,
+          };
+        }
+      }else if(isProjector()){
+        clearScoreCountdown();
+      }
       appState.selectedCorrectionIndex=null;
       appState.abortArmed=false;
       appState.skipArmed=false;
@@ -189,6 +240,7 @@ function updateExperience(experience, event){
     startCountdown();
   }
   render();
+  if(isProjector() && appState.scoreCountdown) startScoreCountdown();
 }
 function renderConnection(){
   const element = $('wsStatus');
@@ -754,15 +806,42 @@ function modeAmbience(mode, event, frozen=false){
   </div>`;
 }
 
+function bombExplosion(game,event){
+  if(!isBombEvent({game},event)) return '';
+  const index=BOARD_ORDER.indexOf(Number(event.field));
+  const radii={
+    double:222,
+    triple:129,
+    single_inner:78,
+    single_outer:176,
+    single_bull:0,
+    double_bull:0,
+  };
+  const radius=radii[event.ring];
+  if(radius===undefined || (Number(event.field)!==25 && index<0)) return '';
+  const [x,y]=Number(event.field)===25
+    ? [250,250]
+    : polar(250,250,radius,index*18);
+  const vectors=[
+    [-118,-94],[-42,-142],[45,-132],[124,-78],[148,4],[112,96],
+    [35,142],[-50,136],[-126,82],[-151,-6],[-82,-48],[74,58],
+  ];
+  return `<div class="bomb-explosion" style="--blast-x:${x*2}px;--blast-y:${y*2}px" aria-hidden="true">
+    <b>BOOM!</b>
+    ${vectors.map(([dx,dy],index)=>`<i style="--dx:${dx}px;--dy:${dy}px;--delay:${index%3*25}ms"></i>`).join('')}
+  </div>`;
+}
+
 function projectorPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
   const player = currentPlayer(game) || {};
   const testMode=testModeEnabled();
-  return `<section class="projection-game themed-game ${testMode?'test-mode':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
+  const bombImpact=isBombEvent({game},appState.projectedEvent);
+  return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
     ${modeAmbience(mode,appState.projectedEvent)}
-    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div></div>
-    <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong>${player.score ?? 0}</strong></header>
+    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}</div>
+    <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong data-score-player="${escapeHtml(player.id || '')}">${player.score ?? 0}</strong></header>
     <footer class="projection-bottom">
       <div class="throw-callout">${game.status==='hold'?'DARTS ZIEHEN':escapeHtml(appState.projectedEvent?.label || 'BEREIT')}</div>
       <div>${game.darts_in_turn}/3 DARTS · ${game.turn_score} PTS</div>
@@ -770,7 +849,7 @@ function projectorPlaying(){
     ${projectorAdvice(game)}
     ${projectorOverlayPrompt(game)}
     ${projectorModePanel(game)}
-    <aside class="projection-roster">${game.players.map(item=>`<span class="${item.id===game.current_player_id?'active':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
+    <aside class="projection-roster">${game.players.map(item=>`<span class="${item.id===game.current_player_id?'active':''}"><b>${escapeHtml(item.name)}</b><i data-score-player="${escapeHtml(item.id)}">${item.score}</i></span>`).join('')}</aside>
     ${testMode?'<div class="projector-test-tools"><b>TESTMODUS</b><span>Scheibensegment anklicken</span><button data-action="test-miss">MISS</button></div>':''}
   </section>`;
 }
@@ -1039,7 +1118,11 @@ function playEventCue(event,experience){
   }
   const theme=modeBySlug(experience.game?.game_type)?.sound_theme || 'arena';
   const themeBase={arcade:500,club:390,championship:450,arena:420}[theme] || 420;
-  if(event.type==='hit'){
+  if(event.type==='hit' && isBombEvent(experience,event)){
+    tone(92,.38,0,'sawtooth',.18);
+    tone(54,.52,.04,'sawtooth',.16);
+    tone(680,.09,0,'square',.07);
+  } else if(event.type==='hit'){
     const base=event.multiplier===3?themeBase*1.45:event.multiplier===2?themeBase*1.22:event.field===25?themeBase*1.7:themeBase;
     tone(base,.16,0,'triangle',.16); tone(base*1.5,.2,.08,'sine',.1);
     if(theme==='arcade') tone(base*2,.11,.15,'square',.035);

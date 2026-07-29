@@ -943,7 +943,7 @@ else:
 {
   "difficulty": "normal",
   "bomb_count": 4,
-  "bomb_growth": "one_per_full_round",
+  "bomb_growth": "escalating",
   "penalty": -50,
   "turn_ends_on_bomb": false,
   "hidden_bombs": false
@@ -974,7 +974,10 @@ else miss:
 
 after every player has completed the round:
   keep all existing bombs
-  add exactly one new bomb
+  if bomb_growth == "steady":
+    add exactly one new bomb
+  else:
+    add as many bombs as the new round number
 ```
 
 ### Overlay
