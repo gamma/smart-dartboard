@@ -44,6 +44,16 @@ GAME_MODE = ExampleMode()
    Dateiname wird automatisch aus dem Slug abgeleitet.
 7. Regeltests in `tests/test_games.py` ergänzen.
 
+Für feste Rundenzahlen sollte ein Arcade-Modus jeden Rückgabepfad aus
+`apply_throw` über `finish_round_game(...)` führen. Dadurch beendet auch ein
+Miss oder ein neutrales Feld die letzte Aufnahme korrekt. Controller-Aktionen,
+die eine Aufnahme beenden, verwenden entsprechend
+`finish_action_round_game(...)`.
+
+Ein optionaler Hook `on_turn_start(state, player)` wird nach dem
+Spielerwechsel ausgeführt. Er eignet sich beispielsweise zum Mischen von
+Farben oder zum Erzeugen einer neuen Aufgabe.
+
 ## Verfügbare Zustandsdaten
 
 `apply_throw` erhält:
@@ -79,3 +89,5 @@ Das Event enthält bei einem Treffer typischerweise:
 - `winner_id` wird gesetzt, wenn nicht der gerade werfende Spieler gewinnt.
 - `force_hold=True` beendet die Aufnahme sofort, beispielsweise bei Bust.
 - Jede neue Regel benötigt Tests für Normalfall, Randfall, Sieg und Undo.
+- Jeder Modus mit Cover folgt dem Basis-Prompt in
+  `docs/ARTWORK_PROMPTS.md`; Bildtitel gehören in die UI, nicht in das Artwork.

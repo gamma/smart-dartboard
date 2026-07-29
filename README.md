@@ -13,7 +13,8 @@ Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 
 - dauerhafte Spielerprofile mit Farbe und Avatar
 - mehrere Spiele pro Session
-- Session- und Gesamtstatistiken
+- Sessionwertung mit drei Punkten pro Sieg sowie dauerhafte Gesamtstatistiken
+- wertungsfreier Spielabbruch zurück zur Spielauswahl
 - grafische Spielauswahl mit 3D-Renderings
 - eigener Anleitungsbildschirm pro Spielmodus auf beiden Displays
 - Count Up, X01, Cricket und erste Party-Modi als automatisch entdeckte Spielmodule
@@ -23,8 +24,10 @@ Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 - Drei-Dart-Hold für sicheres Entfernen der Darts
 - große Anzeige der aktuellen drei Würfe mit Touch-Korrekturscheibe
 - direkt anklickbare Projektorscheibe für Testtreffer ohne Hardware
-- perspektivische Vierpunkt-Projektorkalibrierung
+- perspektivische Vierpunkt-Projektorkalibrierung mit automatischem,
+  seitenverhältnisabhängigem Rund-und-mittig-Reset
 - synthetisierte Treffer-, Miss-, Wechsel-, Countdown- und Siegersounds
+- zentrale Projektor-Soundsteuerung samt Testton im Board-Setup
 - Healthcheck und Docker-/Raspberry-Pi-Betrieb
 
 ## Schnellstart ohne Dartboard
@@ -88,6 +91,7 @@ docker compose config --quiet
 - [Neue Spielmodule entwickeln](docs/GAME_PLUGINS.md)
 - [Party-Modi & visuelle Incentives](docs/PARTY_MODES.md)
 - [X01 Checkout- und Setup-Advisor](docs/X01_ADVISOR.md)
+- [Reproduzierbare Artwork-Prompts](docs/ARTWORK_PROMPTS.md)
 
 ## Datenfluss
 

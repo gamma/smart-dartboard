@@ -100,11 +100,10 @@
 
 .correction-board .seg {
   cursor: pointer;
-  transition: filter .12s, opacity .12s;
+  transition: opacity .12s;
 }
 
 .correction-board .seg:hover {
-  filter: url(#glow);
   opacity: .72;
   stroke: #fff;
   stroke-width: 2;

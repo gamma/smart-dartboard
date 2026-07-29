@@ -8,6 +8,10 @@ const appState = {
   projectedEvent: null,
   boardResetTimer: null,
   selectedCorrectionIndex: null,
+  abortArmed: false,
+  geometryTimer: null,
+  reportedGeometry: '',
+  reportedAudioStatus: '',
 };
 
 const BOARD_ORDER = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
@@ -39,8 +43,7 @@ function modeBySlug(slug){
   return appState.experience?.modes.find(mode => mode.slug === slug);
 }
 function modeAsset(slug){
-  const known = new Set(['countup','x01','cricket','target_rush','avoid_bomb','color_clash','risk_it','king_of_board','treasure_hunt']);
-  const safe = known.has(slug) ? slug : 'countup';
+  const safe = /^[a-z0-9_]+$/.test(String(slug || '')) ? slug : 'countup';
   return `/static/assets/modes/${encodeURIComponent(safe)}.webp`;
 }
 function avatarEmoji(avatar){
@@ -96,6 +99,16 @@ function connectWs(){
 function updateExperience(experience, event){
   const previous = appState.experience;
   appState.experience = experience;
+  if(isProjector() && experience.sound?.enabled){
+    ensureAudio(true);
+  }
+  const previousPlayer=previous?.game?.current_player_id;
+  const currentPlayerId=experience.game?.current_player_id;
+  if(previousPlayer && currentPlayerId && previousPlayer!==currentPlayerId){
+    clearTimeout(appState.boardResetTimer);
+    appState.projectedEvent=null;
+    appState.selectedCorrectionIndex=null;
+  }
   if(event){
     const isThrow=event.type==='hit' || event.type==='miss';
     const lastThrow=experience.game?.throws?.at(-1);
@@ -103,6 +116,7 @@ function updateExperience(experience, event){
     if(throwWasCounted) playEventCue(event, experience);
     if(isThrow && throwWasCounted){
       appState.selectedCorrectionIndex=null;
+      appState.abortArmed=false;
       appState.projectedEvent=event;
       clearTimeout(appState.boardResetTimer);
       appState.boardResetTimer=setTimeout(()=>{
@@ -216,7 +230,7 @@ function controlPlayers(){
 
 function modeCard(mode){
   return `<button class="mode-card" data-action="select-mode" data-mode="${escapeHtml(mode.slug)}" style="--accent:${escapeHtml(mode.accent)}">
-    <img src="${modeAsset(mode.slug)}" alt="" loading="eager">
+    <img src="${modeAsset(mode.slug)}" alt="" loading="eager" onerror="this.onerror=null;this.src='/static/assets/modes/countup.webp'">
     <span class="mode-shade"></span>
     <span class="mode-copy"><small>${escapeHtml(mode.tagline)}</small><b>${escapeHtml(mode.title)}</b><em>${escapeHtml(mode.description)}</em></span>
     <i>→</i>
@@ -226,6 +240,7 @@ function controlGameSelect(){
   const session = appState.experience.session;
   return `<section class="control-scene">
     ${sceneHeader('SCHRITT 2 VON 2','Wählt euer Spiel',`${session?.players.length || 0} Spieler · alle Modi sind sofort startklar.`)}
+    ${sessionScoreStrip()}
     <div class="mode-grid">${appState.experience.modes.map(modeCard).join('')}</div>
     <footer class="sticky-actions">
       ${actionButton('Session beenden','end-session','ghost')}
@@ -281,9 +296,15 @@ function marks(player, targets){
 function scoreboard(game){
   return game.players.map(player => `<article class="score-row ${player.id===game.current_player_id?'active':''}" style="--player:${escapeHtml(player.color)}">
     <span class="avatar avatar-${escapeHtml(player.avatar)}" aria-label="${escapeHtml(player.avatar)}">${avatarEmoji(player.avatar)}</span>
-    <div><b>${escapeHtml(player.name)}</b>${game.game_type==='cricket' ? marks(player,game.cricket_targets) : ''}</div>
+    <div><b>${escapeHtml(player.name)}</b>${game.game_type==='cricket' ? marks(player,game.cricket_targets) : ''}${game.game_type==='darts_bingo' ? bingoCard(player.marks) : ''}</div>
     <strong>${player.score}</strong>
   </article>`).join('');
+}
+function bingoCard(playerMarks){
+  if(!playerMarks) return '';
+  return `<div class="bingo-card">${Object.entries(playerMarks).sort(([a],[b])=>Number(a)-Number(b)).map(([,cell])=>
+    `<span class="${cell.done?'done':''}">${escapeHtml(cell.label)}</span>`
+  ).join('')}</div>`;
 }
 function currentTurnThrows(game){
   return game.darts_in_turn > 0 ? game.throws.slice(-game.darts_in_turn) : [];
@@ -338,6 +359,20 @@ function overlayActionButtons(game){
   if(!actions.length) return '';
   return actions.map(item => `<button class="action-button primary" data-action="game-action" data-game-action="${escapeHtml(item.id)}" ${item.enabled===false?'disabled':''}>${escapeHtml(item.label || item.id)}</button>`).join('');
 }
+function controlModePrompt(game){
+  const overlay=game.overlay;
+  if(!overlay?.prompt || game.game_type==='x01') return '';
+  const detail=overlay.combo?.count
+    ? `COMBO ×${overlay.combo.count}`
+    : Number.isFinite(overlay.pot)
+      ? `POT ${overlay.pot}`
+      : '';
+  return `<aside class="control-mode-prompt">
+    <span>AKTUELLE AUFGABE</span>
+    <b>${escapeHtml(overlay.prompt)}</b>
+    ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
+  </aside>`;
+}
 function controlPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -347,6 +382,7 @@ function controlPlaying(){
       <div class="turn-counter"><span>${game.darts_in_turn}</span><small>/ 3 DARTS</small><b>${game.turn_score} PTS</b></div>
     </div>
     ${x01AdvicePanel(game)}
+    ${controlModePrompt(game)}
     <div class="turn-darts">${turnDartCards(game)}</div>
     ${correctionPanel()}
     <div class="scoreboard">${scoreboard(game)}</div>
@@ -354,7 +390,30 @@ function controlPlaying(){
       ${overlayActionButtons(game)}
       ${game.status==='hold' ? actionButton('Weiter zum nächsten Spieler','continue','primary') : actionButton('Spieler wechseln','next-player','secondary')}
       ${actionButton('Letzten Wurf zurück','undo','danger')}
+      ${abortControls()}
     </div>
+  </section>`;
+}
+function abortControls(){
+  if(!appState.abortArmed){
+    return actionButton('Spiel abbrechen','arm-abort','ghost');
+  }
+  return `<div class="abort-confirm">
+    <b>Dieses Spiel wird nicht gewertet.</b>
+    ${actionButton('Abbrechen bestätigen','abort-game','danger')}
+    ${actionButton('Weiterspielen','cancel-abort','ghost')}
+  </div>`;
+}
+
+function sessionStandings(){
+  return appState.experience.session_statistics || [];
+}
+function sessionScoreStrip(){
+  const standings=sessionStandings();
+  if(!standings.length) return '';
+  return `<section class="session-score-strip">
+    <span>SESSION-WERTUNG · 3 PUNKTE PRO SIEG</span>
+    <div>${standings.map((player,index)=>`<b style="--player:${escapeHtml(player.color)}"><i>${index+1}</i>${escapeHtml(player.name)}<strong>${player.session_points}</strong></b>`).join('')}</div>
   </section>`;
 }
 
@@ -368,17 +427,18 @@ function controlGameResult(){
     <div class="trophy-orbit">♛</div>
     <div class="kicker">GAME COMPLETE</div>
     <h1>${escapeHtml(champion?.name || 'Spiel beendet')}</h1>
-    <p>${champion ? 'holt sich den Sieg.' : 'Das Spiel ist abgeschlossen.'}</p>
+    <p>${champion ? 'holt sich den Sieg und 3 Sessionpunkte.' : 'Das Spiel ist abgeschlossen.'}</p>
+    ${sessionScoreStrip()}
     <div class="result-actions">
-      ${actionButton('Nächstes Spiel','next-game')}
-      ${actionButton('Session abschließen','end-session','ghost')}
+      ${actionButton('Zurück zur Spielauswahl','next-game')}
     </div>
   </section>`;
 }
 function statCards(){
-  return appState.experience.statistics.map(stat => `<article class="stat-card" style="--player:${escapeHtml(stat.color)}">
+  const stats=sessionStandings().length ? sessionStandings() : appState.experience.statistics;
+  return stats.map(stat => `<article class="stat-card" style="--player:${escapeHtml(stat.color)}">
     <h3>${escapeHtml(stat.name)}</h3>
-    <div><span><b>${stat.wins}</b><small>Siege</small></span><span><b>${stat.three_dart_average}</b><small>3-Dart Ø</small></span><span><b>${stat.best_dart}</b><small>Best Dart</small></span><span><b>${stat.total_points}</b><small>Punkte</small></span></div>
+    <div>${Number.isFinite(stat.session_points)?`<span><b>${stat.session_points}</b><small>Sessionpunkte</small></span>`:''}<span><b>${stat.wins}</b><small>Siege</small></span><span><b>${stat.games}</b><small>Spiele</small></span><span><b>${stat.win_rate}%</b><small>Siegquote</small></span><span><b>${stat.darts}</b><small>Darts</small></span><span><b>${stat.three_dart_average}</b><small>Board 3-Dart Ø</small></span></div>
   </article>`).join('');
 }
 function controlSessionSummary(){
@@ -399,14 +459,35 @@ function cornerControls(calibration){
   </fieldset>`).join('');
 }
 function controlCalibration(){
+  const geometry=appState.experience.projector_geometry || {width:1600,height:900};
   return `<section class="control-scene calibration-control">
     ${sceneHeader('EINMALIGES SETUP','Projektor ausrichten','Verschiebe die vier Eckpunkte, bis der äußere Ring exakt auf der echten Scheibe liegt.')}
     <div class="calibration-grid">${cornerControls(appState.experience.calibration)}</div>
-    <p class="calibration-note">Die Perspektive wird als Softwareprofil gespeichert. Der Projektor muss danach im Alltag nicht mehr nachjustiert werden.</p>
+    ${soundSetup()}
+    <p class="calibration-note">Gemeldete Projektorfläche: <b>${geometry.width} × ${geometry.height}</b>. „Rund und mittig“ setzt eine unverzerrte quadratische Fläche mit 5 % Sicherheitsrand auf der kürzeren Browserseite. Danach kannst du die vier Ecken fein auf die echte Scheibe legen.</p>
     <footer class="sticky-actions">
       ${actionButton('Abbrechen','home','ghost')}
+      ${actionButton('Rund und mittig zurücksetzen','reset-calibration','secondary')}
       ${actionButton('Kalibrierung speichern','save-calibration')}
     </footer>
+  </section>`;
+}
+function soundSetup(){
+  const sound=appState.experience.sound || {enabled:false,status:'disabled'};
+  const statusLabels={
+    disabled:'AUS',
+    starting:'WIRD GESTARTET',
+    ready:'BEREIT',
+    blocked:'AUTOPLAY BLOCKIERT',
+    unavailable:'NICHT VERFÜGBAR',
+  };
+  return `<section class="sound-setup ${sound.enabled?'enabled':''}">
+    <div><span>PROJEKTOR-SOUND</span><h2>${sound.enabled?'Eingeschaltet':'Ausgeschaltet'}</h2><p>Status: <b>${statusLabels[sound.status] || escapeHtml(sound.status)}</b></p></div>
+    <div class="sound-setup-actions">
+      ${actionButton(sound.enabled?'Sound ausschalten':'Sound einschalten',sound.enabled?'sound-disable':'sound-enable',sound.enabled?'ghost':'primary')}
+      ${actionButton('Testton','sound-test','secondary',sound.enabled?'':'disabled')}
+    </div>
+    ${sound.status==='blocked'?'<small>Der Projektor-Browser blockiert Autoplay. Im Kioskmodus die Autoplay-Freigabe aktivieren und die Projektorseite neu laden.</small>':''}
   </section>`;
 }
 
@@ -471,8 +552,28 @@ function projectorAdvice(game){
 
 function projectorOverlayPrompt(game){
   const overlay = game.overlay;
-  if(!overlay?.prompt || game.status === 'hold' || game.game_type === 'x01') return '';
-  return `<aside class="projector-advice arcade"><span>ARCADE</span><b>${escapeHtml(overlay.prompt)}</b><small>${escapeHtml(overlay.combo?.count ? `Combo x${overlay.combo.count}` : '')}</small></aside>`;
+  if(!overlay?.prompt || game.status === 'hold' || game.game_type === 'x01' || overlay.card || overlay.boss || overlay.cricket || Number.isFinite(overlay.pot)) return '';
+  return `<aside class="projector-advice arcade"><span>ZIEL</span><b>${escapeHtml(overlay.prompt)}</b><small>${escapeHtml(overlay.combo?.count ? `Combo ×${overlay.combo.count}` : '')}</small></aside>`;
+}
+function projectorModePanel(game){
+  const overlay = game.overlay || {};
+  if(overlay.cricket?.remaining){
+    return `<aside class="projector-mode-panel cricket-panel">
+      <span>NOCH ZU SCHLIESSEN</span>
+      <div>${overlay.cricket.remaining.map(item=>`<b><i>${escapeHtml(item.label)}</i><em>${'●'.repeat(item.marks)}${'○'.repeat(item.needed)}</em><strong>×${item.needed}</strong></b>`).join('')}</div>
+    </aside>`;
+  }
+  if(Array.isArray(overlay.card)){
+    return `<aside class="projector-mode-panel bingo-panel"><span>BINGO-KARTE</span><div>${overlay.card.map(cell=>`<b class="${cell.done?'done':''}">${escapeHtml(cell.label)}</b>`).join('')}</div></aside>`;
+  }
+  if(overlay.boss){
+    const hp=Math.max(0,Number(overlay.boss.hp)||0), max=Math.max(1,Number(overlay.boss.max_hp)||1);
+    return `<aside class="projector-mode-panel boss-panel"><span>BOSS</span><strong>${hp} HP</strong><i style="--progress:${Math.max(0,Math.min(100,hp/max*100))}%"></i></aside>`;
+  }
+  if(Number.isFinite(overlay.pot)){
+    return `<aside class="projector-mode-panel pot-panel"><span>DEIN POT</span><strong>${overlay.pot}</strong></aside>`;
+  }
+  return '';
 }
 
 function projectorPlaying(){
@@ -489,6 +590,7 @@ function projectorPlaying(){
     </footer>
     ${projectorAdvice(game)}
     ${projectorOverlayPrompt(game)}
+    ${projectorModePanel(game)}
     <aside class="projection-roster">${game.players.map(item=>`<span class="${item.id===game.current_player_id?'active':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
     ${testMode?'<div class="projector-test-tools"><b>TESTMODUS</b><span>Scheibensegment anklicken</span><button data-action="test-miss">MISS</button></div>':''}
   </section>`;
@@ -496,7 +598,7 @@ function projectorPlaying(){
 function projectorResult(){
   const champion = winner();
   const mode = modeBySlug(appState.experience.game.game_type);
-  return projectorBackdrop(mode,`<div class="projector-center winner-scene"><div class="winner-crown">♛</div><div class="kicker">WINNER</div><h1>${escapeHtml(champion?.name || 'GAME OVER')}</h1><p class="result-score">${champion?.score ?? ''} PUNKTE</p></div>`,'result-projector');
+  return projectorBackdrop(mode,`<div class="projector-center winner-scene"><div class="winner-crown">♛</div><div class="kicker">WINNER</div><h1>${escapeHtml(champion?.name || 'GAME OVER')}</h1><p class="result-score">+3 SESSIONSPUNKTE</p></div>`,'result-projector');
 }
 function projectorSummary(){
   return projectorBackdrop(null,`<div class="projector-summary"><div>${sceneHeader('SESSION COMPLETE','Was für eine Runde!','Eure Highlights')}</div><div class="projector-stats">${statCards()}</div></div>`);
@@ -523,7 +625,7 @@ function buildBoard(){
   if(!svg || svg.dataset.ready) return;
   svg.dataset.ready='1';
   const rings={double:[210,235],singleOuter:[142,210],triple:[116,142],singleInner:[38,116]};
-  let html='<defs><filter id="glow"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs><circle class="board-bg" cx="250" cy="250" r="244"/>';
+  let html='<circle class="board-bg" cx="250" cy="250" r="244"/>';
   BOARD_ORDER.forEach((field,index)=>{
     const a1=index*18-9, a2=index*18+9;
     for(const [zone,radii] of Object.entries(rings)){
@@ -534,6 +636,7 @@ function buildBoard(){
   });
   html += '<circle id="seg-singleBull-25" class="seg singleBull" cx="250" cy="250" r="38"/><circle id="seg-doubleBull-25" class="seg doubleBull" cx="250" cy="250" r="18"/>';
   html += [235,210,142,116,38,18].map(radius=>`<circle class="board-wire" cx="250" cy="250" r="${radius}"/>`).join('');
+  html += '<g id="overlayLabels" class="overlay-labels"></g>';
   svg.innerHTML=html;
 }
 function ringToZone(ring){
@@ -542,15 +645,28 @@ function ringToZone(ring){
 function renderBoardEvent(event){
   document.querySelectorAll('.seg.hit,.seg.miss-zone,.seg.advice-target,.seg.overlay-target,.seg.overlay-danger,.seg.overlay-bonus,.seg.overlay-owned').forEach(element=>{element.classList.remove('hit','miss-zone','advice-target','overlay-target','overlay-danger','overlay-bonus','overlay-owned'); element.style.removeProperty('--owner-color');});
   const overlay = appState.experience?.game?.overlay;
+  const labelLayer=$('overlayLabels');
+  if(labelLayer) labelLayer.innerHTML='';
+  const paintLabel = item => {
+    if(!labelLayer || !item.label) return;
+    const index=BOARD_ORDER.indexOf(Number(item.field));
+    const radii={double:222,triple:129,single_inner:78,single_outer:176,single_bull:30,double_bull:0};
+    const radius=radii[item.ring];
+    if(index<0 || radius===undefined) return;
+    const [x,y]=polar(250,250,radius,index*18);
+    labelLayer.insertAdjacentHTML('beforeend',`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(item.label)}</text>`);
+  };
   const paint = (items, cls) => (items || []).forEach(item => {
     const segment = $(boardSegmentId(ringToZone(item.ring), item.field));
     if(segment) segment.classList.add(cls);
+    paintLabel(item);
   });
   const paintOwned = (items) => (items || []).forEach(item => {
     const segment = $(boardSegmentId(ringToZone(item.ring), item.field));
     if(segment){ segment.classList.add('overlay-owned'); segment.style.setProperty('--owner-color', item.color || '#28e7ff'); }
   });
-  if(appState.experience?.game?.status === 'running'){
+  const gameStatus=appState.experience?.game?.status;
+  if(gameStatus === 'running' || gameStatus === 'hold'){
     paint(overlay?.targets, 'overlay-target');
     paint(overlay?.danger, 'overlay-danger');
     paint(overlay?.bonus, 'overlay-bonus');
@@ -636,19 +752,49 @@ function applyCalibration(){
   if(!plane || !appState.experience?.calibration) return;
   plane.style.transform=homographyMatrix(appState.experience.calibration.corners);
 }
+async function reportProjectorGeometry(){
+  if(!isProjector()) return;
+  const geometry=`${innerWidth}x${innerHeight}`;
+  if(geometry===appState.reportedGeometry) return;
+  appState.reportedGeometry=geometry;
+  try{
+    await action('/api/projector/geometry',{width:innerWidth,height:innerHeight});
+  }catch(error){
+    appState.reportedGeometry='';
+  }
+}
 
-function ensureAudio(){
+async function reportAudioStatus(status){
+  if(!isProjector() || status===appState.reportedAudioStatus) return;
+  appState.reportedAudioStatus=status;
+  try{
+    await action('/api/sound/status',{status});
+  }catch(error){
+    appState.reportedAudioStatus='';
+  }
+}
+function ensureAudio(reportStatus=false){
   if(!appState.audio){
     const AudioContext=window.AudioContext||window.webkitAudioContext;
     if(AudioContext) appState.audio=new AudioContext();
   }
-  if(appState.audio?.state==='suspended') appState.audio.resume();
-  $('audioUnlock')?.classList.add('hidden');
+  if(!appState.audio){
+    if(reportStatus) reportAudioStatus('unavailable');
+    return null;
+  }
+  if(appState.audio.state==='suspended'){
+    appState.audio.resume().then(()=>{
+      if(reportStatus) reportAudioStatus(appState.audio.state==='running'?'ready':'blocked');
+    }).catch(()=>{ if(reportStatus) reportAudioStatus('blocked'); });
+  }else if(reportStatus){
+    reportAudioStatus(appState.audio.state==='running'?'ready':'blocked');
+  }
   return appState.audio;
 }
 function tone(frequency,duration=0.12,delay=0,type='sine',gain=0.12){
+  if(!isProjector() || !appState.experience?.sound?.enabled) return;
   const context=ensureAudio();
-  if(!context) return;
+  if(!context || context.state!=='running') return;
   const oscillator=context.createOscillator(), volume=context.createGain();
   oscillator.type=type; oscillator.frequency.value=frequency;
   volume.gain.setValueAtTime(0.0001,context.currentTime+delay);
@@ -658,13 +804,20 @@ function tone(frequency,duration=0.12,delay=0,type='sine',gain=0.12){
   oscillator.start(context.currentTime+delay); oscillator.stop(context.currentTime+delay+duration+0.02);
 }
 function playEventCue(event,experience){
-  if(!isProjector()) return;
+  if(!isProjector() || !experience.sound?.enabled) return;
   const key=`${event.type}:${event.seq ?? event.action ?? Date.now()}`;
   if(key===appState.lastCueKey) return;
   appState.lastCueKey=key;
+  if(event.type==='sound_test'){
+    [440,660,880].forEach((frequency,index)=>tone(frequency,.2,index*.1,'triangle',.12));
+    return;
+  }
+  const theme=modeBySlug(experience.game?.game_type)?.sound_theme || 'arena';
+  const themeBase={arcade:500,club:390,championship:450,arena:420}[theme] || 420;
   if(event.type==='hit'){
-    const base=event.multiplier===3?620:event.multiplier===2?520:event.field===25?760:420;
+    const base=event.multiplier===3?themeBase*1.45:event.multiplier===2?themeBase*1.22:event.field===25?themeBase*1.7:themeBase;
     tone(base,.16,0,'triangle',.16); tone(base*1.5,.2,.08,'sine',.1);
+    if(theme==='arcade') tone(base*2,.11,.15,'square',.035);
   } else if(event.type==='miss') tone(110,.28,0,'sawtooth',.08);
   else if(event.type==='continue'||event.type==='next_player') tone(330,.14);
   else if(event.type==='hardware_status'&&event.status==='error') tone(95,.4,0,'sawtooth',.06);
@@ -707,7 +860,6 @@ document.addEventListener('click',async event=>{
   const target=event.target.closest('[data-action]');
   if(!target) return;
   const name=target.dataset.action;
-  if(name==='audio'){ ensureAudio(); return; }
   if(name==='choose-players'){ await action('/api/navigation/players'); return; }
   if(name==='home'){ appState.selectedPlayers.clear(); await action('/api/session/close'); return; }
   if(name==='calibrate'){ await action('/api/navigation',{screen:'calibration'}); return; }
@@ -723,10 +875,17 @@ document.addEventListener('click',async event=>{
     await action('/api/game/prepare',{game_type:appState.experience.selected_mode,options}); return;
   }
   if(name==='back-games'){ await action('/api/game/next'); return; }
-  if(name==='start-game'){ ensureAudio(); await action('/api/game/start'); return; }
+  if(name==='start-game'){ await action('/api/game/start'); return; }
   if(name==='continue'){ await action('/api/continue'); return; }
   if(name==='next-player'){ await action('/api/next-player'); return; }
   if(name==='undo'){ await action('/api/undo'); return; }
+  if(name==='arm-abort'){ appState.abortArmed=true; renderControl(); return; }
+  if(name==='cancel-abort'){ appState.abortArmed=false; renderControl(); return; }
+  if(name==='abort-game'){
+    appState.abortArmed=false;
+    await action('/api/game/abort');
+    return;
+  }
   if(name==='game-action'){
     await action('/api/game/action',{action:target.dataset.gameAction,payload:{}}); return;
   }
@@ -757,6 +916,13 @@ document.addEventListener('click',async event=>{
     await action('/api/calibration',{...appState.experience.calibration,corners});
     await action('/api/session/close'); return;
   }
+  if(name==='reset-calibration'){
+    await action('/api/calibration/reset');
+    return;
+  }
+  if(name==='sound-enable'){ await action('/api/sound/settings',{enabled:true}); return; }
+  if(name==='sound-disable'){ await action('/api/sound/settings',{enabled:false}); return; }
+  if(name==='sound-test'){ await action('/api/sound/test'); return; }
 });
 document.addEventListener('submit',async event=>{
   if(event.target.id!=='newPlayerForm') return;
@@ -776,5 +942,10 @@ document.addEventListener('change',event=>{
   if(!event.target.matches('[data-corner]')) return;
   action('/api/calibration',appState.experience.calibration);
 });
-window.addEventListener('resize',()=>{ if(isProjector()) applyCalibration(); });
-window.addEventListener('load',()=>{ loadBootstrap(); connectWs(); });
+window.addEventListener('resize',()=>{
+  if(!isProjector()) return;
+  applyCalibration();
+  clearTimeout(appState.geometryTimer);
+  appState.geometryTimer=setTimeout(reportProjectorGeometry,250);
+});
+window.addEventListener('load',()=>{ loadBootstrap(); connectWs(); reportProjectorGeometry(); });

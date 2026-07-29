@@ -21,8 +21,9 @@ Das System benötigt im Spielbetrieb keine Internetverbindung.
 4. `docker compose up --build -d` starten.
 5. `http://<host>:8000/control` auf dem Tablet öffnen.
 6. `http://localhost:8000/projector` auf dem Projektorrechner öffnen.
-7. Auf dem Projektor einmal **Sound aktivieren** wählen.
-8. Über **Projektor kalibrieren** die Scheibe deckungsgleich ausrichten.
+7. Über **Projektor kalibrieren** das Board-Setup öffnen, die Scheibe
+   deckungsgleich ausrichten und dort **Projektor-Sound einschalten**.
+8. Den **Testton** im Board-Setup auslösen und den Status `BEREIT` prüfen.
 
 Ohne verbundenes BLE-Board läuft die Projektoransicht im Testmodus. In diesem
 Modus erzeugt ein Klick auf ein Scheibensegment den entsprechenden Treffer;
@@ -44,8 +45,10 @@ chromium \
 ```
 
 `--autoplay-policy=no-user-gesture-required` erlaubt Sound nach einem
-automatischen Neustart. Ohne diese Option verlangt der Browser einmalig eine
-Interaktion über **Sound aktivieren**.
+automatischen Neustart. Ohne diese Option kann der Projektor-Browser die
+automatische Audioausgabe blockieren. Der Status erscheint dann als
+`AUTOPLAY BLOCKIERT` im Board-Setup auf dem Controller; auf dem Projektor
+selbst gibt es bewusst keine Sound-Schaltfläche.
 
 ## Autostart
 
