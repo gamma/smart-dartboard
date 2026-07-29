@@ -833,7 +833,8 @@ function projectorOverlayPrompt(game){
     ? 'Jetzt aus dem Kopf!'
     : overlay.prompt;
   const label=game.game_type==='simon_says' && !appState.memoryHidden ? '3 SEKUNDEN MERKEN' : 'ZIEL';
-  return `<aside class="projector-advice arcade"><span>${label}</span><b>${promptMarkup(prompt)}</b><small>${escapeHtml(overlay.combo?.count ? `Combo ×${overlay.combo.count}` : '')}</small></aside>`;
+  const detail=overlay.combo?.count ? `Combo ×${overlay.combo.count}` : '';
+  return `<aside class="projector-advice arcade"><span>${label}</span><b>${promptMarkup(prompt)}</b>${detail?`<small>${escapeHtml(detail)}</small>`:''}</aside>`;
 }
 function projectorModePanel(game){
   const overlay = game.overlay || {};
