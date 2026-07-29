@@ -26,6 +26,39 @@ class SessionControllerTests(unittest.TestCase):
         self.controller.set_screen("playing")
         return ada, bob
 
+    def _finish_countup_game(self):
+        ada, bob = self._start_game()
+        self.controller.engine.state.round_number = int(
+            self.controller.selected_options["rounds"]
+        )
+        for seq in range(3):
+            self.controller.process_event(
+                {
+                    "type": "hit",
+                    "label": "S20",
+                    "score": 20,
+                    "seq": 800 + seq,
+                    "field": 20,
+                    "ring": "single_outer",
+                    "multiplier": 1,
+                }
+            )
+        self.controller.continue_turn()
+        for seq in range(3):
+            self.controller.process_event(
+                {
+                    "type": "hit",
+                    "label": "S1",
+                    "score": 1,
+                    "seq": 810 + seq,
+                    "field": 1,
+                    "ring": "single_outer",
+                    "multiplier": 1,
+                }
+            )
+        self.assertEqual("game_result", self.controller.screen)
+        return ada, bob
+
     def test_screen_flow_and_throw_persistence(self):
         ada, _ = self._start_game()
         self.controller.process_event(
@@ -137,6 +170,76 @@ class SessionControllerTests(unittest.TestCase):
         self.assertEqual(6, stats["darts"])
         session_stats = self.controller.public_state()["session_statistics"][0]
         self.assertEqual(6, session_stats["session_points"])
+
+    def test_double_board_button_starts_rotated_rematch(self):
+        now = [100.0]
+        self.controller._clock = lambda: now[0]
+        ada, bob = self._finish_countup_game()
+        finished_game_id = self.controller.game_id
+        selected_options = dict(self.controller.selected_options)
+        button = {
+            "type": "button",
+            "button": "menu",
+            "action": "press",
+            "seq": 900,
+        }
+
+        self.controller.process_event(button)
+
+        armed = self.controller.public_state()
+        self.assertEqual("game_result", armed["screen"])
+        self.assertEqual(finished_game_id, armed["game_id"])
+        self.assertTrue(armed["rematch"]["armed"])
+        self.assertEqual("finished", armed["game"]["status"])
+
+        now[0] += 1
+        self.controller.process_event({**button, "seq": 901})
+
+        rematch = self.controller.public_state()
+        self.assertEqual("countdown", rematch["screen"])
+        self.assertNotEqual(finished_game_id, rematch["game_id"])
+        self.assertEqual("running", rematch["game"]["status"])
+        self.assertFalse(rematch["rematch"]["armed"])
+        self.assertEqual("countup", rematch["selected_mode"])
+        self.assertEqual(selected_options, rematch["selected_options"])
+        self.assertEqual(
+            [bob["id"], ada["id"]],
+            [player["id"] for player in rematch["game"]["players"]],
+        )
+        self.assertEqual(
+            "finished",
+            self.controller.store.get_game(finished_game_id)["status"],
+        )
+        self.assertEqual(
+            "running",
+            self.controller.store.get_game(rematch["game_id"])["status"],
+        )
+        standings = {
+            player["id"]: player for player in rematch["session_statistics"]
+        }
+        self.assertEqual(3, standings[ada["id"]]["session_points"])
+        self.assertEqual(0, standings[bob["id"]]["session_points"])
+
+    def test_rematch_confirmation_expires(self):
+        now = [200.0]
+        self.controller._clock = lambda: now[0]
+        self._finish_countup_game()
+        finished_game_id = self.controller.game_id
+        button = {
+            "type": "button",
+            "button": "menu",
+            "action": "press",
+            "seq": 910,
+        }
+
+        self.controller.process_event(button)
+        now[0] += 3.1
+        self.controller.process_event({**button, "seq": 911})
+
+        state = self.controller.public_state()
+        self.assertEqual("game_result", state["screen"])
+        self.assertEqual(finished_game_id, state["game_id"])
+        self.assertTrue(state["rematch"]["armed"])
 
     def test_draw_finishes_without_awarding_session_points(self):
         self._start_game()

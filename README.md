@@ -14,6 +14,7 @@ Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 - dauerhafte Spielerprofile mit Farbe und Avatar
 - mehrere Spiele pro Session
 - Sessionwertung mit drei Punkten pro Sieg sowie dauerhafte Gesamtstatistiken
+- schnelle Revanche nach Spielende per doppeltem Spielerwechsel-Tastendruck
 - wertungsfreier Spielabbruch zurück zur Spielauswahl
 - grafische Spielauswahl mit 3D-Renderings
 - eigener Anleitungsbildschirm pro Spielmodus auf beiden Displays

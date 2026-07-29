@@ -3,7 +3,8 @@ from __future__ import annotations
 import asyncio
 from collections import deque
 from pathlib import Path
-from typing import Any, Deque, Dict, Iterable, Optional, Tuple
+from time import monotonic
+from typing import Any, Callable, Deque, Dict, Iterable, Optional, Tuple
 
 from .game import GameEngine
 from .games import registry
@@ -20,14 +21,22 @@ SCREENS = {
     "session_summary",
     "calibration",
 }
+REMATCH_CONFIRM_SECONDS = 3.0
 
 
 class SessionController:
     """Owns the durable session and screen state for every connected display."""
 
-    def __init__(self, database_path: Path | str, engine: Optional[GameEngine] = None) -> None:
+    def __init__(
+        self,
+        database_path: Path | str,
+        engine: Optional[GameEngine] = None,
+        clock: Optional[Callable[[], float]] = None,
+    ) -> None:
         self.store = DartboardStore(database_path)
         self.engine = engine or GameEngine()
+        self._clock = clock or monotonic
+        self._rematch_armed_until = 0.0
         self.screen = "attract"
         self.session_id: Optional[str] = None
         self.game_id: Optional[str] = None
@@ -87,6 +96,12 @@ class SessionController:
     def public_state(self) -> Dict[str, Any]:
         session = self.store.get_session(self.session_id) if self.session_id else None
         player_ids = [player["id"] for player in session["players"]] if session else []
+        rematch_remaining = max(0.0, self._rematch_armed_until - self._clock())
+        rematch_armed = (
+            rematch_remaining > 0
+            and self.screen == "game_result"
+            and self.engine.state.status == "finished"
+        )
         return {
             "screen": self.screen,
             "session": session,
@@ -106,6 +121,12 @@ class SessionController:
             "projector_geometry": self.projector_geometry,
             "sound": self.sound,
             "hardware": self.hardware,
+            "rematch": {
+                "armed": rematch_armed,
+                "expires_in_ms": round(rematch_remaining * 1000)
+                if rematch_armed
+                else 0,
+            },
         }
 
     def create_player(self, name: str, avatar: str, color: str) -> Dict[str, Any]:
@@ -161,6 +182,7 @@ class SessionController:
             self.selected_mode,
             self.selected_options,
         )
+        self._rematch_armed_until = 0.0
         self.screen = "countdown"
         self._persist()
 
@@ -173,6 +195,15 @@ class SessionController:
         self._persist()
 
     def process_event(self, event: Dict[str, Any]) -> None:
+        if (
+            event.get("type") == "button"
+            and event.get("button") == "menu"
+            and event.get("action") == "press"
+            and self.screen == "game_result"
+            and self.engine.state.status == "finished"
+        ):
+            self.rematch_button()
+            return
         before_count = len(self.engine.state.throws)
         self.engine.handle_event(event)
         if len(self.engine.state.throws) > before_count and self.game_id:
@@ -194,6 +225,55 @@ class SessionController:
                 self.store.finish_game(self.game_id, self.engine.state.winner_id)
             self.screen = "game_result"
         self._persist()
+
+    def rematch_button(self) -> bool:
+        """Arm or start a same-mode rematch from the physical board button."""
+        if (
+            not self.session_id
+            or not self.game_id
+            or not self.selected_mode
+            or self.screen != "game_result"
+            or self.engine.state.status != "finished"
+        ):
+            raise ValueError("A rematch requires a finished session game")
+        previous_game = self.store.get_game(self.game_id)
+        if not previous_game or previous_game["status"] != "finished":
+            raise ValueError("The previous game must be stored as finished")
+
+        now = self._clock()
+        if now >= self._rematch_armed_until:
+            self._rematch_armed_until = now + REMATCH_CONFIRM_SECONDS
+            self._persist()
+            return False
+
+        session = self.store.get_session(self.session_id)
+        if not session:
+            raise ValueError("Active session no longer exists")
+        players_by_id = {player["id"]: player for player in session["players"]}
+        previous_order = [
+            player.id
+            for player in self.engine.state.players
+            if player.id in players_by_id
+        ]
+        if len(previous_order) != len(players_by_id):
+            previous_order = [player["id"] for player in session["players"]]
+        rotated_order = previous_order[1:] + previous_order[:1]
+        rotated_players = [players_by_id[player_id] for player_id in rotated_order]
+
+        self.engine.reset(
+            self.selected_mode,
+            rotated_players,
+            options=self.selected_options,
+        )
+        self.game_id = self.store.start_game(
+            self.session_id,
+            self.selected_mode,
+            self.selected_options,
+        )
+        self._rematch_armed_until = 0.0
+        self.screen = "countdown"
+        self._persist()
+        return True
 
     def continue_turn(self) -> None:
         self.engine.continue_turn()
@@ -253,6 +333,7 @@ class SessionController:
         self._persist()
 
     def next_game(self) -> None:
+        self._rematch_armed_until = 0.0
         self.engine.clear()
         self.game_id = None
         self.selected_mode = None
@@ -267,6 +348,7 @@ class SessionController:
         if not game or game["status"] != "running":
             raise ValueError("Only a running game can be aborted")
         self.store.abort_game(self.game_id)
+        self._rematch_armed_until = 0.0
         self.engine.clear()
         self.game_id = None
         self.selected_mode = None
@@ -283,6 +365,7 @@ class SessionController:
         self._persist()
 
     def reset_to_attract(self) -> None:
+        self._rematch_armed_until = 0.0
         self.screen = "attract"
         self.session_id = None
         self.game_id = None

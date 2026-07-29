@@ -55,6 +55,12 @@ Ohne verbundenes BLE-Board läuft die Projektoransicht im Testmodus. In diesem
 Modus erzeugt ein Klick auf ein Scheibensegment den entsprechenden Treffer;
 für einen Fehlwurf steht daneben **MISS** bereit.
 
+Nach einem gewerteten Spiel startet ein doppelter Druck auf die
+Spielerwechsel-Taste innerhalb von drei Sekunden eine Revanche mit demselben
+Modus, denselben Optionen und rotierendem Startspieler. Der erste Druck zeigt
+die Bestätigung auf Controller und Projektor; ein einzelner Druck verändert das
+Ergebnis nicht.
+
 Die Kalibrierung und alle Spieldaten liegen in `./data/dartboard.db`.
 
 ## Projektor-Kioskmodus

@@ -10,6 +10,8 @@ const appState = {
   memoryRevealTimer: null,
   memoryRevealKey: '',
   memoryHidden: false,
+  rematchTimer: null,
+  rematchArmedUntil: 0,
   selectedCorrectionIndex: null,
   abortArmed: false,
   skipArmed: false,
@@ -102,7 +104,19 @@ function connectWs(){
 }
 function updateExperience(experience, event){
   const previous = appState.experience;
+  const rematchWasArmed=Date.now()<appState.rematchArmedUntil;
   appState.experience = experience;
+  clearTimeout(appState.rematchTimer);
+  if(experience.rematch?.armed){
+    appState.rematchArmedUntil=Date.now()+Math.max(0,Number(experience.rematch.expires_in_ms)||0);
+    appState.rematchTimer=setTimeout(()=>{
+      appState.rematchArmedUntil=0;
+      render();
+    },Math.max(0,Number(experience.rematch.expires_in_ms)||0)+30);
+    if(!rematchWasArmed) tone(440,.12,0,'triangle',.08);
+  }else{
+    appState.rematchArmedUntil=0;
+  }
   if(isProjector() && experience.sound?.enabled){
     ensureAudio(true);
   }
@@ -467,6 +481,14 @@ function resultCopy(game, champion){
     ? {icon:'=', label:'GLEICHSTAND', title:'Unentschieden', points:'KEINE SESSIONSPUNKTE'}
     : {icon:'☠', label:'CHALLENGE VERLOREN', title:'Boss gewinnt', points:'KEINE SESSIONSPUNKTE'};
 }
+function rematchPrompt(compact=false){
+  const armed=Date.now()<appState.rematchArmedUntil;
+  const title=armed ? 'NOCH EINMAL DRÜCKEN' : '2× SPIELERWECHSEL DRÜCKEN';
+  const detail=armed ? 'Revanche wird bestätigt' : 'Gleiches Spiel · Startspieler wechselt';
+  return compact
+    ? `<small class="rematch-prompt ${armed?'armed':''}">${title} · REVANCHE</small>`
+    : `<aside class="rematch-prompt ${armed?'armed':''}"><span>SCHEIBEN-TASTE</span><b>${title}</b><small>${detail}</small></aside>`;
+}
 function controlGameResult(){
   const game=appState.experience.game;
   const champion = winner();
@@ -477,6 +499,7 @@ function controlGameResult(){
     <h1>${escapeHtml(result.title)}</h1>
     <p>${champion ? 'holt sich den Sieg und 3 Sessionpunkte.' : escapeHtml(game.message || 'Keine Sessionpunkte in diesem Spiel.')}</p>
     ${sessionScoreStrip()}
+    ${rematchPrompt()}
     <div class="result-actions">
       ${actionButton('Zurück zur Spielauswahl','next-game')}
     </div>
@@ -672,6 +695,7 @@ function projectorResult(){
         <footer>
           <b>${result.points}</b>
           ${lastThrow ? `<small>LETZTER DART · ${escapeHtml(lastThrow.label || 'MISS')}</small>` : ''}
+          ${rematchPrompt(true)}
         </footer>
       </article>
     </div>
