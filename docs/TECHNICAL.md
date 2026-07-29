@@ -325,11 +325,14 @@ Scheibe hinter der kalibrierten SVG-Scheibe verschwindet. Eine mit derselben
 Homographie transformierte dunkle Schutzzone hält die echte Scheibe ruhig und
 kontrastreich.
 
-Wenige modusspezifische Ambient-Symbole bewegen sich ausschließlich außerhalb
-der Scheibe. Treffer und Miss lösen kurze Reaktionen aus; das Ergebnis friert
-die Kulisse ein. Bei `prefers-reduced-motion: reduce` bleiben alle
-Ambient-Animationen automatisch statisch. Treffersegmente selbst werden
-weiterhin ausschließlich auf der SVG-Geometrie hervorgehoben.
+Modusspezifische, rein mit CSS gezeichnete Props und Partikelsysteme bewegen
+sich ausschließlich außerhalb der Scheibe: beispielsweise Stoffherzen, Eier,
+Cookies, Bonbons, Blöcke, Billardkugeln, Geister-Wisps oder Sternenflug. Das
+vermeidet fremdartige Emoji-Optik und zusätzliche Bilddownloads. Treffer und
+Miss lösen kurze Reaktionen aus; das Ergebnis friert die Kulisse ein. Bei
+`prefers-reduced-motion: reduce` bleiben alle Ambient-Animationen automatisch
+statisch. Treffersegmente selbst werden weiterhin ausschließlich auf der
+SVG-Geometrie hervorgehoben.
 
 Die Sound-Engine nutzt Web Audio und erzeugt getrennte Cues für Treffer,
 Double/Triple, Miss, Spielerwechsel, Countdown, Sieg und Boardfehler. Im

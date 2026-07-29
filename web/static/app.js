@@ -43,18 +43,14 @@ const NEON_MODE_ASSETS = new Set([
   'treasure_hunt','x01',
 ]);
 const MODE_AMBIENCE = {
-  avoid_bomb:['💣','🛡️','✨'], block_drop:['🧱','⭐','🧩'],
-  boss_fight:['👾','❤️','⚔️'], candy_cannon:['🍬','🍭','✨'],
-  color_clash:['🎨','🔵','🟠'], cookie_monster:['🍪','🥛','✨'],
-  countup:['⭐','➕','🎯'], cricket:['🏏','🔒','🎯'],
-  dart_sweeper:['💣','🔍','⭐'], darts_bingo:['🎟️','⭐','✓'],
-  dragon_eggs:['🥚','🐉','✨'], eight_ball:['🎱','🔴','🟡'],
-  ghost_chase:['👻','🌙','✨'], heart_chase:['❤️','💛','💨'],
-  king_of_board:['👑','🏰','⭐'], lightning_round:['⚡','💨','⭐'],
-  mini_golf:['⛳','🌿','⚪'], risk_it:['⚖️','⭐','🐷'],
-  robin_hood:['🏹','🌲','✨'], simon_says:['🟢','🟡','🔵'],
-  space_defender:['🚀','🪐','⭐'], target_rush:['🎯','💨','⭐'],
-  treasure_hunt:['💎','🧭','⭐'], x01:['🎯','🏁','➖'],
+  avoid_bomb:'mines', block_drop:'blocks', boss_fight:'embers',
+  candy_cannon:'candy', color_clash:'confetti', cookie_monster:'cookies',
+  countup:'streaks', cricket:'leaves', dart_sweeper:'mines',
+  darts_bingo:'sparkles', dragon_eggs:'eggs', eight_ball:'billiards',
+  ghost_chase:'wisps', heart_chase:'hearts', king_of_board:'sparkles',
+  lightning_round:'lightning', mini_golf:'golf', risk_it:'coins',
+  robin_hood:'leaves', simon_says:'signals', space_defender:'space',
+  target_rush:'streaks', treasure_hunt:'gems', x01:'streaks',
 };
 
 function $(id){ return document.getElementById(id); }
@@ -712,12 +708,13 @@ function projectorModePanel(game){
   return '';
 }
 function modeAmbience(mode, event, frozen=false){
-  const symbols=MODE_AMBIENCE[mode?.slug] || ['⭐','🎯','✨'];
+  const effect=MODE_AMBIENCE[mode?.slug] || 'sparkles';
   const reaction=event?.type==='hit' ? 'react-hit' : event?.type==='miss' ? 'react-miss' : '';
   return `<div class="game-ambience ${reaction} ${frozen?'frozen':''}" aria-hidden="true" style="--game-art:url('${modeAsset(mode?.slug || 'countup')}')">
     <div class="game-art-backdrop"></div>
     <div class="ambient-vignette"></div>
-    <div class="ambient-sprites">${[...symbols,...symbols.slice(0,1)].map((symbol,index)=>`<i class="ambient-sprite sprite-${index+1}">${escapeHtml(symbol)}</i>`).join('')}</div>
+    <div class="ambient-ribbons"><i></i><i></i></div>
+    <div class="ambient-effects effect-${effect}">${Array.from({length:12},()=>'<i></i>').join('')}</div>
   </div>`;
 }
 
