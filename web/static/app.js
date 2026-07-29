@@ -59,6 +59,7 @@ const OVERLAY_ICON_ASSETS = {
   cookie:'/static/assets/effects/cookie.webp',
   cookie_moldy:'/static/assets/effects/cookie_moldy.webp',
   milk:'/static/assets/effects/milk.webp',
+  mine:'/static/assets/effects/mine.webp',
 };
 
 function $(id){ return document.getElementById(id); }
@@ -111,6 +112,14 @@ function isBombEvent(experience,event){
   return Boolean(experience.game.overlay?.danger?.some(item=>
     Number(item.field)===Number(event.field) && String(item.ring)===String(event.ring)
   ));
+}
+function isMineExplosionEvent(experience,event){
+  return experience?.game?.game_type==='dart_sweeper'
+    && event?.type==='hit'
+    && event?.effect==='mine_explosion';
+}
+function isExplosionEvent(experience,event){
+  return isBombEvent(experience,event) || isMineExplosionEvent(experience,event);
 }
 function isCandyOverheatEvent(experience,event){
   return experience?.game?.game_type==='candy_cannon'
@@ -891,7 +900,7 @@ function modeAmbience(mode, event, frozen=false){
 }
 
 function bombExplosion(game,event){
-  if(!isBombEvent({game},event)) return '';
+  if(!isExplosionEvent({game},event)) return '';
   const index=BOARD_ORDER.indexOf(Number(event.field));
   const radii={
     double:222,
@@ -911,6 +920,7 @@ function bombExplosion(game,event){
     [35,142],[-50,136],[-126,82],[-151,-6],[-82,-48],[74,58],
   ];
   return `<div class="bomb-explosion" style="--blast-x:${x*2}px;--blast-y:${y*2}px" aria-hidden="true">
+    <img src="/static/assets/effects/mine_explosion.webp" alt="">
     <b>BOOM!</b>
     ${vectors.map(([dx,dy],index)=>`<i style="--dx:${dx}px;--dy:${dy}px;--delay:${index%3*25}ms"></i>`).join('')}
   </div>`;
@@ -940,7 +950,7 @@ function projectorPlaying(){
   const mode = modeBySlug(game.game_type);
   const player = currentPlayer(game) || {};
   const testMode=testModeEnabled();
-  const bombImpact=isBombEvent({game},appState.projectedEvent);
+  const bombImpact=isExplosionEvent({game},appState.projectedEvent);
   const candyOverheatImpact=isCandyOverheatEvent({game},appState.projectedEvent);
   return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
     ${modeAmbience(mode,appState.projectedEvent)}
@@ -1056,10 +1066,14 @@ function renderBoardEvent(event){
     if(paintedProps.has(propKey)) return;
     paintedProps.add(propKey);
     const fieldHit=event?.type==='hit' && Number(event.field)===Number(item.field);
-    const propHit=fieldHit && (item.icon==='milk' || String(event.ring)===String(item.ring));
+    const propHit=fieldHit && (
+      item.icon==='milk'
+      || item.icon==='mine'
+      || String(event.ring)===String(item.ring)
+    );
     const variant=/^[a-z_]+$/.test(String(item.variant || '')) ? item.variant : 'default';
-    const width=item.icon==='milk'?26:30;
-    const height=item.icon==='milk'?36:30;
+    const width=item.icon==='milk'?26:item.icon==='mine'?35:30;
+    const height=item.icon==='milk'?36:item.icon==='mine'?39:30;
     const imageY=y-height/2-(item.label?5:0);
     const labelY=y+height/2+4;
     labelLayer.insertAdjacentHTML('beforeend',`<g class="overlay-prop variant-${variant} ${propHit?'overlay-prop-hit':''}">
@@ -1085,7 +1099,10 @@ function renderBoardEvent(event){
         segment.classList.add(`overlay-zone-${item.role||'revealed'}`);
         if(item.color) segment.style.setProperty('--zone-color',item.color);
       }
-      if((index===0 || item.label_all) && item.label!==undefined && item.label!=='') paintLabel({...item,ring});
+      if(
+        (index===0 || item.label_all)
+        && (item.icon || (item.label!==undefined && item.label!==''))
+      ) paintLabel({...item,ring});
     });
   });
   const game=appState.experience?.game;
@@ -1246,7 +1263,7 @@ function playEventCue(event,experience){
   }
   const theme=modeBySlug(experience.game?.game_type)?.sound_theme || 'arena';
   const themeBase={arcade:500,club:390,championship:450,arena:420}[theme] || 420;
-  if(event.type==='hit' && isBombEvent(experience,event)){
+  if(event.type==='hit' && isExplosionEvent(experience,event)){
     tone(92,.38,0,'sawtooth',.18);
     tone(54,.52,.04,'sawtooth',.16);
     tone(680,.09,0,'square',.07);

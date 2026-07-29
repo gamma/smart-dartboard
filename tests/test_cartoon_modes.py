@@ -429,6 +429,12 @@ class CartoonModeTests(unittest.TestCase):
         self.assertEqual(lives - 1, engine.state.mode_state["lives"])
         self.assertIn(20, engine.state.mode_state["exploded"])
         self.assertEqual({}, engine.state.mode_state["revealed"])
+        self.assertEqual("mine_explosion", engine.state.last_event["effect"])
+        mine_zone = next(
+            zone for zone in engine.state.as_dict()["overlay"]["zones"]
+            if zone["field"] == 20
+        )
+        self.assertEqual("mine", mine_zone["icon"])
 
     def test_dart_sweeper_exploded_mine_only_costs_one_life(self):
         engine = GameEngine()

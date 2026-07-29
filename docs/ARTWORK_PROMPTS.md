@@ -127,14 +127,14 @@ ImageGen erzeugt. Der Generierungsablauf wurde überwiegend durch GPT-5.6-sol
 gesteuert. Die lokale Codex-Sitzung und die noch vorhandenen
 ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 
-- 52 direkte ImageGen-Aufrufe sowie ein anfänglicher Batch mit drei
+- 54 direkte ImageGen-Aufrufe sowie ein anfänglicher Batch mit drei
   ImageGen-Aufrufen liefen in einer mit `gpt-5.6-sol` gesteuerten
   Codex-Sitzung.
 - Die C2PA-Manifeste der geprüften Original-PNGs nennen
   `OpenAI Media Service API`, den Software-Agenten `gpt-image` in Version `2.0`
   und den digitalen Quelltyp `trainedAlgorithmicMedia`.
-- Aus insgesamt 55 erzeugten Ergebnissen wurden die heute vorhandenen 37 Cover
-  und 15 Effekte ausgewählt; drei Cover-Kandidaten wurden verworfen oder
+- Aus insgesamt 57 erzeugten Ergebnissen wurden die heute vorhandenen 37 Cover
+  und 17 Effekte ausgewählt; drei Cover-Kandidaten wurden verworfen oder
   ersetzt. Sämtliche übergebenen Bildreferenzen zeigen auf bereits lokal
   erzeugte Dateien dieses Projekts. Fremde Bilder, Logos oder
   Markenreferenzen wurden in den protokollierten Aufrufen nicht verwendet.
@@ -146,7 +146,7 @@ ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 |---|---|---|---|---|
 | Playful-Cartoon-Cover | 24 ImageGen-Ergebnisse; `heart_chase` nur aus Text erzeugt, danach als interne Stilreferenz für alle weiteren Cover | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | ImageMagick: mittiger Zuschnitt auf 900 × 640, WebP-Qualität 88 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 | Classic-Neon-Cover | 13 ImageGen-Ergebnisse; `countup`, `x01` und `cricket` nur aus Text, danach als interne Stilreferenzen für die weiteren Neon-Cover | `gpt-image` 2.0; 28.–29.07.2026; gesteuert mit `gpt-5.6-sol` | historische Versionen aus Git-Commit `54ba4a3` wiederhergestellt, mittig auf 900 × 640 gebracht und als WebP mit Qualität 88 exportiert | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
-| animierte 3D-Props | 15 ImageGen-Ergebnisse; zwölf Props mit `heart_chase` als interner Referenz, `candy_overheat` mit `candy_cannon` und `candy`, `cookie_moldy` und `milk` mit `heart_chase` und `cookie` | `gpt-image` 2.0; 29.–30.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt, beschnitten, auf höchstens 512 × 512 skaliert und als Alpha-WebP exportiert; `candy_overheat` 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
+| animierte 3D-Props | 17 ImageGen-Ergebnisse; zwölf ursprüngliche Props mit `heart_chase`, mode-spezifische Ergänzungen zusätzlich mit passenden projektinternen Props | `gpt-image` 2.0; 29.–30.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt und als Alpha-WebP exportiert; Standardprops höchstens 512 × 512, große Bursts 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 
 Der Neon-Basis-Prompt beschreibt somit reproduzierbar die sichtbare
 Bildsprache. Die historischen Einzelprompts sind zusätzlich in der lokalen
@@ -168,6 +168,9 @@ wartbare Zusammenfassung und kein behaupteter wortgleicher Originalprompt.
    eigene Candy-Cannon-Cover und den eigenen Candy-Prop als Referenzen.
 6. Am 30.07.2026 entstanden `cookie_moldy` und `milk` mit dem eigenen
    Heart-Chase-Cover und Cookie-Prop als einzigen Bildreferenzen.
+7. Ebenfalls am 30.07.2026 wurden `mine` neu gerendert und
+   `mine_explosion` ergänzt; Referenzen waren ausschließlich das eigene
+   Heart-Chase-Cover und der vorherige Mine-Prop.
 
 Die zugehörigen Git-Commits sind `179cf40` für die ersten drei Cover,
 `e5f3192` für die ergänzten Neon-Artworks, `475d23f` für das vollständige
@@ -228,7 +231,8 @@ Qualitätsstufe 90 gespeichert. Die aktuelle Bibliothek umfasst:
 | `golf.webp` | Golfball | Mini Golf |
 | `wisp.webp` | freundlicher Geisterschweif | Ghost Chase |
 | `leaf.webp` | weiches Eichenblatt | Cricket, Robin Hood |
-| `mine.webp` | harmlose Spielzeugmine | Avoid Bomb, Dart Sweeper |
+| `mine.webp` | detaillierte gepolsterte Filz-Spielzeugmine | Avoid Bomb, Dart Sweeper |
+| `mine_explosion.webp` | großer taktiler Filz-Explosionsburst | Avoid Bomb, Dart Sweeper Minentreffer |
 | `coin.webp` | goldene Sternmünze | Risk It |
 | `gem.webp` | blauer Spielzeugedelstein | Treasure Hunt |
 | `candy_overheat.webp` | Zuckerstaub-Explosion mit Bonbons und Konfetti | Candy Cannon Overheat und kleiner FIRE-Einschlag |
@@ -284,4 +288,44 @@ Lighting/mood: warm soft studio key light, cheerful family arcade mood, clear cr
 Background: perfectly flat solid #00ff00 chroma-key green, uniformly lit, no floor, horizon, cast shadow, gradient, texture, reflection, or green spill.
 Constraints: exactly one bottle with one small attached splash; opaque materials only; no cookie, dartboard, people, face, eyes, limbs, text, letters, logo, brand, watermark or border; do not use #00ff00 anywhere in the prop.
 Avoid: transparent glass, photoreal liquid, product photography, emoji styling, flat vector art, multiple bottles, scenery, dark nightclub style, neon tubes or heavy bloom.
+```
+
+### DartSweeper-Mine und Explosion
+
+Beide Assets wurden am 30.07.2026 mit dem eingebauten OpenAI ImageGen
+(`gpt-image` 2.0), gesteuert durch `gpt-5.6-sol`, erzeugt. Referenzen waren
+ausschließlich `web/static/assets/modes/heart_chase.webp` und die vorherige
+Version von `web/static/assets/effects/mine.webp`. Die Chroma-Flächen wurden
+mit `remove_chroma_key.py` und weicher Matte entfernt. `mine.webp` wurde als
+512 × 512 Alpha-WebP, `mine_explosion.webp` als 768 × 768 Alpha-WebP mit
+Qualitätsstufe 90 exportiert.
+
+Finaler Prompt für `mine.webp`:
+
+```text
+Use case: stylized-concept
+Asset type: isolated high-resolution 3D prop sprite for the Smart Dartboard DartSweeper and Avoid the Bomb modes
+Input images: Image 1 is the mandatory Playful Cartoon style reference and defines the handcrafted material, warm lighting and friendly arcade finish. Image 2 is the existing mine prop and establishes the recognizable round mine silhouette, but the new asset should be more detailed, more expressive and more readable at small board-overlay size.
+Primary request: Render one premium, instantly recognizable toy mine as a chunky round handcrafted arcade prop. Use a charcoal-black padded felt body with clearly separated rounded segments, a thick warm coral-red safety ring, small coral studs, a short twisted rope fuse and a tiny mustard-yellow glowing fuse tip. Add subtle stitching, painted-clay fittings and soft surface texture so it feels like a high-end animated-film prop, harmless and playful rather than military or threatening.
+Style/medium: polished cinematic stylized 3D animation render; tactile felt, plush padding, twisted rope and softly painted clay; rounded family-friendly toy shapes, believable depth and crisp surface detail.
+Composition/framing: exactly one complete mine centered in a square canvas, slight three-quarter front/top view, generous clean margin, no cropping, strong readable silhouette at 30–80 px.
+Lighting/mood: warm soft studio key light with a subtle golden rim from the fuse, cheerful family arcade mood, clear separation between black body and coral details.
+Background: perfectly flat solid #00ff00 chroma-key green, uniformly lit, no floor, horizon, cast shadow, gradient, texture, reflection or green spill.
+Constraints: exactly one mine; fuse remains attached; opaque materials only; no explosion, smoke, sparks except one tiny attached fuse glow, dartboard, people, face, eyes, limbs, text, letters, logo, brand, watermark or border; do not use #00ff00 anywhere in the prop.
+Avoid: realistic weapon photography, military styling, sharp spikes, horror, danger symbols, metallic photorealism, emoji styling, flat vector art, dark nightclub style, neon tubes or heavy bloom.
+```
+
+Finaler Prompt für `mine_explosion.webp`:
+
+```text
+Use case: stylized-concept
+Asset type: isolated high-resolution 3D explosion effect sprite for the Smart Dartboard DartSweeper and Avoid the Bomb projector
+Input images: Image 1 is the mandatory Playful Cartoon style reference and defines the handcrafted tactile world, warm lighting and premium animated-film finish. Image 2 is the project mine prop whose charcoal, coral, rope and stitched felt materials establish the matching effect palette and scale.
+Primary request: Render one large, compact radial cartoon mine explosion as a premium handcrafted arcade effect. Build the burst from a bright mustard-yellow and warm cream star-shaped core, thick rounded coral-orange felt fire petals, several puffy charcoal and warm-gray fabric smoke clouds, small soft rope fibers and a few harmless rounded coral toy fragments flying outward. It must read immediately as a joyful BOOM at projector scale while remaining family-friendly, tactile and visually rich.
+Style/medium: polished cinematic stylized 3D animation render; opaque felt, plush fabric, cotton stuffing, painted clay and paper; rounded handcrafted shapes with strong depth and crisp layered silhouette.
+Composition/framing: one complete roughly circular explosion centered in a square canvas, energetic radial silhouette, generous clean margin on every side, no cropping, readable at 100–500 px.
+Lighting/mood: brilliant warm cream/yellow center illuminating coral felt and charcoal puffs, energetic playful arcade celebration, restrained glow that does not erase material detail.
+Background: perfectly flat solid #ff00ff chroma-key magenta, uniformly lit, no floor, horizon, cast shadow, gradient, texture, reflection or magenta spill.
+Constraints: exactly one explosion effect; all smoke and fire shapes must be opaque tactile objects suitable for chroma removal; no intact mine, dartboard, people, face, eyes, limbs, text, letters, BOOM typography, logo, brand, watermark or border; do not use #ff00ff anywhere in the effect.
+Avoid: realistic fire simulation, translucent smoke, photoreal blast, military debris, gore, dangerous sharp shrapnel, mushroom cloud, horror, emoji styling, flat vector starburst, dark nightclub style, neon tubes or bloom obscuring the silhouette.
 ```

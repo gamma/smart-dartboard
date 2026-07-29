@@ -237,7 +237,11 @@
   animation: milk-bull-hit .85s cubic-bezier(.18, .8, .22, 1);
 }
 
-.overlay-prop.overlay-prop-hit:not(.variant-moldy):not(.variant-milk) {
+.overlay-prop.overlay-prop-hit.variant-mine {
+  animation: mine-prop-hit .72s cubic-bezier(.18, .8, .22, 1) forwards;
+}
+
+.overlay-prop.overlay-prop-hit:not(.variant-moldy):not(.variant-milk):not(.variant-mine) {
   animation: cookie-eaten .78s cubic-bezier(.18, .8, .22, 1) forwards;
 }
 
@@ -258,6 +262,13 @@
   0% { transform: scale(.82); filter: brightness(1); }
   42% { transform: scale(1.55) rotate(-8deg); filter: brightness(1.45); }
   100% { transform: scale(1); filter: brightness(1); }
+}
+
+@keyframes mine-prop-hit {
+  0% { opacity: 1; transform: scale(1) rotate(0); }
+  24% { transform: scale(1.35) rotate(-9deg); }
+  48% { opacity: 1; transform: scale(.92) rotate(8deg); }
+  100% { opacity: 0; transform: scale(.18) rotate(-20deg); }
 }
 
 .projection-game.test-mode .seg {
@@ -292,12 +303,10 @@
 }
 
 .bomb-explosion::before {
-  width: 210px;
-  height: 210px;
-  background:
-    radial-gradient(circle at 42% 38%, #fff 0 6%, #fff5a5 7% 15%, #ffc02e 28%, #ff5b20 51%, rgba(181, 24, 8, .72) 66%, transparent 72%),
-    conic-gradient(from 15deg, transparent, #ffcf3f, transparent 18%, #ff6633, transparent 38%, #fff0a0, transparent 61%);
-  filter: drop-shadow(0 0 24px #ff7a21) drop-shadow(0 0 65px rgba(255, 40, 15, .9));
+  width: 245px;
+  height: 245px;
+  background: radial-gradient(circle, rgba(255, 249, 198, .96), rgba(255, 183, 47, .7) 26%, rgba(231, 111, 81, .32) 52%, transparent 72%);
+  filter: drop-shadow(0 0 38px rgba(255, 122, 33, .82));
   animation: bomb-fireball 1.15s cubic-bezier(.16, .82, .24, 1) forwards;
 }
 
@@ -324,9 +333,24 @@
   animation: bomb-shrapnel .95s var(--delay) cubic-bezier(.13, .7, .2, 1) forwards;
 }
 
-.bomb-explosion b {
+.bomb-explosion img {
   position: absolute;
   z-index: 2;
+  left: 50%;
+  top: 50%;
+  width: 540px;
+  height: 540px;
+  object-fit: contain;
+  opacity: 0;
+  filter:
+    drop-shadow(0 0 24px rgba(255, 213, 88, .92))
+    drop-shadow(0 0 68px rgba(231, 87, 52, .62));
+  animation: mine-explosion-burst 1.42s cubic-bezier(.14, .8, .2, 1) forwards;
+}
+
+.bomb-explosion b {
+  position: absolute;
+  z-index: 3;
   left: 50%;
   top: 50%;
   color: #fff;
@@ -500,6 +524,14 @@
   100% { opacity: 0; transform: translate(-50%, -50%) scale(1.48) rotate(15deg); filter: blur(7px); }
 }
 
+@keyframes mine-explosion-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.06) rotate(-10deg); }
+  14% { opacity: 1; }
+  46% { opacity: 1; transform: translate(-50%, -50%) scale(1.04) rotate(2deg); }
+  76% { opacity: 1; transform: translate(-50%, -50%) scale(.98) rotate(0); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.14); filter: blur(3px); }
+}
+
 @keyframes bomb-shockwave {
   0% { opacity: 1; transform: translate(-50%, -50%) scale(.15); }
   100% { opacity: 0; transform: translate(-50%, -50%) scale(2.25); border-width: 3px; }
@@ -589,6 +621,7 @@
 @media (prefers-reduced-motion: reduce) {
   .bomb-explosion::before,
   .bomb-explosion::after,
+  .bomb-explosion img,
   .bomb-explosion i,
   .bomb-explosion b,
   .bomb-impact::after,

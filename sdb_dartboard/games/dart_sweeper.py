@@ -155,6 +155,7 @@ class DartSweeperMode:
             if field not in state.mode_state["exploded"]:
                 state.mode_state["exploded"].append(field)
                 state.mode_state["lives"] = max(0, int(state.mode_state["lives"]) - 1)
+                event["effect"] = "mine_explosion"
                 return self._finish_if_needed(
                     state,
                     0,
@@ -194,7 +195,10 @@ class DartSweeperMode:
                     "field": field,
                     "rings": ALL_RINGS,
                     "role": "mine",
-                    "label": "💥",
+                    "label": "",
+                    "icon": "mine",
+                    "variant": "mine",
+                    "color": "#e76f51",
                 })
             elif field in revealed:
                 count = revealed[field]
