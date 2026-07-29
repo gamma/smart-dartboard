@@ -13,3 +13,15 @@
 .effect-coins i{width:clamp(42px,3.6vw,66px);height:clamp(45px,3.9vw,71px);background-image:url("/static/assets/effects/coin.webp")}
 .effect-gems i{width:clamp(43px,3.8vw,70px);height:clamp(42px,3.7vw,68px);background-image:url("/static/assets/effects/gem.webp")}
 .effect-hearts i:before,.effect-hearts i:after,.effect-candy i:before,.effect-candy i:after{content:none}
+
+/* A state update must not restart the long-running prop drift. Reactions animate
+   the containing layer, leaving every sprite's individual animation timeline intact. */
+.game-ambience .ambient-effects i{animation:prop-drift 8s ease-in-out infinite alternate!important;animation-delay:var(--delay)!important}
+.game-ambience.react-hit .ambient-effects{animation:ambient-props-hit .7s ease-out}
+.game-ambience.react-miss .ambient-effects{animation:ambient-props-miss .45s ease-out}
+@keyframes ambient-props-hit{45%{filter:brightness(1.3) saturate(1.12);transform:scale(1.035)}}
+@keyframes ambient-props-miss{35%{filter:saturate(.72);transform:translateX(-7px)}70%{transform:translateX(7px)}}
+
+/* Persisted mode overlays may also color a segment. The physical hit is always
+   the top-most, unmistakable state for its short display window. */
+.dartboard-svg .seg.hit{fill:var(--accent)!important;stroke:#fff!important;stroke-width:3!important;filter:brightness(1.28)}

@@ -617,6 +617,13 @@ function renderProjector(){
   const root = $('projectorRoot');
   if(!root) return;
   const screen = appState.experience.screen;
+  const modeSlug=appState.experience.game?.game_type || appState.experience.selected_mode || '';
+  const currentAmbience=root.querySelector('.game-ambience');
+  const preserveAmbience=(
+    currentAmbience
+    && (screen==='playing' || screen==='game_result')
+    && currentAmbience.dataset.mode===modeSlug
+  ) ? currentAmbience : null;
   const renderers = {
     attract: projectorAttract,
     players: projectorPlayers,
@@ -628,7 +635,36 @@ function renderProjector(){
     session_summary: projectorSummary,
     calibration: projectorCalibration,
   };
-  root.innerHTML = (renderers[screen] || projectorAttract)();
+  const markup=(renderers[screen] || projectorAttract)();
+  if(preserveAmbience){
+    const template=document.createElement('template');
+    template.innerHTML=markup.trim();
+    const currentScene=root.firstElementChild;
+    const freshScene=template.content.firstElementChild;
+    const freshAmbience=freshScene?.querySelector('.game-ambience');
+    if(currentScene && freshScene && freshAmbience){
+      currentScene.className=freshScene.className;
+      currentScene.style.cssText=freshScene.style.cssText;
+      preserveAmbience.style.cssText=freshAmbience.style.cssText;
+      preserveAmbience.classList.toggle('frozen',freshAmbience.classList.contains('frozen'));
+      preserveAmbience.classList.remove('react-hit','react-miss');
+      [...currentScene.children].forEach(child=>{
+        if(child!==preserveAmbience) child.remove();
+      });
+      [...freshScene.children].forEach(child=>{
+        if(child!==freshAmbience) currentScene.appendChild(child);
+      });
+      const reaction=appState.projectedEvent?.type;
+      if(screen==='playing' && (reaction==='hit' || reaction==='miss')){
+        void preserveAmbience.offsetWidth;
+        preserveAmbience.classList.add(`react-${reaction}`);
+      }
+    }else{
+      root.innerHTML=markup;
+    }
+  }else{
+    root.innerHTML=markup;
+  }
   if(screen === 'playing' || screen === 'game_result' || screen === 'calibration'){
     buildBoard();
     applyCalibration();
@@ -710,7 +746,7 @@ function projectorModePanel(game){
 function modeAmbience(mode, event, frozen=false){
   const effect=MODE_AMBIENCE[mode?.slug] || 'sparkles';
   const reaction=event?.type==='hit' ? 'react-hit' : event?.type==='miss' ? 'react-miss' : '';
-  return `<div class="game-ambience ${reaction} ${frozen?'frozen':''}" aria-hidden="true" style="--game-art:url('${modeAsset(mode?.slug || 'countup')}')">
+  return `<div class="game-ambience ${reaction} ${frozen?'frozen':''}" data-mode="${escapeHtml(mode?.slug || '')}" aria-hidden="true" style="--game-art:url('${modeAsset(mode?.slug || 'countup')}')">
     <div class="game-art-backdrop"></div>
     <div class="ambient-vignette"></div>
     <div class="ambient-ribbons"><i></i><i></i></div>
