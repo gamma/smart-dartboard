@@ -1,0 +1,15 @@
+/* High-resolution rendered props; CSS remains responsible only for motion. */
+.effect-hearts i,.effect-eggs i,.effect-cookies i,.effect-candy i,.effect-blocks i,.effect-billiards i,.effect-golf i,.effect-wisps i,.effect-leaves i,.effect-mines i,.effect-coins i,.effect-gems i{background-color:transparent;background-position:center;background-repeat:no-repeat;background-size:contain;border:0;border-radius:0;box-shadow:none}
+.effect-hearts i{width:clamp(48px,4.2vw,76px);height:clamp(46px,4vw,73px);background-image:url("/static/assets/effects/heart.webp")}
+.effect-eggs i{width:clamp(40px,3.4vw,62px);height:clamp(51px,4.4vw,80px);background-image:url("/static/assets/effects/egg.webp")}
+.effect-cookies i{width:clamp(48px,4.2vw,78px);height:clamp(38px,3.4vw,63px);background-image:url("/static/assets/effects/cookie.webp")}
+.effect-candy i{width:clamp(60px,5vw,92px);height:clamp(28px,2.4vw,44px);background-image:url("/static/assets/effects/candy.webp")}
+.effect-blocks i{width:clamp(43px,3.7vw,68px);height:clamp(51px,4.4vw,80px);background-image:url("/static/assets/effects/block.webp")}
+.effect-billiards i{width:clamp(42px,3.6vw,66px);height:clamp(44px,3.8vw,69px);background-image:url("/static/assets/effects/billiard.webp")}
+.effect-golf i{width:clamp(30px,2.5vw,46px);height:clamp(31px,2.6vw,48px);background-image:url("/static/assets/effects/golf.webp")}
+.effect-wisps i{width:clamp(68px,5.8vw,106px);height:clamp(48px,4vw,74px);background-image:url("/static/assets/effects/wisp.webp")}
+.effect-leaves i{width:clamp(38px,3.2vw,58px);height:clamp(51px,4.3vw,79px);background-image:url("/static/assets/effects/leaf.webp")}
+.effect-mines i{width:clamp(44px,3.8vw,70px);height:clamp(49px,4.2vw,77px);background-image:url("/static/assets/effects/mine.webp")}
+.effect-coins i{width:clamp(42px,3.6vw,66px);height:clamp(45px,3.9vw,71px);background-image:url("/static/assets/effects/coin.webp")}
+.effect-gems i{width:clamp(43px,3.8vw,70px);height:clamp(42px,3.7vw,68px);background-image:url("/static/assets/effects/gem.webp")}
+.effect-hearts i:before,.effect-hearts i:after,.effect-candy i:before,.effect-candy i:after{content:none}

@@ -74,3 +74,40 @@ Avoid: any text, letters or title typography, poster layout, flat vector art, du
 Generierte Bilder werden mittig auf `900 × 640 px` beschnitten und als
 verlustbehaftetes WebP mit Qualitätsstufe 88 gespeichert. In das Bild wird kein
 Titel eingebrannt; Titel und Beschreibung kommen barrierefrei aus der Web-UI.
+
+## Animierte 3D-Props
+
+Die Ambient-Animationen verwenden freigestellte Einzelobjekte aus
+`web/static/assets/effects/`. Als Stilreferenz dient ebenfalls
+`web/static/assets/modes/heart_chase.webp`. Der gemeinsame Prompt lautet:
+
+```text
+Use case: stylized-concept
+Asset type: isolated high-resolution 3D prop sprite for a smart dart arcade projector
+Primary request: Render one large, instantly recognizable [SUBJECT] matching the joyful handcrafted 3D cartoon style of the supplied Heart Chase reference.
+Style/medium: polished cinematic 3D animation render; tactile painted wood, soft fabric, clay or toy-like material appropriate to the subject; rounded friendly shapes; believable depth and fine surface detail.
+Composition/framing: a single complete object centered in a square canvas, three-quarter view, generous clean margin, no cropping, readable when displayed at 50–100 px.
+Lighting/mood: warm soft studio key light, gentle contact shading on the object itself, cheerful arcade mood, crisp silhouette.
+Background: perfectly flat saturated chroma-key green or magenta, uniformly lit, with no floor, horizon, cast shadow or environmental reflection.
+Constraints: exactly one object; no dartboard; no people; no text; no letters; no logo; no watermark; no border.
+Avoid: emojis, icons, flat vector art, multiple objects, scenery, dark nightclub style, neon tubes, bloom obscuring the silhouette, transparent-looking holes except where physically required.
+```
+
+Nach der Generierung wird die Chroma-Fläche mit einer weichen Matte entfernt,
+das Ergebnis auf maximal `512 × 512 px` skaliert und als Alpha-WebP mit
+Qualitätsstufe 90 gespeichert. Die aktuelle Bibliothek umfasst:
+
+| Asset | Motiv | Verwendete Effekte |
+|---|---|---|
+| `heart.webp` | Stoffherz | Heart Chase |
+| `egg.webp` | bemaltes Spielzeugei | Dragon Eggs |
+| `cookie.webp` | weicher Schoko-Cookie | Cookie Monster |
+| `candy.webp` | eingewickeltes Bonbon | Candy Cannon |
+| `block.webp` | abgerundeter Puzzleblock | Block Drop |
+| `billiard.webp` | schwarze Achterkugel | Eight Ball |
+| `golf.webp` | Golfball | Mini Golf |
+| `wisp.webp` | freundlicher Geisterschweif | Ghost Chase |
+| `leaf.webp` | weiches Eichenblatt | Cricket, Robin Hood |
+| `mine.webp` | harmlose Spielzeugmine | Avoid Bomb, Dart Sweeper |
+| `coin.webp` | goldene Sternmünze | Risk It |
+| `gem.webp` | blauer Spielzeugedelstein | Treasure Hunt |

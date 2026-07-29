@@ -325,11 +325,13 @@ Scheibe hinter der kalibrierten SVG-Scheibe verschwindet. Eine mit derselben
 Homographie transformierte dunkle Schutzzone hält die echte Scheibe ruhig und
 kontrastreich.
 
-Modusspezifische, rein mit CSS gezeichnete Props und Partikelsysteme bewegen
-sich ausschließlich außerhalb der Scheibe: beispielsweise Stoffherzen, Eier,
-Cookies, Bonbons, Blöcke, Billardkugeln, Geister-Wisps oder Sternenflug. Das
-vermeidet fremdartige Emoji-Optik und zusätzliche Bilddownloads. Treffer und
-Miss lösen kurze Reaktionen aus; das Ergebnis friert die Kulisse ein. Bei
+Modusspezifische, hochauflösende 3D-Props werden als freigestellte Alpha-WebP-
+Sprites aus `web/static/assets/effects/` geladen und bewegen sich ausschließlich
+außerhalb der Scheibe: beispielsweise Stoffherzen, Eier, Cookies, Bonbons,
+Blöcke, Billardkugeln und Geister-Wisps. Nur Lichtspuren, Konfetti, Blitze und
+Sternenflug entstehen direkt per CSS, damit diese Partikeleffekte flüssig
+animierbar bleiben. Treffer und Miss lösen kurze Reaktionen aus; das Ergebnis
+friert die Kulisse ein. Bei
 `prefers-reduced-motion: reduce` bleiben alle Ambient-Animationen automatisch
 statisch. Treffersegmente selbst werden weiterhin ausschließlich auf der
 SVG-Geometrie hervorgehoben.
