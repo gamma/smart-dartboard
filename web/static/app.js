@@ -414,6 +414,24 @@ function controlModePrompt(game){
     ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
   </aside>`;
 }
+function genericPanel(panel, compact=false){
+  if(!panel) return '';
+  const progress=panel.progress && Number.isFinite(Number(panel.progress.max))
+    ? `<i class="generic-progress" style="--progress:${Math.max(0,Math.min(100,Number(panel.progress.value||0)/Math.max(1,Number(panel.progress.max))*100))}%"></i>`
+    : '';
+  const stats=(panel.stats||[]).map(item=>`<b><small>${escapeHtml(item.label||'')}</small><strong>${escapeHtml(item.value??'')}</strong></b>`).join('');
+  const rows=(panel.rows||[]).map(item=>`<div class="${item.state?`state-${escapeHtml(item.state)}`:''}"><span>${escapeHtml(item.label||'')}</span><strong>${escapeHtml(item.value??'')}</strong></div>`).join('');
+  const grid=panel.grid ? `<div class="generic-grid" style="--columns:${Math.max(1,Math.min(12,Number(panel.grid.columns)||1))}">${(panel.grid.cells||[]).map(cell=>`<i class="${cell.state?`state-${escapeHtml(cell.state)}`:''}" title="${escapeHtml(cell.label||'')}">${escapeHtml(cell.value??'')}</i>`).join('')}</div>` : '';
+  return `<section class="generic-mode-panel ${compact?'compact':''}">
+    <span>${escapeHtml(panel.title||'SPIELSTATUS')}</span>
+    ${panel.headline?`<h3>${escapeHtml(panel.headline)}</h3>`:''}
+    ${panel.subline?`<p>${escapeHtml(panel.subline)}</p>`:''}
+    ${progress}
+    ${stats?`<div class="generic-stats">${stats}</div>`:''}
+    ${rows?`<div class="generic-rows">${rows}</div>`:''}
+    ${grid}
+  </section>`;
+}
 function controlPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -427,6 +445,7 @@ function controlPlaying(){
     <div class="turn-darts">${turnDartCards(game)}</div>
     ${correctionPanel()}
     <div class="scoreboard">${scoreboard(game)}</div>
+    ${genericPanel(game.overlay?.panel)}
     <div class="operator-panel">
       ${overlayActionButtons(game)}
       ${game.status==='hold' ? actionButton('Weiter zum nächsten Spieler','continue','primary') : skipPlayerControls()}
@@ -473,10 +492,13 @@ function winner(){
   return game.players.find(player => player.id === game.winner_id);
 }
 function resultCopy(game, champion){
-  if(champion){
-    return {icon:'♛', label:'SPIEL ENTSCHIEDEN', title:champion.name, points:'+3 SESSIONSPUNKTE'};
+  if(game.result_type==='team_win'){
+    return {icon:'★', label:'TEAM-SIEG', title:'Gemeinsam geschafft!', points:'+3 FÜR ALLE'};
   }
-  const draw=String(game.message || '').startsWith('Unentschieden');
+  if(champion || game.result_type==='individual_win'){
+    return {icon:'♛', label:'SPIEL ENTSCHIEDEN', title:champion?.name || 'Spiel gewonnen', points:'+3 SESSIONSPUNKTE'};
+  }
+  const draw=game.result_type==='draw' || String(game.message || '').startsWith('Unentschieden');
   return draw
     ? {icon:'=', label:'GLEICHSTAND', title:'Unentschieden', points:'KEINE SESSIONSPUNKTE'}
     : {icon:'☠', label:'CHALLENGE VERLOREN', title:'Boss gewinnt', points:'KEINE SESSIONSPUNKTE'};
@@ -497,7 +519,7 @@ function controlGameResult(){
     <div class="trophy-orbit">${result.icon}</div>
     <div class="kicker">GAME COMPLETE</div>
     <h1>${escapeHtml(result.title)}</h1>
-    <p>${champion ? 'holt sich den Sieg und 3 Sessionpunkte.' : escapeHtml(game.message || 'Keine Sessionpunkte in diesem Spiel.')}</p>
+    <p>${game.result_type==='team_win' ? escapeHtml(game.message || 'Das Team gewinnt gemeinsam.') : champion ? 'holt sich den Sieg und 3 Sessionpunkte.' : escapeHtml(game.message || 'Keine Sessionpunkte in diesem Spiel.')}</p>
     ${sessionScoreStrip()}
     ${rematchPrompt()}
     <div class="result-actions">
@@ -637,6 +659,7 @@ function projectorOverlayPrompt(game){
 }
 function projectorModePanel(game){
   const overlay = game.overlay || {};
+  if(overlay.panel) return genericPanel(overlay.panel,true);
   if(overlay.cricket?.remaining?.length){
     return `<aside class="projector-mode-panel cricket-panel">
       <span>NOCH ZU SCHLIESSEN</span>
@@ -687,7 +710,7 @@ function projectorResult(){
       <div><div class="kicker">${escapeHtml(mode?.title || '')} · ENDERGEBNIS</div><h1>Finaler Spielstand</h1></div>
     </header>
     ${projectorModePanel(game)}
-    <aside class="projection-roster result-roster">${game.players.map(item=>`<span class="${item.id===game.winner_id?'winner':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
+    <aside class="projection-roster result-roster">${game.players.map(item=>`<span class="${(game.winner_ids||[]).includes(item.id)||item.id===game.winner_id?'winner':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
     <div class="victory-overlay">
       <article class="victory-card ${champion?'':'no-winner'}">
         <div class="winner-crown">${result.icon}</div>
@@ -745,6 +768,10 @@ function ringToZone(ring){
 }
 function renderBoardEvent(event){
   document.querySelectorAll('.seg.hit,.seg.miss-zone,.seg.advice-target,.seg.overlay-target,.seg.overlay-danger,.seg.overlay-bonus,.seg.overlay-owned').forEach(element=>{element.classList.remove('hit','miss-zone','advice-target','overlay-target','overlay-danger','overlay-bonus','overlay-owned'); element.style.removeProperty('--owner-color');});
+  document.querySelectorAll('.seg.overlay-zone-covered,.seg.overlay-zone-revealed,.seg.overlay-zone-mine,.seg.overlay-zone-control').forEach(element=>{
+    element.classList.remove('overlay-zone-covered','overlay-zone-revealed','overlay-zone-mine','overlay-zone-control');
+    element.style.removeProperty('--zone-color');
+  });
   const overlay = appState.experience?.game?.overlay;
   const labelLayer=$('overlayLabels');
   if(labelLayer) labelLayer.innerHTML='';
@@ -766,6 +793,17 @@ function renderBoardEvent(event){
     const segment = $(boardSegmentId(ringToZone(item.ring), item.field));
     if(segment){ segment.classList.add('overlay-owned'); segment.style.setProperty('--owner-color', item.color || '#28e7ff'); }
   });
+  const paintZones = (items) => (items || []).forEach(item => {
+    const rings=item.rings || (item.ring ? [item.ring] : []);
+    rings.forEach((ring,index)=>{
+      const segment=$(boardSegmentId(ringToZone(ring),item.field));
+      if(segment){
+        segment.classList.add(`overlay-zone-${item.role||'revealed'}`);
+        if(item.color) segment.style.setProperty('--zone-color',item.color);
+      }
+      if((index===0 || item.label_all) && item.label!==undefined && item.label!=='') paintLabel({...item,ring});
+    });
+  });
   const game=appState.experience?.game;
   const gameStatus=game?.status;
   const activeTargetsHidden = (
@@ -780,6 +818,7 @@ function renderBoardEvent(event){
     paint(overlay?.danger, 'overlay-danger');
     paint(overlay?.bonus, 'overlay-bonus');
     paintOwned(overlay?.owned);
+    paintZones(overlay?.zones);
   }
   const advice = appState.experience?.game?.advice;
   if(advice?.primary && appState.experience?.game?.status === 'running'){

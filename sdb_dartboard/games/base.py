@@ -77,6 +77,8 @@ class ThrowOutcome:
     bust: bool = False
     force_hold: bool = False
     winner_id: str | None = None
+    winner_ids: List[str] = field(default_factory=list)
+    result_type: str = ""
 
 
 class GameMode(Protocol):

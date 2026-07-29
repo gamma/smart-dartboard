@@ -42,6 +42,8 @@ class GameState:
     throws: List[ThrowEvent] = field(default_factory=list)
     status: str = "idle"
     winner_id: Optional[str] = None
+    winner_ids: List[str] = field(default_factory=list)
+    result_type: str = ""
     last_event: Optional[Dict[str, Any]] = None
     message: str = "Ready"
     options: Dict[str, Any] = field(default_factory=dict)
@@ -72,6 +74,8 @@ class GameState:
             "turn_score": self.turn_score,
             "status": self.status,
             "winner_id": self.winner_id,
+            "winner_ids": list(self.winner_ids),
+            "result_type": self.result_type,
             "message": self.message,
             "turn_start_values": dict(self.turn_start_values),
             "round_number": self.round_number,
@@ -95,6 +99,13 @@ class GameState:
         self.turn_score = snap["turn_score"]
         self.status = snap["status"]
         self.winner_id = snap["winner_id"]
+        self.winner_ids = list(
+            snap.get(
+                "winner_ids",
+                [self.winner_id] if self.winner_id else [],
+            )
+        )
+        self.result_type = str(snap.get("result_type", ""))
         self.message = snap["message"]
         self.turn_start_values = dict(snap.get("turn_start_values", {}))
         self.round_number = int(snap.get("round_number", 1))
@@ -140,6 +151,8 @@ class GameState:
             "round_number": self.round_number,
             "status": self.status,
             "winner_id": self.winner_id,
+            "winner_ids": self.winner_ids,
+            "result_type": self.result_type,
             "last_event": self.last_event,
             "message": self.message,
             "options": self.options,
@@ -362,16 +375,22 @@ class GameEngine:
         return self.state
 
     def _advance_player(self) -> None:
-        was_last_player = bool(
-            self.state.players
-            and self.state.current_player_index == len(self.state.players) - 1
-        )
-        if self.state.players:
-            self.state.current_player_index = (
-                self.state.current_player_index + 1
-            ) % len(self.state.players)
-        if was_last_player:
+        players = self.state.players
+        if not players:
+            return
+        mode = registry.get(self.state.game_type)
+        eligibility = getattr(mode, "is_player_active", None)
+        start_index = self.state.current_player_index
+        next_index = start_index
+        for offset in range(1, len(players) + 1):
+            candidate_index = (start_index + offset) % len(players)
+            candidate = players[candidate_index]
+            if eligibility is None or eligibility(self.state, candidate):
+                next_index = candidate_index
+                break
+        if next_index <= start_index:
             self.state.round_number += 1
+        self.state.current_player_index = next_index
         self.state.darts_in_turn = 0
         self.state.turn_score = 0
         player = self.state.current_player()
@@ -415,6 +434,19 @@ class GameEngine:
         if outcome.finished:
             self.state.status = "finished"
             self.state.winner_id = outcome.winner_id
+            self.state.winner_ids = list(
+                outcome.winner_ids
+                or ([outcome.winner_id] if outcome.winner_id else [])
+            )
+            self.state.result_type = outcome.result_type or (
+                "individual_win"
+                if self.state.winner_ids
+                else (
+                    "draw"
+                    if outcome.message.startswith("Unentschieden")
+                    else "challenge_loss"
+                )
+            )
         elif outcome.force_hold:
             self.state.status = "hold"
         else:

@@ -84,6 +84,8 @@ def finish_round_game(
         winner_id, message = result_message(state.players, winner_message)
         outcome.finished = True
         outcome.winner_id = winner_id
+        outcome.winner_ids = [winner_id] if winner_id else []
+        outcome.result_type = "individual_win" if winner_id else "draw"
         outcome.force_hold = False
         outcome.message = message
     return outcome
@@ -99,6 +101,8 @@ def finish_action_round_game(state: Any, winner_message: str) -> bool:
         winner_id, message = result_message(state.players, winner_message)
         state.status = "finished"
         state.winner_id = winner_id
+        state.winner_ids = [winner_id] if winner_id else []
+        state.result_type = "individual_win" if winner_id else "draw"
         state.message = message
         return True
     return False

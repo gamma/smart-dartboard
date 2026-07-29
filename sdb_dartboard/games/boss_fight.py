@@ -12,7 +12,7 @@ class BossFightMode:
         slug="boss_fight",
         title="Boss Fight",
         tagline="Alle gegen den Boss",
-        description="Gemeinsame Boss-Jagd mit Rundenlimit: Treffer verursachen Schaden, Schwachpunkte geben Bonusdamage. Der MVP holt den Spielsieg.",
+        description="Gemeinsame Boss-Jagd mit Rundenlimit: Treffer verursachen Schaden, Schwachpunkte geben Bonusdamage. Bei Erfolg gewinnt das ganze Team.",
         accent="#ff4f79",
         accent_secondary="#9b5cff",
         visual="boss-fight",
@@ -25,7 +25,7 @@ class BossFightMode:
         instructions=[
             InstructionStep("Schaden machen", "Jeder Treffer zieht Boss-HP ab.", "damage"),
             InstructionStep("Schwachpunkte", "Goldene Ziele verursachen doppelten Schaden.", "weak"),
-            InstructionStep("Zeitlimit", "Besiegt den Boss innerhalb der gewählten Runden. Der Spieler mit dem meisten Schaden wird MVP und erhält den Spielsieg.", "coop"),
+            InstructionStep("Zeitlimit", "Besiegt den Boss innerhalb der gewählten Runden. Alle erhalten den Sieg; der meiste Schaden wird nur als MVP geehrt.", "coop"),
         ],
         sound_theme="arcade",
     )
@@ -55,14 +55,15 @@ class BossFightMode:
             if is_weak:
                 self._refresh_weak(state)
         if state.mode_state["boss_hp"] <= 0:
-            winner_id, result = result_message(
+            _, result = result_message(
                 state.players, "Boss besiegt! MVP: {winner}"
             )
             return ThrowOutcome(
                 turn_value=damage,
                 message=result,
                 finished=True,
-                winner_id=winner_id,
+                winner_ids=[candidate.id for candidate in state.players],
+                result_type="team_win",
             )
         final_dart = state.darts_in_turn == 2
         final_player = state.current_player_index == len(state.players) - 1
@@ -72,7 +73,7 @@ class BossFightMode:
                 turn_value=damage,
                 message=f"Boss gewinnt mit {state.mode_state['boss_hp']} HP!",
                 finished=True,
-                winner_id=None,
+                result_type="challenge_loss",
             )
         message = (
             f"{event.get('label','')} macht {damage} Schaden"

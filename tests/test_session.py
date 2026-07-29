@@ -278,6 +278,32 @@ class SessionControllerTests(unittest.TestCase):
             all(player["session_points"] == 0 for player in state["session_statistics"])
         )
 
+    def test_coop_result_awards_session_points_to_every_player(self):
+        ada = self.controller.create_player("Ada", "nova", "#ff00aa")
+        bob = self.controller.create_player("Bob", "comet", "#28e7ff")
+        self.controller.start_session([ada["id"], bob["id"]])
+        self.controller.prepare_game("space_defender", {"waves": 4})
+        self.controller.start_game()
+        self.controller.set_screen("playing")
+        self.controller.engine.state.mode_state.update(
+            {"ships": [], "wave": 4, "cleanup": True}
+        )
+        self.controller.engine.state.current_player_index = 1
+        self.controller.engine.state.darts_in_turn = 2
+
+        self.controller.process_event(
+            {"type": "miss", "label": "MISS", "score": 0, "seq": 720}
+        )
+
+        state = self.controller.public_state()
+        standings = {
+            player["id"]: player for player in state["session_statistics"]
+        }
+        self.assertEqual("game_result", state["screen"])
+        self.assertEqual("team_win", state["game"]["result_type"])
+        self.assertEqual(3, standings[ada["id"]]["session_points"])
+        self.assertEqual(3, standings[bob["id"]]["session_points"])
+
     def test_correction_rewrites_persisted_statistics(self):
         ada, _ = self._start_game()
         self.controller.process_event(

@@ -42,6 +42,22 @@ class StorageTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.store.start_session(["missing"])
 
+    def test_cooperative_win_awards_every_winner(self):
+        ada = self.store.create_player("Ada")
+        bob = self.store.create_player("Bob")
+        session = self.store.start_session([ada["id"], bob["id"]])
+        game_id = self.store.start_game(session["id"], "space_defender", {})
+        self.store.finish_game(game_id, winner_ids=[ada["id"], bob["id"]])
+
+        stats = {
+            item["id"]: item
+            for item in self.store.session_statistics(session["id"])
+        }
+        self.assertEqual(1, stats[ada["id"]]["wins"])
+        self.assertEqual(1, stats[bob["id"]]["wins"])
+        self.assertEqual(3, stats[ada["id"]]["session_points"])
+        self.assertEqual(3, stats[bob["id"]]["session_points"])
+
     def test_database_health_probe(self):
         self.assertTrue(self.store.ping())
 

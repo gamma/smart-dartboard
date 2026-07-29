@@ -222,7 +222,11 @@ class SessionController:
         if self.engine.state.status == "finished" and self.game_id:
             game = self.store.get_game(self.game_id)
             if game and game["status"] != "finished":
-                self.store.finish_game(self.game_id, self.engine.state.winner_id)
+                self.store.finish_game(
+                    self.game_id,
+                    self.engine.state.winner_id,
+                    self.engine.state.winner_ids,
+                )
             self.screen = "game_result"
         self._persist()
 
@@ -318,7 +322,11 @@ class SessionController:
                 ],
             )
             if self.engine.state.status == "finished":
-                self.store.finish_game(self.game_id, self.engine.state.winner_id)
+                self.store.finish_game(
+                    self.game_id,
+                    self.engine.state.winner_id,
+                    self.engine.state.winner_ids,
+                )
                 self.screen = "game_result"
             elif was_finished:
                 self.store.reopen_game(self.game_id)
@@ -328,7 +336,11 @@ class SessionController:
     def game_action(self, action: str, payload: Dict[str, Any] | None = None) -> None:
         self.engine.handle_action(action, payload or {})
         if self.engine.state.status == "finished" and self.game_id:
-            self.store.finish_game(self.game_id, self.engine.state.winner_id)
+            self.store.finish_game(
+                self.game_id,
+                self.engine.state.winner_id,
+                self.engine.state.winner_ids,
+            )
             self.screen = "game_result"
         self._persist()
 

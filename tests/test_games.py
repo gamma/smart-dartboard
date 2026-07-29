@@ -22,15 +22,26 @@ class GameRegistryTests(unittest.TestCase):
         self.assertEqual(
             {
                 "avoid_bomb",
+                "block_drop",
                 "boss_fight",
+                "candy_cannon",
                 "color_clash",
+                "cookie_monster",
                 "countup",
                 "cricket",
+                "dart_sweeper",
                 "darts_bingo",
+                "dragon_eggs",
+                "eight_ball",
+                "ghost_chase",
+                "heart_chase",
                 "king_of_board",
                 "lightning_round",
+                "mini_golf",
                 "risk_it",
+                "robin_hood",
                 "simon_says",
+                "space_defender",
                 "target_rush",
                 "treasure_hunt",
                 "x01",
@@ -352,6 +363,11 @@ class GameEngineTests(unittest.TestCase):
         engine.handle_event(hit(60, 400, multiplier=3, label="T20"))
         self.assertEqual("finished", engine.state.status)
         self.assertEqual(0, engine.state.mode_state["boss_hp"])
+        self.assertEqual("team_win", engine.state.result_type)
+        self.assertEqual(
+            {player.id for player in engine.state.players},
+            set(engine.state.winner_ids),
+        )
 
     def test_boss_fight_can_be_lost_at_round_limit(self):
         engine = GameEngine()

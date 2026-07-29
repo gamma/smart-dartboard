@@ -83,11 +83,24 @@ class DartboardStore:
                 CREATE INDEX IF NOT EXISTS idx_games_session ON games(session_id);
                 CREATE INDEX IF NOT EXISTS idx_throws_game ON throws(game_id);
                 CREATE INDEX IF NOT EXISTS idx_throws_player ON throws(player_id);
+                CREATE TABLE IF NOT EXISTS game_winners (
+                    game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,
+                    player_id TEXT NOT NULL REFERENCES players(id),
+                    PRIMARY KEY (game_id, player_id)
+                );
+                CREATE INDEX IF NOT EXISTS idx_game_winners_player
+                    ON game_winners(player_id);
                 CREATE TABLE IF NOT EXISTS runtime_state (
                     key TEXT PRIMARY KEY,
                     value_json TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 );
+                """
+            )
+            self._connection.execute(
+                """
+                INSERT OR IGNORE INTO game_winners(game_id, player_id)
+                SELECT id, winner_id FROM games WHERE winner_id IS NOT NULL
                 """
             )
 
@@ -202,11 +215,26 @@ class DartboardStore:
                 (game_id, seq, player_id, json.dumps(event), score_after, utc_now()),
             )
 
-    def finish_game(self, game_id: str, winner_id: Optional[str]) -> None:
+    def finish_game(
+        self,
+        game_id: str,
+        winner_id: Optional[str] = None,
+        winner_ids: Optional[Iterable[str]] = None,
+    ) -> None:
+        winners = list(dict.fromkeys(winner_ids or ([winner_id] if winner_id else [])))
+        legacy_winner = winners[0] if len(winners) == 1 else None
         with self._lock, self._connection:
             self._connection.execute(
                 "UPDATE games SET status='finished', winner_id=?, ended_at=? WHERE id=?",
-                (winner_id, utc_now(), game_id),
+                (legacy_winner, utc_now(), game_id),
+            )
+            self._connection.execute(
+                "DELETE FROM game_winners WHERE game_id=?",
+                (game_id,),
+            )
+            self._connection.executemany(
+                "INSERT INTO game_winners(game_id, player_id) VALUES(?, ?)",
+                [(game_id, player_id) for player_id in winners],
             )
 
     def abort_game(self, game_id: str) -> None:
@@ -220,11 +248,19 @@ class DartboardStore:
                 """,
                 (utc_now(), game_id),
             )
+            self._connection.execute(
+                "DELETE FROM game_winners WHERE game_id=?",
+                (game_id,),
+            )
 
     def reopen_game(self, game_id: str) -> None:
         with self._lock, self._connection:
             self._connection.execute(
                 "UPDATE games SET status='running', winner_id=NULL, ended_at=NULL WHERE id=?",
+                (game_id,),
+            )
+            self._connection.execute(
+                "DELETE FROM game_winners WHERE game_id=?",
                 (game_id,),
             )
 
@@ -302,7 +338,7 @@ class DartboardStore:
         query = """
             SELECT p.id, p.name, p.avatar, p.color,
                    COUNT(DISTINCT CASE WHEN g.status='finished' THEN g.id END) AS games,
-                   COUNT(DISTINCT CASE WHEN g.winner_id=p.id THEN g.id END) AS wins,
+                   COUNT(DISTINCT CASE WHEN gw.player_id IS NOT NULL THEN g.id END) AS wins,
                    COUNT(t.id) AS darts,
                    COALESCE(SUM(CAST(json_extract(t.event_json, '$.score') AS INTEGER)), 0) AS total_points,
                    COALESCE(MAX(CAST(json_extract(t.event_json, '$.score') AS INTEGER)), 0) AS best_dart,
@@ -312,6 +348,8 @@ class DartboardStore:
             LEFT JOIN games g ON g.session_id=sp.session_id
             LEFT JOIN throws t
               ON t.game_id=g.id AND t.player_id=p.id AND g.status!='aborted'
+            LEFT JOIN game_winners gw
+              ON gw.game_id=g.id AND gw.player_id=p.id
             GROUP BY p.id
             ORDER BY wins DESC, total_points DESC, lower(p.name)
         """
@@ -338,7 +376,7 @@ class DartboardStore:
         query = """
             SELECT p.id, p.name, p.avatar, p.color,
                    COUNT(DISTINCT g.id) AS games,
-                   COUNT(DISTINCT CASE WHEN g.winner_id=p.id THEN g.id END) AS wins,
+                   COUNT(DISTINCT CASE WHEN gw.player_id IS NOT NULL THEN g.id END) AS wins,
                    COUNT(t.id) AS darts,
                    COALESCE(SUM(CAST(json_extract(t.event_json, '$.score') AS INTEGER)), 0) AS total_points,
                    COALESCE(MAX(CAST(json_extract(t.event_json, '$.score') AS INTEGER)), 0) AS best_dart,
@@ -348,6 +386,8 @@ class DartboardStore:
             LEFT JOIN games g
               ON g.session_id=sp.session_id AND g.status='finished'
             LEFT JOIN throws t ON t.game_id=g.id AND t.player_id=p.id
+            LEFT JOIN game_winners gw
+              ON gw.game_id=g.id AND gw.player_id=p.id
             WHERE sp.session_id=?
             GROUP BY p.id
             ORDER BY wins DESC, total_points DESC, lower(p.name)
