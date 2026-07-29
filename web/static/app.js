@@ -37,6 +37,11 @@ const AVATARS = [
   {id:'party', emoji:'🥳', label:'Party'},
 ];
 const COLORS = ['#28e7ff','#ffb52b','#3dff91','#ff4f79','#a77bff','#ffffff'];
+const NEON_MODE_ASSETS = new Set([
+  'avoid_bomb','boss_fight','color_clash','countup','cricket','darts_bingo',
+  'king_of_board','lightning_round','risk_it','simon_says','target_rush',
+  'treasure_hunt','x01',
+]);
 
 function $(id){ return document.getElementById(id); }
 function isProjector(){ return location.pathname.includes('projector'); }
@@ -50,6 +55,9 @@ function modeBySlug(slug){
 }
 function modeAsset(slug){
   const safe = /^[a-z0-9_]+$/.test(String(slug || '')) ? slug : 'countup';
+  if(appState.experience?.art_theme === 'neon' && NEON_MODE_ASSETS.has(safe)){
+    return `/static/assets/themes/neon/modes/${encodeURIComponent(safe)}.webp`;
+  }
   return `/static/assets/modes/${encodeURIComponent(safe)}.webp`;
 }
 function avatarEmoji(avatar){
@@ -556,6 +564,7 @@ function controlCalibration(){
   return `<section class="control-scene calibration-control">
     ${sceneHeader('EINMALIGES SETUP','Projektor ausrichten','Verschiebe die vier Eckpunkte, bis der äußere Ring exakt auf der echten Scheibe liegt.')}
     <div class="calibration-grid">${cornerControls(appState.experience.calibration)}</div>
+    ${artThemeSetup()}
     ${soundSetup()}
     <p class="calibration-note">Gemeldete Projektorfläche: <b>${geometry.width} × ${geometry.height}</b>. „Rund und mittig“ setzt eine unverzerrte quadratische Fläche mit 5 % Sicherheitsrand auf der kürzeren Browserseite. Danach kannst du die vier Ecken fein auf die echte Scheibe legen.</p>
     <footer class="sticky-actions">
@@ -563,6 +572,16 @@ function controlCalibration(){
       ${actionButton('Rund und mittig zurücksetzen','reset-calibration','secondary')}
       ${actionButton('Kalibrierung speichern','save-calibration')}
     </footer>
+  </section>`;
+}
+function artThemeSetup(){
+  const theme=appState.experience.art_theme || 'cartoon';
+  return `<section class="art-theme-setup">
+    <div><span>ARTWORK-THEME</span><h2>${theme==='neon'?'Classic Neon':'Playful Cartoon'}</h2><p>Neue Modi ohne altes Neon-Cover verwenden automatisch das Cartoon-Artwork.</p></div>
+    <div class="segmented">
+      <button class="${theme==='cartoon'?'selected':''}" data-action="art-theme" data-theme="cartoon">Cartoon</button>
+      <button class="${theme==='neon'?'selected':''}" data-action="art-theme" data-theme="neon">Classic Neon</button>
+    </div>
   </section>`;
 }
 function soundSetup(){
@@ -1075,6 +1094,7 @@ document.addEventListener('click',async event=>{
   if(name==='sound-enable'){ await action('/api/sound/settings',{enabled:true}); return; }
   if(name==='sound-disable'){ await action('/api/sound/settings',{enabled:false}); return; }
   if(name==='sound-test'){ await action('/api/sound/test'); return; }
+  if(name==='art-theme'){ await action('/api/art-theme',{theme:target.dataset.theme}); return; }
 });
 document.addEventListener('submit',async event=>{
   if(event.target.id!=='newPlayerForm') return;

@@ -16,7 +16,8 @@ Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 - Sessionwertung mit drei Punkten pro Sieg sowie dauerhafte Gesamtstatistiken
 - schnelle Revanche nach Spielende per doppeltem Spielerwechsel-Tastendruck
 - wertungsfreier Spielabbruch zurück zur Spielauswahl
-- grafische Spielauswahl mit 3D-Renderings
+- grafische Spielauswahl mit umschaltbarem Playful-Cartoon- und
+  Classic-Neon-Artwork-Theme
 - eigener Anleitungsbildschirm pro Spielmodus auf beiden Displays
 - 24 automatisch entdeckte Spielmodule: Klassiker, Party-, Challenge- und
   Koop-Modi einschließlich Heart Chase, Space Defender, Block Drop und

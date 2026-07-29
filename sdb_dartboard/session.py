@@ -55,6 +55,7 @@ class SessionController:
         }
         self.projector_geometry = {"width": 1600, "height": 900}
         self.sound = {"enabled": False, "status": "disabled"}
+        self.art_theme = "cartoon"
         self.hardware: Dict[str, Any] = {"enabled": False, "status": "disabled"}
         self._restore()
 
@@ -79,6 +80,8 @@ class SessionController:
             "enabled": sound_enabled,
             "status": "starting" if sound_enabled else "disabled",
         }
+        stored_theme = self.store.get_runtime_value("art_theme", "cartoon")
+        self.art_theme = stored_theme if stored_theme in {"cartoon", "neon"} else "cartoon"
 
     def _persist(self) -> None:
         self.store.set_runtime_value(
@@ -120,6 +123,7 @@ class SessionController:
             "calibration": self.calibration,
             "projector_geometry": self.projector_geometry,
             "sound": self.sound,
+            "art_theme": self.art_theme,
             "hardware": self.hardware,
             "rematch": {
                 "armed": rematch_armed,
@@ -439,6 +443,12 @@ class SessionController:
             raise ValueError(f"Unknown sound status: {status}")
         self.sound = {**self.sound, "status": status}
         self.store.set_runtime_value("sound", self.sound)
+
+    def set_art_theme(self, theme: str) -> None:
+        if theme not in {"cartoon", "neon"}:
+            raise ValueError(f"Unknown artwork theme: {theme}")
+        self.art_theme = theme
+        self.store.set_runtime_value("art_theme", theme)
 
 
 class EventPipeline:

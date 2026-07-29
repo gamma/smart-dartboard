@@ -180,6 +180,10 @@ class SoundStatusRequest(BaseModel):
     status: str = Field(pattern=r"^(ready|blocked|unavailable)$")
 
 
+class ArtThemeRequest(BaseModel):
+    theme: str = Field(pattern=r"^(cartoon|neon)$")
+
+
 class ThrowCorrectionRequest(BaseModel):
     turn_index: int = Field(ge=0, le=2)
     event: DartEventRequest
@@ -353,6 +357,13 @@ async def sound_status(req: SoundStatusRequest):
 async def sound_test():
     sequence = int(asyncio.get_running_loop().time() * 1000)
     await publish_state({"type": "sound_test", "seq": sequence})
+    return controller.public_state()
+
+
+@app.post("/api/art-theme")
+async def art_theme(req: ArtThemeRequest):
+    controller.set_art_theme(req.theme)
+    await publish_state({"type": "art_theme", "theme": req.theme})
     return controller.public_state()
 
 

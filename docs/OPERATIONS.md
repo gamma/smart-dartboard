@@ -48,7 +48,8 @@ empfohlene Rückweg.
 5. `http://<host>:8000/control` auf dem Tablet öffnen.
 6. `http://localhost:8000/projector` auf dem Projektorrechner öffnen.
 7. Über **Projektor kalibrieren** das Board-Setup öffnen, die Scheibe
-   deckungsgleich ausrichten und dort **Projektor-Sound einschalten**.
+   deckungsgleich ausrichten, das gewünschte Artwork-Theme auswählen und dort
+   **Projektor-Sound einschalten**.
 8. Den **Testton** im Board-Setup auslösen und den Status `BEREIT` prüfen.
 
 Ohne verbundenes BLE-Board läuft die Projektoransicht im Testmodus. In diesem

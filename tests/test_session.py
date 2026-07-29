@@ -136,6 +136,14 @@ class SessionControllerTests(unittest.TestCase):
             self.controller.public_state()["sound"],
         )
 
+    def test_art_theme_is_validated_and_persisted(self):
+        self.controller.set_art_theme("neon")
+        self.controller.close()
+        self.controller = SessionController(self.database)
+        self.assertEqual("neon", self.controller.public_state()["art_theme"])
+        with self.assertRaisesRegex(ValueError, "Unknown artwork theme"):
+            self.controller.set_art_theme("unknown")
+
     def test_finished_game_cannot_be_returned_to_playing_screen(self):
         self._start_game()
         self.controller.engine.state.status = "finished"

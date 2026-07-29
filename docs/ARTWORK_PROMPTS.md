@@ -10,6 +10,19 @@ Arcade-Spielzeug: warm, farbenfroh, charmant und familienfreundlich.
 Neue Cover verwenden `web/static/assets/modes/heart_chase.webp` als
 Stilreferenz. Motive und Requisiten kommen aus dem jeweiligen Modus-Prompt.
 
+## Theme-Packs
+
+Das aktive Artwork-Theme wird im Board-Setup gewählt und dauerhaft gespeichert:
+
+- `cartoon` verwendet `web/static/assets/modes/<slug>.webp` und ist Standard.
+- `neon` verwendet die erhaltenen Bestandscover unter
+  `web/static/assets/themes/neon/modes/<slug>.webp`.
+
+Das Classic-Neon-Pack enthält die 13 historischen Cover. Modi, die erst danach
+entstanden sind, fallen im Neon-Theme automatisch auf ihr Cartoon-Cover zurück.
+Dadurch bleibt das historische Pack unverändert erhalten, ohne für neue Modi
+künstlich Neonbilder erzeugen zu müssen.
+
 ## Basis-Prompt
 
 ```text
