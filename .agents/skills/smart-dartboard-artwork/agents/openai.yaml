@@ -1,0 +1,4 @@
+interface:
+  display_name: "Smart Dartboard Artwork"
+  short_description: "Theme-konforme Arcade-Artworks erzeugen"
+  default_prompt: "Use $smart-dartboard-artwork to create or update a theme-consistent game-mode artwork for this project."

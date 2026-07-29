@@ -23,6 +23,10 @@ entstanden sind, fallen im Neon-Theme automatisch auf ihr Cartoon-Cover zurück.
 Dadurch bleibt das historische Pack unverändert erhalten, ohne für neue Modi
 künstlich Neonbilder erzeugen zu müssen.
 
+Der projektlokale Skill
+`.agents/skills/smart-dartboard-artwork/SKILL.md` beschreibt den verbindlichen
+Generierungs-, Prüf- und Publishing-Ablauf für beide Packs.
+
 ## Basis-Prompt
 
 ```text
@@ -38,6 +42,31 @@ Lighting/mood: soft warm key light, gentle shadows, optimistic and inviting; cri
 Color palette: warm cream, sky blue, leafy green, coral, mustard and mode-specific colors; natural dartboard colors may be simplified but remain recognizable.
 Constraints: one coherent scene; regulation board geometry; visually readable at card size; no people; no logos; no brands; no watermark; no frame; no UI.
 Avoid: any text, letters or title typography, poster layout, flat vector art, duplicated boards, deformed darts, dark nightclub scenes, black void backgrounds, neon tubes, cyberpunk, holograms, lasers, heavy bloom, ominous mood, photoreal product advertising.
+```
+
+## Classic-Neon-Basis-Prompt
+
+Neue Neon-Cover verwenden
+`web/static/assets/themes/neon/modes/countup.webp` als primäre Stilreferenz.
+Je nach Motiv dient zusätzlich eines der Bestandscover als Akzentreferenz:
+`target_rush.webp` für Cyan-Ziellicht, `treasure_hunt.webp` für warmes Gold und
+`boss_fight.webp` für violette Energie. Referenzen bestimmen ausschließlich
+Stil und Bildaufbau; ihre konkreten Treffer, Pfeile und Effekte werden nicht
+kopiert.
+
+```text
+Use case: stylized-concept
+Asset type: cinematic game-mode cover for a touch-controlled smart dart arcade
+Primary request: Create a premium cinematic Classic Neon interpretation of the specified dart game mode, matching the supplied historical Smart Dartboard covers.
+Input images: the Countup cover is the primary style reference; the optional second cover is an accent and lighting reference only.
+Scene/backdrop: a dark upscale arcade or tournament hall with restrained architectural detail, atmospheric depth and a subtly reflective floor or counter.
+Subject: one recognizable regulation sisal dartboard is the hero object; express the game mode through a small number of readable darts, practical light accents and physically plausible themed props.
+Style/medium: high-detail cinematic 3D render with realistic tactile board fibers, metal dividers, premium dark materials and controlled sci-fi arcade lighting; dramatic but believable rather than cartoon or graphic design.
+Composition/framing: landscape 3:2; dartboard centered slightly right and shown large; generous dark negative space on the left and lower-left for UI copy; strong depth; no important detail at the outer edges.
+Lighting/mood: low-key premium arcade lighting, crisp board face, cyan/blue foundation with one mode-specific accent color, selective rim light, restrained haze and bloom, readable shadow detail.
+Color palette: black, charcoal and natural dartboard cream/green/red, anchored by electric cyan or blue plus one mode-specific accent such as amber, magenta, violet or green.
+Constraints: one coherent scene; regulation board geometry and number order; visually readable at card size; no people; no logos; no brands; no watermark; no frame; no UI.
+Avoid: any text, letters or title typography, poster layout, flat vector art, playful toy materials, cute mascots, duplicated boards, malformed darts, impossible board geometry, generic cyberpunk city scenery, excessive laser clutter, blown highlights, heavy bloom obscuring segments, black crush, horror imagery.
 ```
 
 ## Modusspezifische Ergänzungen
@@ -74,6 +103,33 @@ Avoid: any text, letters or title typography, poster layout, flat vector art, du
 Generierte Bilder werden mittig auf `900 × 640 px` beschnitten und als
 verlustbehaftetes WebP mit Qualitätsstufe 88 gespeichert. In das Bild wird kein
 Titel eingebrannt; Titel und Beschreibung kommen barrierefrei aus der Web-UI.
+
+## Prompt- und Herkunftsnachweis
+
+Für jedes neu erzeugte oder ersetzte Asset wird zusammen mit der Bildänderung
+festgehalten:
+
+- Theme, Slug und endgültiger vollständiger Prompt,
+- verwendete Referenzdateien,
+- Generator und Modellbezeichnung,
+- Generierungsdatum,
+- wesentliche Nachbearbeitung sowie
+- bekannte Lizenz- oder Nutzungsbedingungen.
+
+Fehlende Angaben historischer Bestandsbilder werden als `unbekannt` markiert
+und nicht nachträglich geraten. Für ein Publishing-Review ist unbekannte
+Herkunft oder ungeklärte Nutzung ausdrücklich als offener Punkt zu behandeln.
+
+### Aktueller Altbestand
+
+| Bestand | Stilrezept | Exakter finaler Prompt | Generator/Modell/Datum | Lizenznachweis |
+|---|---|---|---|---|
+| Playful-Cartoon-Cover | Basis-Prompt und Modusmotive dokumentiert | unbekannt | unbekannt | unbekannt |
+| Classic-Neon-Cover | Basis-Prompt nachträglich aus dem Referenzsatz abgeleitet | unbekannt | unbekannt | unbekannt |
+| animierte 3D-Props | gemeinsamer Prompt und Motive dokumentiert | unbekannt | unbekannt | unbekannt |
+
+Der Neon-Basis-Prompt beschreibt somit reproduzierbar die sichtbare
+Bildsprache, ist aber kein behaupteter Originalprompt der historischen Bilder.
 
 ## Animierte 3D-Props
 
