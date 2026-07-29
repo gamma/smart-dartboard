@@ -142,11 +142,11 @@ ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
   der lokalen Konvertierung nicht übernommen wurde. Die Zuordnung bleibt über
   ImageGen-Call-ID, Konvertierungsbefehl und Git-Commit rekonstruierbar.
 
-| Bestand | Erzeugung und Referenzen | Bildmodell/Datum | Nachbearbeitung | Offener Lizenzpunkt |
+| Bestand | Erzeugung und Referenzen | Bildmodell/Datum | Nachbearbeitung | Lizenzstatus |
 |---|---|---|---|---|
-| Playful-Cartoon-Cover | 24 ImageGen-Ergebnisse; `heart_chase` nur aus Text erzeugt, danach als interne Stilreferenz für alle weiteren Cover | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | ImageMagick: mittiger Zuschnitt auf 900 × 640, WebP-Qualität 88 | endgültigen Rechteinhaber bestätigen |
-| Classic-Neon-Cover | 13 ImageGen-Ergebnisse; `countup`, `x01` und `cricket` nur aus Text, danach als interne Stilreferenzen für die weiteren Neon-Cover | `gpt-image` 2.0; 28.–29.07.2026; gesteuert mit `gpt-5.6-sol` | historische Versionen aus Git-Commit `54ba4a3` wiederhergestellt, mittig auf 900 × 640 gebracht und als WebP mit Qualität 88 exportiert | endgültigen Rechteinhaber bestätigen |
-| animierte 3D-Props | 13 ImageGen-Ergebnisse; zwölf Props mit `heart_chase` als interner Referenz, `candy_overheat` mit `candy_cannon` und `candy` | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt, beschnitten, auf höchstens 512 × 512 skaliert und als Alpha-WebP exportiert; `candy_overheat` 768 × 768 | endgültigen Rechteinhaber bestätigen |
+| Playful-Cartoon-Cover | 24 ImageGen-Ergebnisse; `heart_chase` nur aus Text erzeugt, danach als interne Stilreferenz für alle weiteren Cover | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | ImageMagick: mittiger Zuschnitt auf 900 × 640, WebP-Qualität 88 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
+| Classic-Neon-Cover | 13 ImageGen-Ergebnisse; `countup`, `x01` und `cricket` nur aus Text, danach als interne Stilreferenzen für die weiteren Neon-Cover | `gpt-image` 2.0; 28.–29.07.2026; gesteuert mit `gpt-5.6-sol` | historische Versionen aus Git-Commit `54ba4a3` wiederhergestellt, mittig auf 900 × 640 gebracht und als WebP mit Qualität 88 exportiert | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
+| animierte 3D-Props | 13 ImageGen-Ergebnisse; zwölf Props mit `heart_chase` als interner Referenz, `candy_overheat` mit `candy_cannon` und `candy` | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt, beschnitten, auf höchstens 512 × 512 skaliert und als Alpha-WebP exportiert; `candy_overheat` 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 
 Der Neon-Basis-Prompt beschreibt somit reproduzierbar die sichtbare
 Bildsprache. Die historischen Einzelprompts sind zusätzlich in der lokalen

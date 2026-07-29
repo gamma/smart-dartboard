@@ -59,13 +59,13 @@ Vor einer öffentlichen Veröffentlichung:
 3. Alle Links, Alternativtexte und den Lightbox-Dialog testen.
 4. `node --check website/app.js` ausführen.
 5. Die Aussagen zu Moduszahl und Funktionen mit `README.md` abgleichen.
-6. Den endgültigen Rechteinhaber in `NOTICE`, `ASSETS_LICENSE.md` und den
-   Attributionstexten bestätigen.
-7. Den rekonstruierten Herkunftsnachweis in `docs/ARTWORK_PROMPTS.md` prüfen
-   und die freigegebenen Pfade mit dem bestätigten Rechteinhaber in die Tabelle
-   `Cleared assets` in `ASSETS_LICENSE.md` eintragen.
+6. Prüfen, dass `Gerry Weißbach (gamma / gamma production)` in `NOTICE`,
+   `ASSETS_LICENSE.md` und den Attributionstexten unverändert genannt ist.
+7. Für seit Provenienz-Commit `0069737` neu hinzugekommene Artworks einen
+   Herkunftsnachweis ergänzen und sie ausdrücklich in `ASSETS_LICENSE.md`
+   freigeben.
 8. Erst danach den manuellen Pages-Workflow starten.
 
-Apache-2.0 ist für den Code eingerichtet. Die Punkte 6 und 7 bleiben vor einem
-öffentlichen Release echte Blocker und sollten nicht durch Vermutungen ersetzt
-werden.
+Apache-2.0 ist für den Code eingerichtet; die zum 30.07.2026 vorhandenen
+Artworks und Screenshots sind in `ASSETS_LICENSE.md` unter CC BY-NC-SA 4.0
+freigegeben.

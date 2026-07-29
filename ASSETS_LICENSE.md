@@ -10,7 +10,8 @@ License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
 Required attribution:
 
 ```text
-Smart Dartboard contributors — CC BY-NC-SA 4.0
+Smart Dartboard visual assets © 2026 Gerry Weißbach
+(gamma / gamma production) — CC BY-NC-SA 4.0
 https://github.com/gamma/smart-dartboard
 ```
 
@@ -27,38 +28,29 @@ This prevents the repository from offering rights it may not own.
 
 ### Cleared assets
 
-No visual asset has been cleared yet.
-
 | Path or glob | Rights holder | Source and references | Cleared on |
 |---|---|---|---|
-| — | — | — | — |
+| `web/static/assets/modes/*.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; text-only Cartoon anchor and project-internal references; provenance commit `0069737` | 2026-07-30 |
+| `web/static/assets/themes/neon/modes/*.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; text-only Neon anchors and project-internal references; provenance commit `0069737` | 2026-07-30 |
+| `web/static/assets/effects/*.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; project-internal references and local chroma-key processing; provenance commit `0069737` | 2026-07-30 |
+| `website/assets/modes/*.webp` | Gerry Weißbach (gamma / gamma production) | Copies of the cleared Cartoon covers | 2026-07-30 |
+| `website/assets/neon/*.webp` | Gerry Weißbach (gamma / gamma production) | Copies of the cleared Classic-Neon covers | 2026-07-30 |
+| `website/assets/screenshots/*.jpg` | Gerry Weißbach (gamma / gamma production) | Local Playwright/WebKit captures of the cleared project UI and artworks | 2026-07-30 |
 
-## Pending asset groups
+Entries cover the files present at provenance commit `0069737`. A later file
+matching one of these globs must receive its own provenance review before it is
+treated as cleared.
 
-The project owner has stated that the existing graphics were generated locally
-with OpenAI ImageGen, with the workflow mostly orchestrated by GPT-5.6-sol.
-The local generation records and surviving source PNGs further identify the
-generator as OpenAI `gpt-image` version 2.0. The records contain 50 ImageGen
-assets selected from 53 generated results: 37 covers and 13 effects are
-currently included, while three cover candidates were discarded or replaced.
+## Provenance summary
+
+The cleared graphics were generated locally with OpenAI ImageGen, with the
+workflow orchestrated by GPT-5.6-sol. The local generation records and
+surviving source PNGs identify the generator as OpenAI `gpt-image` version 2.0.
+The repository contains 50 selected ImageGen assets: 37 covers and 13 effects.
 All supplied image references point to assets created earlier within this
-project; no external image reference appears in the recorded calls.
-
-The following groups remain excluded until the final rights-holder name has
-been confirmed and entered in the cleared-assets table:
-
-- `web/static/assets/modes/**`
-- `web/static/assets/themes/**`
-- `web/static/assets/effects/**`
-- `website/assets/modes/**`
-- `website/assets/neon/**`
-- `website/assets/screenshots/**`
-
-The Website copies do not gain a separate license merely because they duplicate
-or depict another asset. The Website screenshots were captured locally with
-Playwright and WebKit by the project workflow, but they depict the pending game
-artworks and therefore remain pending with them. Detailed provenance notes are
-maintained in `docs/ARTWORK_PROMPTS.md`.
+project; no external image reference appears in the recorded calls. The
+Website screenshots were captured locally with Playwright and WebKit. Detailed
+provenance notes are maintained in `docs/ARTWORK_PROMPTS.md`.
 
 ## Excluded brand assets
 
@@ -67,6 +59,6 @@ are not licensed under CC BY-NC-SA 4.0. See `TRADEMARKS.md`.
 
 ## Commercial licensing
 
-The rights holder may offer the same cleared assets under separate commercial
-terms. The non-commercial Creative Commons grant remains in force for copies
-already distributed under it.
+Gerry Weißbach (gamma / gamma production) may offer the same cleared assets
+under separate commercial terms. The non-commercial Creative Commons grant
+remains in force for copies already distributed under it.
