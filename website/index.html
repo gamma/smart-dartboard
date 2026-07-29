@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#071018">
+  <meta name="description" content="Smart Dartboard verwandelt eine echte Dartscheibe mit Projektor, Touch-Steuerung und modularen Spielmodi in eine kleine Arcade.">
+  <title>Smart Dartboard — Eine echte Scheibe. Eine ganze Spielhalle.</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./app.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Zum Inhalt springen</a>
+
+  <header class="site-header" data-header>
+    <a class="brand" href="#top" aria-label="Smart Dartboard Startseite">
+      <span class="brand-mark" aria-hidden="true"><i></i></span>
+      <span><b>SMART DARTS</b><small>ARCADE SYSTEM</small></span>
+    </a>
+    <button class="nav-toggle" type="button" aria-expanded="false" aria-controls="site-nav" data-nav-toggle>
+      <span></span><span></span>
+      <span class="sr-only">Navigation öffnen</span>
+    </button>
+    <nav id="site-nav" class="site-nav" aria-label="Hauptnavigation" data-nav>
+      <a href="#erlebnis">Erlebnis</a>
+      <a href="#spielmodi">Spielmodi</a>
+      <a href="#technik">Technik</a>
+      <a class="nav-github" href="https://github.com/gamma/smart-dartboard">GitHub <span aria-hidden="true">↗</span></a>
+    </nav>
+  </header>
+
+  <main id="main">
+    <section id="top" class="hero">
+      <div class="hero-glow hero-glow-one"></div>
+      <div class="hero-glow hero-glow-two"></div>
+      <div class="hero-copy reveal">
+        <p class="eyebrow"><span></span>DARTS, ABER ARCADE.</p>
+        <h1>Eine echte Scheibe.<br><em>Eine ganze Spielhalle.</em></h1>
+        <p class="hero-lede">
+          Smart Dartboard legt digitale Spielwelten exakt über ein echtes Board.
+          Wählen, werfen, jubeln – mit Projektor, Touch-Controller, Sound und
+          Spielmodi, die sich jedes Mal anders anfühlen.
+        </p>
+        <div class="hero-actions">
+          <a class="button button-primary" href="#gameplay">Gameplay ansehen <span>↓</span></a>
+          <a class="button button-ghost" href="https://github.com/gamma/smart-dartboard">Projekt auf GitHub <span>↗</span></a>
+        </div>
+        <div class="hero-notes" aria-label="Produkteigenschaften">
+          <span><i></i> Lokaler Betrieb</span>
+          <span><i></i> BLE-Dartboard</span>
+          <span><i></i> Point &amp; Click</span>
+        </div>
+      </div>
+
+      <div class="hero-visual reveal" data-delay="120">
+        <div class="screen screen-projector">
+          <div class="screen-bar"><span></span><span></span><span></span><b>PROJECTOR · LIVE</b></div>
+          <img src="./assets/screenshots/projector-candy-cannon.jpg" alt="Candy Cannon auf dem Projektor: Das Bull ist als FIRE-Ziel markiert.">
+        </div>
+        <div class="screen screen-controller">
+          <div class="screen-bar"><span></span><span></span><span></span><b>SESSION CONTROL</b></div>
+          <img src="./assets/screenshots/control-candy-cannon.jpg" alt="Touch-Controller während einer Candy-Cannon-Runde.">
+        </div>
+        <div class="live-pill"><i></i> ECHTE TESTSESSION</div>
+      </div>
+    </section>
+
+    <section class="proof-strip" aria-label="Projektumfang">
+      <div><strong>24</strong><span>Spielmodi</span></div>
+      <div><strong>2</strong><span>spezialisierte Screens</span></div>
+      <div><strong>1</strong><span>echte Dartscheibe</span></div>
+      <div><strong>∞</strong><span>modular erweiterbar</span></div>
+    </section>
+
+    <section id="erlebnis" class="section experience">
+      <header class="section-heading reveal">
+        <p class="eyebrow"><span></span>VON NULL AUF SPIELBETRIEB</p>
+        <h2>Einfach genug für den ersten Wurf.<br><em>Tief genug für den ganzen Abend.</em></h2>
+        <p>Die Bedienung bleibt auf dem Controller. Der Projektor gehört vollständig dem Spiel.</p>
+      </header>
+
+      <div class="experience-grid">
+        <button class="image-card selection-shot reveal" type="button" data-zoom="./assets/screenshots/control-mode-selection.jpg" aria-label="Spielauswahl vergrößern">
+          <img src="./assets/screenshots/control-mode-selection.jpg" alt="Grafische Spielauswahl für drei Spieler mit großen Moduskarten.">
+          <span class="image-caption"><b>01 · AUSWÄHLEN</b><small>Spieler, Modus und Optionen in wenigen Berührungen</small></span>
+          <i class="zoom-hint" aria-hidden="true">↗</i>
+        </button>
+
+        <div class="step-stack">
+          <article class="step-card reveal" data-delay="60">
+            <span>01</span>
+            <div><h3>Session starten</h3><p>Spielerprofile antippen. Ergebnisse und Siege laufen über mehrere Games weiter.</p></div>
+          </article>
+          <article class="step-card reveal" data-delay="120">
+            <span>02</span>
+            <div><h3>Modus wählen</h3><p>Große Artworks, kurze Regeln und passende Optionen – ohne verschachtelte Menüs.</p></div>
+          </article>
+          <article class="step-card reveal" data-delay="180">
+            <span>03</span>
+            <div><h3>Loswerfen</h3><p>Board-Overlays zeigen Ziele und Gefahren. Sound bestätigt Treffer, Wechsel und Sieg.</p></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section bento-section">
+      <div class="bento">
+        <article class="bento-card bento-wide reveal">
+          <div class="bento-copy">
+            <p class="card-kicker">PIXELGENAU</p>
+            <h3>Die Projektion sitzt auf der echten Scheibe.</h3>
+            <p>Vierpunkt-Kalibrierung, runder Reset und eine dauerhaft mittige Board-Geometrie halten digitale Ziele dort, wo der Dart landet.</p>
+          </div>
+          <div class="calibration-art" aria-hidden="true">
+            <div class="calibration-board"><i></i><i></i><i></i><i></i><b></b></div>
+            <span class="corner c1"></span><span class="corner c2"></span>
+            <span class="corner c3"></span><span class="corner c4"></span>
+          </div>
+        </article>
+
+        <article class="bento-card reveal" data-delay="80">
+          <div class="mini-icon sound-icon" aria-hidden="true"><i></i><i></i><i></i></div>
+          <p class="card-kicker">HÖRBAR DIREKT</p>
+          <h3>Sounds ohne zweiten Blick.</h3>
+          <p>Treffer, Miss, Countdown, Spielerwechsel und Sieg bekommen klare akustische Signale über den Projektor.</p>
+        </article>
+
+        <article class="bento-card reveal" data-delay="140">
+          <div class="mini-icon session-icon" aria-hidden="true"><i>A</i><i>B</i><i>M</i></div>
+          <p class="card-kicker">SESSION READY</p>
+          <h3>Ein Abend, viele Spiele.</h3>
+          <p>Gewonnene Games geben Sessionpunkte. Dauerhafte Profile sammeln Statistiken über den Abend hinaus.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="gameplay" class="section gameplay">
+      <header class="section-heading reveal">
+        <p class="eyebrow"><span></span>ECHTES GAMEPLAY</p>
+        <h2>Die Scheibe wird zum <em>Spielbrett.</em></h2>
+        <p>Alle Aufnahmen stammen automatisiert aus einer lokalen WebKit-Testsession.</p>
+      </header>
+
+      <div class="gameplay-gallery">
+        <button class="gameplay-shot gameplay-main reveal" type="button" data-zoom="./assets/screenshots/projector-block-drop.jpg">
+          <img src="./assets/screenshots/projector-block-drop.jpg" alt="Block Drop Darts mit vier farbigen Steuerflächen und Blockraster.">
+          <span><b>BLOCK DROP DARTS</b><small>Darts steuern gemeinsam einen Block-Puzzler.</small></span>
+        </button>
+        <button class="gameplay-shot reveal" type="button" data-zoom="./assets/screenshots/projector-candy-cannon.jpg" data-delay="80">
+          <img src="./assets/screenshots/projector-candy-cannon.jpg" alt="Candy Cannon mit aufgeladenem Bull als Feuer-Trigger.">
+          <span><b>CANDY CANNON</b><small>Laden, Risiko nehmen, Bull treffen.</small></span>
+        </button>
+        <button class="gameplay-shot reveal" type="button" data-zoom="./assets/screenshots/projector-avoid-bomb.jpg" data-delay="140">
+          <img src="./assets/screenshots/projector-avoid-bomb.jpg" alt="Avoid the Bomb mit roten Bombenfeldern auf dem Dartboard.">
+          <span><b>AVOID THE BOMB</b><small>Punkte sammeln – rote Felder meiden.</small></span>
+        </button>
+      </div>
+    </section>
+
+    <section id="spielmodi" class="section modes">
+      <header class="section-heading compact reveal">
+        <div>
+          <p class="eyebrow"><span></span>24 MODI. EINE SCHEIBE.</p>
+          <h2>Jeder Wurf kann etwas <em>anderes bedeuten.</em></h2>
+        </div>
+        <p>Klassiker, Party-Games, Koop-Abenteuer und Arcade-Experimente teilen sich dieselbe präzise Trefferlogik.</p>
+      </header>
+
+      <div class="mode-grid">
+        <article class="mode-card reveal">
+          <img src="./assets/modes/candy_cannon.webp" alt="">
+          <div><span>RISK &amp; REWARD</span><h3>Candy Cannon</h3><p>Aufladen, nicht überhitzen und mit Bull feuern.</p></div>
+        </article>
+        <article class="mode-card reveal" data-delay="40">
+          <img src="./assets/modes/block_drop.webp" alt="">
+          <div><span>KOOP PUZZLE</span><h3>Block Drop</h3><p>Bewegen, drehen und gemeinsam Linien bauen.</p></div>
+        </article>
+        <article class="mode-card reveal" data-delay="80">
+          <img src="./assets/modes/dart_sweeper.webp" alt="">
+          <div><span>TACTICAL</span><h3>Dart Sweeper</h3><p>Felder aufdecken und Minen logisch umspielen.</p></div>
+        </article>
+        <article class="mode-card reveal" data-delay="120">
+          <img src="./assets/modes/boss_fight.webp" alt="">
+          <div><span>TEAM BATTLE</span><h3>Boss Fight</h3><p>Schwachpunkte finden und gemeinsam Schaden machen.</p></div>
+        </article>
+        <article class="mode-card reveal">
+          <img src="./assets/modes/space_defender.webp" alt="">
+          <div><span>CO-OP</span><h3>Space Defender</h3><p>Wellen stoppen, bevor die Flotte zu groß wird.</p></div>
+        </article>
+        <article class="mode-card reveal" data-delay="40">
+          <img src="./assets/modes/mini_golf.webp" alt="">
+          <div><span>PRECISION</span><h3>Mini Golf</h3><p>Ein gemeinsamer Kurs, möglichst wenige Darts.</p></div>
+        </article>
+        <article class="mode-card reveal" data-delay="80">
+          <img src="./assets/modes/eight_ball.webp" alt="">
+          <div><span>DUEL</span><h3>Eight Ball</h3><p>Eigene Zahlen räumen, dann Double Bull versenken.</p></div>
+        </article>
+        <article class="mode-card reveal" data-delay="120">
+          <img src="./assets/modes/heart_chase.webp" alt="">
+          <div><span>ARCADE CHASE</span><h3>Heart Chase</h3><p>Herausforderungen schlagen und Herzen jagen.</p></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="section themes">
+      <header class="section-heading compact reveal">
+        <div>
+          <p class="eyebrow"><span></span>ZWEI ARTWORK-PACKS</p>
+          <h2>Deine Spielhalle.<br><em>Dein Look.</em></h2>
+        </div>
+        <p>Wechsle im Board-Setup zwischen warmer 3D-Spielzeugwelt und klassischer Neon-Arcade.</p>
+      </header>
+
+      <div class="theme-switcher reveal" data-theme-stage>
+        <div class="theme-tabs" role="tablist" aria-label="Artwork-Theme">
+          <button class="active" type="button" role="tab" aria-selected="true" data-theme-button="cartoon">
+            <i></i><span><b>Playful Cartoon</b><small>Warm · charmant · familienfreundlich</small></span>
+          </button>
+          <button type="button" role="tab" aria-selected="false" data-theme-button="neon">
+            <i></i><span><b>Classic Neon</b><small>Dunkel · filmisch · intensiv</small></span>
+          </button>
+        </div>
+        <div class="theme-preview">
+          <img class="active" data-theme-image="cartoon" src="./assets/modes/countup.webp" alt="Count Up im hellen Playful-Cartoon-Theme.">
+          <img data-theme-image="neon" src="./assets/neon/countup.webp" alt="Count Up im dunklen Classic-Neon-Theme.">
+          <div><span>COUNT UP</span><b data-theme-name>PLAYFUL CARTOON</b></div>
+        </div>
+      </div>
+    </section>
+
+    <section id="technik" class="section system">
+      <div class="system-copy reveal">
+        <p class="eyebrow"><span></span>ECHTE HARDWARE, KLARE ROLLEN</p>
+        <h2>Drei Teile.<br><em>Ein flüssiges Spiel.</em></h2>
+        <p>Die Scheibe liefert Treffer, der Controller führt durch den Abend, der Projektor macht jeden Wurf sichtbar und hörbar.</p>
+        <ul>
+          <li><i>01</i><span><b>SDBplay-kompatibles BLE-Board</b><small>Treffer kommen seriell und entprellt ins Spiel.</small></span></li>
+          <li><i>02</i><span><b>Touch-Controller</b><small>Spieler, Modi, Korrektur, Abbruch und Setup.</small></span></li>
+          <li><i>03</i><span><b>Projektor</b><small>Kalibrierte Ziele, Spielstand, Animation und Sound.</small></span></li>
+        </ul>
+      </div>
+      <div class="system-diagram reveal" data-delay="100" aria-label="Systemdiagramm">
+        <div class="diagram-node node-board"><span class="dartboard-mini"></span><b>DARTBOARD</b><small>BLE EVENTS</small></div>
+        <div class="diagram-line line-one"><i></i></div>
+        <div class="diagram-core"><span></span><b>SMART<br>DARTS</b><small>LOCAL CORE</small></div>
+        <div class="diagram-line line-two"><i></i></div>
+        <div class="diagram-node node-control"><span>◉</span><b>CONTROL</b><small>TOUCH UI</small></div>
+        <div class="diagram-line line-three"><i></i></div>
+        <div class="diagram-node node-projector"><span>▱</span><b>PROJECTOR</b><small>LIVE OUTPUT</small></div>
+      </div>
+    </section>
+
+    <section class="section architecture">
+      <div class="architecture-card reveal">
+        <div>
+          <p class="eyebrow"><span></span>FÜR NEUE IDEEN GEBAUT</p>
+          <h2>Spielmodi sind Module.<br><em>Nicht Core-Code.</em></h2>
+          <p>Jeder Modus bringt Regeln, Optionen, Anleitungen und Board-Overlays mit. Der gemeinsame Core kümmert sich um BLE, Sessions, Undo, Screens und Persistenz.</p>
+          <a class="text-link" href="https://github.com/gamma/smart-dartboard">Architektur auf GitHub ansehen <span>↗</span></a>
+        </div>
+        <div class="code-window" aria-label="Beispiel eines Spielmodus-Moduls">
+          <header><span></span><span></span><span></span><b>games/new_mode.py</b></header>
+          <pre><code><em>class</em> ArcadeMode:
+  metadata = GameMetadata(
+    title=<strong>"New Mode"</strong>,
+    options=[...],
+    instructions=[...],
+  )
+
+  <em>def</em> apply_throw(...):
+    <strong>return</strong> outcome
+
+  <em>def</em> get_overlay(...):
+    <strong>return</strong> targets</code></pre>
+        </div>
+      </div>
+      <div class="tech-row reveal">
+        <span>PYTHON</span><i></i><span>FASTAPI</span><i></i><span>WEBSOCKET</span><i></i><span>SQLITE</span><i></i><span>BLE INPUT</span>
+      </div>
+    </section>
+
+    <section class="final-cta">
+      <div class="cta-orbit orbit-one"></div><div class="cta-orbit orbit-two"></div>
+      <div class="cta-board" aria-hidden="true"><i></i></div>
+      <div class="reveal">
+        <p class="eyebrow"><span></span>READY TO THROW?</p>
+        <h2>Bring Arcade-Energie<br><em>auf die echte Scheibe.</em></h2>
+        <p>Der aktuelle Stand, Setup-Anleitung und der komplette Code liegen auf GitHub.</p>
+        <a class="button button-primary" href="https://github.com/gamma/smart-dartboard">Smart Dartboard auf GitHub <span>↗</span></a>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <a class="brand" href="#top">
+      <span class="brand-mark" aria-hidden="true"><i></i></span>
+      <span><b>SMART DARTS</b><small>ARCADE SYSTEM</small></span>
+    </a>
+    <p>Ein lokales Smart-Dartboard-Projekt in aktiver Entwicklung.</p>
+    <div><a href="https://github.com/gamma/smart-dartboard">GitHub</a><a href="#top">Nach oben ↑</a></div>
+  </footer>
+
+  <dialog class="lightbox" data-lightbox>
+    <button type="button" data-lightbox-close aria-label="Bild schließen">×</button>
+    <img src="./assets/screenshots/projector-candy-cannon.jpg" alt="">
+  </dialog>
+</body>
+</html>

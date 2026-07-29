@@ -122,6 +122,7 @@ docker compose config --quiet
 - [Cartoon-, Challenge- und Minesweeper-Modi](docs/CARTOON_MODES.md)
 - [X01 Checkout- und Setup-Advisor](docs/X01_ADVISOR.md)
 - [Reproduzierbare Artwork-Prompts](docs/ARTWORK_PROMPTS.md)
+- [Website und Publishing](docs/PUBLISHING.md)
 
 ## Datenfluss
 
