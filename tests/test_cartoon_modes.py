@@ -266,7 +266,8 @@ class CartoonModeTests(unittest.TestCase):
     def test_block_drop_overlay_uses_four_contiguous_color_areas(self):
         engine = GameEngine()
         engine.reset("block_drop", ["Ada"])
-        zones = engine.state.as_dict()["overlay"]["zones"]
+        public_state = engine.state.as_dict()
+        zones = public_state["overlay"]["zones"]
         normal = [zone for zone in zones if zone["field"] != 25]
         fields_by_color = {}
         for zone in normal:
@@ -279,6 +280,13 @@ class CartoonModeTests(unittest.TestCase):
                 "#e9c46a": [16, 8, 11, 14, 9],
             },
             fields_by_color,
+        )
+        self.assertEqual(
+            ["left", "rotate_left", "rotate_right", "right", "drop"],
+            [
+                item["icon"]
+                for item in public_state["mode"]["control_legend"]
+            ],
         )
 
     def test_block_drop_rotates_in_both_directions(self):

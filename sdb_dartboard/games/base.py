@@ -34,6 +34,7 @@ class GameMetadata:
     max_players: int = 8
     options: List[GameOption] = field(default_factory=list)
     instructions: List[InstructionStep] = field(default_factory=list)
+    control_legend: List[Dict[str, Any]] = field(default_factory=list)
     sound_theme: str = "arena"
 
     def as_dict(self) -> Dict[str, Any]:

@@ -37,6 +37,19 @@ CONTROL_ZONES = {
     "rotate_right": [2, 17, 3, 19, 7],
     "left": [16, 8, 11, 14, 9],
 }
+CONTROL_LEGEND = [
+    {"icon": "left", "color": "#e9c46a", "label": "Nach links"},
+    {"icon": "rotate_left", "color": "#a77bff", "label": "Links drehen"},
+    {"icon": "rotate_right", "color": "#f4a261", "label": "Rechts drehen"},
+    {"icon": "right", "color": "#81b29a", "label": "Nach rechts"},
+    {
+        "icon": "drop",
+        "color": "#28e7ff",
+        "secondary_color": "#e76f51",
+        "label": "Stein droppen",
+        "detail": "SBULL / DBULL",
+    },
+]
 
 
 class BlockDropMode:
@@ -67,6 +80,7 @@ class BlockDropMode:
             InstructionStep("Gemeinsamer Takt", "Erst nachdem alle gespielt haben, fällt der Stein automatisch eine Zeile.", "round"),
             InstructionStep("Fünf Linien", "Löscht gemeinsam fünf Linien, bevor ein Stein oben herausragt.", "blocks"),
         ],
+        control_legend=CONTROL_LEGEND,
         sound_theme="arcade",
     )
 

@@ -370,6 +370,27 @@ function instructionSteps(mode){
     <span>${index+1}</span><div><h3>${escapeHtml(step.title)}</h3><p>${escapeHtml(step.body)}</p></div>
   </article>`).join('');
 }
+function controlGraphic(icon){
+  const paths={
+    left:'<path d="M20 8 6 20l14 12M7 20h29"/>',
+    right:'<path d="m20 8 14 12-14 12M5 20h29"/>',
+    rotate_left:'<path d="M11 13H4V6"/><path d="M5 13a16 16 0 1 1 2 17"/>',
+    rotate_right:'<path d="M29 13h7V6"/><path d="M35 13a16 16 0 1 0-2 17"/>',
+    drop:'<path d="M20 4v23M10 18l10 10 10-10"/><path d="M6 35h28"/>',
+  };
+  return `<svg viewBox="0 0 40 40" aria-hidden="true" focusable="false">${paths[icon] || paths.drop}</svg>`;
+}
+function controlLegend(items,placement){
+  if(!items?.length) return '';
+  return `<aside class="control-legend ${escapeHtml(placement)}">
+    <span>STEUERUNG</span>
+    <div>${items.map(item=>`<div class="control-legend-row">
+      <i class="control-legend-icon">${controlGraphic(item.icon)}</i>
+      <i class="control-legend-color" style="--control-color:${escapeHtml(item.color || '#28e7ff')};--control-color-2:${escapeHtml(item.secondary_color || item.color || '#28e7ff')}"></i>
+      <b>${escapeHtml(item.label || '')}${item.detail?`<small>${escapeHtml(item.detail)}</small>`:''}</b>
+    </div>`).join('')}</div>
+  </aside>`;
+}
 function controlInstructions(){
   const mode = modeBySlug(appState.experience.selected_mode);
   if(!mode) return controlGameSelect();
@@ -378,7 +399,7 @@ function controlInstructions(){
       <div>${sceneHeader(mode.tagline,mode.title,mode.description)}</div>
     </div>
     <div class="instruction-content">
-      <div class="instruction-list">${instructionSteps(mode)}</div>
+      <div class="instruction-list">${controlLegend(mode.control_legend,'control-instructions')}${instructionSteps(mode)}</div>
       <div class="game-options">${mode.options.map(option => optionControl(option,appState.experience.selected_options[option.key])).join('')}</div>
     </div>
     <footer class="sticky-actions">
@@ -473,6 +494,8 @@ function overlayActionButtons(game){
 function controlModePrompt(game){
   const overlay=game.overlay;
   if(!overlay?.prompt || game.game_type==='x01') return '';
+  const legend=modeBySlug(game.game_type)?.control_legend;
+  if(legend?.length) return controlLegend(legend,'control-live');
   const detail=overlay.combo?.count
     ? `COMBO ×${overlay.combo.count}`
     : Number.isFinite(overlay.pot)
@@ -744,9 +767,12 @@ function projectorGameSelect(){
 }
 function projectorInstructions(){
   const mode = modeBySlug(appState.experience.selected_mode);
+  const instructions=mode.control_legend?.length
+    ? controlLegend(mode.control_legend,'projector-guide')
+    : `<div class="projector-step-list">${instructionSteps(mode)}</div>`;
   return projectorBackdrop(mode,`<div class="projector-instructions">
     <div><div class="kicker">${escapeHtml(mode.tagline)}</div><h1>${escapeHtml(mode.title)}</h1><p>${escapeHtml(mode.description)}</p></div>
-    <div class="projector-step-list">${instructionSteps(mode)}</div>
+    ${instructions}
   </div>`,'mode-projector');
 }
 function projectorCountdown(){
@@ -768,6 +794,8 @@ function projectorAdvice(game){
 function projectorOverlayPrompt(game){
   const overlay = game.overlay;
   if(!overlay?.prompt || game.status === 'hold' || game.game_type === 'x01' || overlay.card || overlay.boss || overlay.cricket || Number.isFinite(overlay.pot)) return '';
+  const legend=modeBySlug(game.game_type)?.control_legend;
+  if(legend?.length) return controlLegend(legend,'projector-live');
   const prompt=game.game_type==='simon_says' && appState.memoryHidden
     ? 'Jetzt aus dem Kopf!'
     : overlay.prompt;

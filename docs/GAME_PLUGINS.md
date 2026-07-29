@@ -31,6 +31,7 @@ GAME_MODE = ExampleMode()
 - Spielergrenzen
 - Point-and-click-Optionen
 - Anleitungsschritte für Control und Projektor
+- optionale grafische `control_legend` für Steuerflächen
 - Soundthema
 
 ## Neues Spiel hinzufügen
@@ -100,6 +101,11 @@ Das Event enthält bei einem Treffer typischerweise:
 - `get_overlay(state)` darf neben Zielen ein deklaratives `panel` sowie
   mehrteilige `zones` liefern. Beide Ansichten rendern diese Daten ohne
   modusabhängige Core-Änderung.
+- `GameMetadata.control_legend` rendert dieselbe vertikale Steuerungslegende in
+  Anleitung und laufendem Spiel. Jeder Eintrag enthält `icon`, `color`,
+  `label` sowie optional `secondary_color` und `detail`. Unterstützte
+  Richtungssymbole sind `left`, `right`, `rotate_left`, `rotate_right` und
+  `drop`; dargestellt wird immer Symbol → Farbe → Bezeichnung.
 - Jede neue Regel benötigt Tests für Normalfall, Randfall, Sieg und Undo.
 - Jeder Modus mit Cover folgt dem Basis-Prompt in
   `docs/ARTWORK_PROMPTS.md`; Bildtitel gehören in die UI, nicht in das Artwork.
