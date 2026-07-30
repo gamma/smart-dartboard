@@ -385,10 +385,14 @@ function updateExperience(experience, event){
 function renderConnection(){
   const element = $('wsStatus');
   if(!element) return;
+  const subtitle=$('brandSubtitle');
+  if(subtitle) subtitle.textContent=t('session_control');
+  const brand=document.querySelector('.brand-button');
+  if(brand) brand.setAttribute('aria-label',t('home'));
   const hardware=appState.experience?.hardware;
   const boardReady=!hardware?.enabled || hardware.status==='connected';
   const cssClass=!appState.wsOk?'':boardReady?'online':'searching';
-  const label=!appState.wsOk?'OFFLINE':boardReady?'LIVE':hardware?.status==='error'?'BOARD FEHLER':'BOARD SUCHT';
+  const label=!appState.wsOk?'OFFLINE':boardReady?'LIVE':hardware?.status==='error'?t('board_error'):t('board_searching');
   element.innerHTML = `<i class="${cssClass}"></i>${label}`;
 }
 function render(){
@@ -482,7 +486,7 @@ function controlPlayers(){
         <label>${t('name')}<input name="name" maxlength="32" autocomplete="off" placeholder="${t('player_name')}" required></label>
         <div class="choice-label">${t('avatar')}</div>
         <div class="avatar-choices">${AVATARS.map((avatar,index) =>
-          `<label class="mini-choice" title="${escapeHtml(avatar.label)}"><input type="radio" name="avatar" value="${escapeHtml(avatar.id)}" ${index===0?'checked':''}><span>${avatar.emoji}</span></label>`
+          `<label class="mini-choice" title="${escapeHtml(localText(avatar.label))}"><input type="radio" name="avatar" value="${escapeHtml(avatar.id)}" ${index===0?'checked':''}><span>${avatar.emoji}</span></label>`
         ).join('')}</div>
         <div class="choice-label">${t('color')}</div>
         <div class="color-choices">${COLORS.map((color,index) =>
@@ -544,7 +548,7 @@ function controlGraphic(icon){
 function controlLegend(items,placement){
   if(!items?.length) return '';
   return `<aside class="control-legend ${escapeHtml(placement)}">
-    <span>STEUERUNG</span>
+    <span>${t('controls')}</span>
     <div>${items.map(item=>`<div class="control-legend-row">
       <i class="control-legend-icon">${controlGraphic(item.icon)}</i>
       <i class="control-legend-color" style="--control-color:${escapeHtml(item.color || '#28e7ff')};--control-color-2:${escapeHtml(item.secondary_color || item.color || '#28e7ff')}"></i>
@@ -668,7 +672,7 @@ function controlModePrompt(game){
       : '';
   const visualLegend=visualLegendMarkup(overlay.visual_legend,'control-visual-legend');
   return `<aside class="control-mode-prompt">
-    <span>AKTUELLE AUFGABE</span>
+    <span>${t('current_task')}</span>
     <b>${promptMarkup(localText(overlay.prompt))}</b>
     ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
     ${visualLegend}
@@ -1007,7 +1011,7 @@ function applyReplayFrame(){
 }
 
 function cornerControls(calibration){
-  const labels = ['Oben links','Oben rechts','Unten rechts','Unten links'];
+  const labels = [t('top_left'),t('top_right'),t('bottom_right'),t('bottom_left')];
   return calibration.corners.map((corner,index) => `<fieldset class="corner-control"><legend>${labels[index]}</legend>
     <label>X <input type="range" min="0" max="1" step="0.002" value="${corner.x}" data-corner="${index}" data-axis="x"><output>${Math.round(corner.x*100)}%</output></label>
     <label>Y <input type="range" min="0" max="1" step="0.002" value="${corner.y}" data-corner="${index}" data-axis="y"><output>${Math.round(corner.y*100)}%</output></label>
@@ -1020,7 +1024,7 @@ function controlCalibration(){
     <div class="calibration-grid">${cornerControls(appState.experience.calibration)}</div>
     ${artThemeSetup()}
     ${soundSetup()}
-    <p class="calibration-note">Gemeldete Projektorfläche: <b>${geometry.width} × ${geometry.height}</b>. „Rund und mittig“ setzt eine unverzerrte quadratische Fläche mit 5 % Sicherheitsrand auf der kürzeren Browserseite. Danach kannst du die vier Ecken fein auf die echte Scheibe legen.</p>
+    <p class="calibration-note">${t('calibration_note',{width:`<b>${geometry.width}`,height:`${geometry.height}</b>`})}</p>
     <footer class="sticky-actions">
       ${actionButton(t('cancel'),'home','ghost')}
       ${actionButton(t('reset_center'),'reset-calibration','secondary')}
@@ -1031,7 +1035,7 @@ function controlCalibration(){
 function artThemeSetup(){
   const theme=appState.experience.art_theme || 'cartoon';
   return `<section class="art-theme-setup">
-    <div><span>ARTWORK-THEME</span><h2>${theme==='neon'?'Classic Neon':'Playful Cartoon'}</h2><p>Neue Modi ohne altes Neon-Cover verwenden automatisch das Cartoon-Artwork.</p></div>
+    <div><span>${t('artwork_theme')}</span><h2>${theme==='neon'?'Classic Neon':'Playful Cartoon'}</h2><p>${t('artwork_copy')}</p></div>
     <div class="segmented">
       <button class="${theme==='cartoon'?'selected':''}" data-action="art-theme" data-theme="cartoon">Cartoon</button>
       <button class="${theme==='neon'?'selected':''}" data-action="art-theme" data-theme="neon">Classic Neon</button>
@@ -1041,19 +1045,19 @@ function artThemeSetup(){
 function soundSetup(){
   const sound=appState.experience.sound || {enabled:false,status:'disabled'};
   const statusLabels={
-    disabled:'AUS',
-    starting:'WIRD GESTARTET',
-    ready:'BEREIT',
-    blocked:'AUTOPLAY BLOCKIERT',
-    unavailable:'NICHT VERFÜGBAR',
+    disabled:language()==='en'?'OFF':'AUS',
+    starting:language()==='en'?'STARTING':'WIRD GESTARTET',
+    ready:t('ready'),
+    blocked:language()==='en'?'AUTOPLAY BLOCKED':'AUTOPLAY BLOCKIERT',
+    unavailable:language()==='en'?'UNAVAILABLE':'NICHT VERFÜGBAR',
   };
   return `<section class="sound-setup ${sound.enabled?'enabled':''}">
-    <div><span>PROJEKTOR-SOUND</span><h2>${sound.enabled?'Eingeschaltet':'Ausgeschaltet'}</h2><p>Status: <b>${statusLabels[sound.status] || escapeHtml(sound.status)}</b></p></div>
+    <div><span>${t('projector_sound')}</span><h2>${sound.enabled?t('enabled'):t('disabled')}</h2><p>${t('status')}: <b>${statusLabels[sound.status] || escapeHtml(sound.status)}</b></p></div>
     <div class="sound-setup-actions">
-      ${actionButton(sound.enabled?'Sound ausschalten':'Sound einschalten',sound.enabled?'sound-disable':'sound-enable',sound.enabled?'ghost':'primary')}
-      ${actionButton('Testton','sound-test','secondary',sound.enabled?'':'disabled')}
+      ${actionButton(sound.enabled?t('sound_off'):t('sound_on'),sound.enabled?'sound-disable':'sound-enable',sound.enabled?'ghost':'primary')}
+      ${actionButton(t('test_tone'),'sound-test','secondary',sound.enabled?'':'disabled')}
     </div>
-    ${sound.status==='blocked'?'<small>Der Projektor-Browser blockiert Autoplay. Im Kioskmodus die Autoplay-Freigabe aktivieren und die Projektorseite neu laden.</small>':''}
+    ${sound.status==='blocked'?`<small>${t('autoplay_help')}</small>`:''}
   </section>`;
 }
 
@@ -1130,11 +1134,11 @@ function projectorAttract(){
   return projectorBackdrop(null,`<div class="projector-center"><div class="projector-logo">◎</div><div class="kicker">SMART DART EXPERIENCE</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(copy)}</p></div>`,'attract-projector');
 }
 function projectorPlayers(){
-  return projectorBackdrop(null,`<div class="projector-center"><div class="kicker">SESSION SETUP</div><h1>${t('who_plays')}</h1><p>${language()==='en'?'Choose players on the Control screen.':'Wählt eure Spieler am Control-Screen.'}</p></div>`);
+  return projectorBackdrop(null,`<div class="projector-center"><div class="kicker">${t('session_setup')}</div><h1>${t('who_plays')}</h1><p>${language()==='en'?'Choose players on the Control screen.':'Wählt eure Spieler am Control-Screen.'}</p></div>`);
 }
 function projectorGameSelect(){
   const players = appState.experience.session?.players || [];
-  return projectorBackdrop(null,`<div class="projector-center"><div class="kicker">TEAM READY</div><h1>${players.map(player=>escapeHtml(player.name)).join(' · ')}</h1><p>${language()==='en'?'Choose your game mode.':'Wählt jetzt euren Spielmodus.'}</p></div>`);
+  return projectorBackdrop(null,`<div class="projector-center"><div class="kicker">${t('team_ready')}</div><h1>${players.map(player=>escapeHtml(player.name)).join(' · ')}</h1><p>${language()==='en'?'Choose your game mode.':'Wählt jetzt euren Spielmodus.'}</p></div>`);
 }
 function projectorInstructions(){
   const mode = modeBySlug(appState.experience.selected_mode);
