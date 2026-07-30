@@ -142,9 +142,28 @@ folgende Daten wiederhergestellt:
 - aktive Session und Teilnehmer
 - ausgewählter Spielmodus und Optionen
 - aktueller Spieler, Scores, Marks und Aufnahme
-- Undo-Historie
+- vollständige Aktions- und Undo-Historie
 - aktueller Screen
 - Projektorkalibrierung
+
+## Wurfkorrektur am Controller
+
+Während eines Spiels zeigt der Controller den aktuellen und den unmittelbar
+vorherigen Spielzug:
+
+- Belegten Dart antippen, um ihn über die Scheibe zu ersetzen, als `MISS` zu
+  werten oder zu löschen.
+- Den nächsten freien Dartplatz antippen, um einen vom Board nicht erkannten
+  Wurf manuell nachzutragen.
+- Direkt nach einem Spielerwechsel nimmt `Letzten Wurf zurück` zuerst den
+  Wechsel zurück. Die drei Würfe des vorherigen Spielers bleiben dabei
+  erhalten.
+- Auf dem Ergebnisbildschirm kann der letzte Spielzug ebenfalls korrigiert
+  werden. Sieger und Sessionpunkte werden danach neu berechnet.
+
+Solange die Korrekturscheibe geöffnet ist, pausiert die BLE- und
+Projektor-Testeingabe für höchstens 60 Sekunden. Manuell nachgetragene Würfe
+bleiben mit der Quelle `manual` in Statistik und Replay erkennbar.
 
 ## Überwachung
 
