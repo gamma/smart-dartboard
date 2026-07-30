@@ -639,6 +639,31 @@ class EventPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertTrue(all(item["source"] == "test" for item in throw_events))
         self.assertTrue(all(item["frame"] for item in throw_events))
 
+    async def test_mode_effects_are_propagated_to_the_published_event(self):
+        self.controller.abort_game()
+        self.controller.prepare_game("dragon_eggs", {"rounds": 5, "eggs": 4})
+        self.controller.start_game()
+        self.controller.set_screen("playing")
+        scale = self.controller.public_state()["game"]["overlay"]["danger"][0]
+
+        for seq in range(3):
+            event = {
+                "type": "hit",
+                "label": scale["id"],
+                "score": 20,
+                "seq": 200 + seq,
+                "field": scale["field"],
+                "ring": scale["ring"],
+                "multiplier": 1,
+            }
+            self.assertTrue(await self.pipeline.process(event, source="test"))
+
+        self.assertEqual("dragon_fire", event["effect"])
+        self.assertEqual(0, event["dragon_heat"])
+        self.assertGreaterEqual(event["dragon_fire_penalty"], 15)
+        self.assertNotIn("_source", event)
+        self.assertNotIn("_action_id", event)
+
     async def test_board_events_pause_during_operator_correction(self):
         event = {
             "type": "hit",

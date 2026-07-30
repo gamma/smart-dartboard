@@ -735,4 +735,11 @@ class EventPipeline:
                     "test",
                 )
             self.controller.process_event(enriched)
+            event.update(
+                {
+                    key: value
+                    for key, value in enriched.items()
+                    if not key.startswith("_")
+                }
+            )
             return True
