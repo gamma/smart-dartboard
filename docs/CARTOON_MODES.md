@@ -272,7 +272,8 @@ Ein Drache bewacht Eier auf dem Board. Spieler sammeln Eier, aber wenn zu viele 
 
 ### Regeln
 
-- 3–6 Eier werden als goldene Felder versteckt.
+- 3–6 Eier werden als goldene Felder versteckt. Jeder Spieler kann jedes Ei
+  einmal pro Runde einsammeln; danach verschwindet es nur für ihn.
 - Treffer auf Ei:
 
 ```text
@@ -280,7 +281,7 @@ Ein Drache bewacht Eier auf dem Board. Spieler sammeln Eier, aber wenn zu viele 
 Ei eingesammelt
 ```
 
-- rote Schuppenfelder sind sichtbar:
+- acht rote Schuppenfelder sind mit eigenen Schuppen-Grafiken sichtbar:
 
 ```text
 -15 Punkte
@@ -290,7 +291,7 @@ Heat Meter +1
 - Bei drei Heat-Punkten:
 
 ```text
-DRAGON AWAKES
+DRACHENFEUER
 aktueller Turn Score halbiert
 Heat Meter reset
 ```
@@ -301,16 +302,17 @@ Heat Meter reset
 ### Projector
 
 ```text
-Gold = Ei
-Rot = Schuppe
-Heat Meter = 0 / 3
+Goldenes Ei = +30
+Rote Schuppe = -15 und eine Flamme
+Drei Flammen = Drachenfeuer
 ```
 
 ### Cartoon Incentives
 
-- Ei knackt auf
-- kleiner Drache fliegt über Board
-- Heat Meter raucht bei 2/3
+- Ei knackt auf und verschwindet nach dem Einsammeln
+- Schuppe springt sichtbar auf und füllt eine Flamme
+- Heat Meter zeigt drei grafische Flammenstufen und warnt bei 2/3
+- großer themegerechter Feuerburst beim dritten Schuppentreffer
 
 ---
 

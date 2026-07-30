@@ -20,6 +20,8 @@ NEON_EFFECTS = {
     "coin",
     "gem",
     "candy_overheat",
+    "dragon_scale",
+    "dragon_fire",
 }
 
 

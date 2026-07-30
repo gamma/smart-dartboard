@@ -66,8 +66,11 @@ const EFFECT_ASSET_NAMES = {
 const NEON_EFFECT_ASSETS = new Set([
   'heart','egg','cookie','cookie_moldy','milk','candy','block','billiard',
   'golf','wisp','leaf','mine','mine_explosion','coin','gem','candy_overheat',
+  'dragon_scale','dragon_fire',
 ]);
 const OVERLAY_ICON_ASSETS = {
+  egg:'egg',
+  dragon_scale:'dragon_scale',
   cookie:'cookie',
   cookie_moldy:'cookie_moldy',
   milk:'milk',
@@ -152,6 +155,11 @@ function isCandyFireEvent(experience,event){
     && event?.type==='hit'
     && event?.effect==='candy_fire'
     && Boolean(event?.target_player_id);
+}
+function isDragonEvent(experience,event,effect){
+  return experience?.game?.game_type==='dragon_eggs'
+    && event?.type==='hit'
+    && event?.effect===effect;
 }
 function clearScoreCountdown(){
   cancelAnimationFrame(appState.scoreCountdownFrame);
@@ -605,6 +613,7 @@ function controlModePrompt(game){
 }
 function genericPanel(panel, compact=false){
   if(!panel) return '';
+  if(panel.kind==='dragon_heat') return dragonHeatPanel(panel,compact);
   const progress=panel.progress && Number.isFinite(Number(panel.progress.max))
     ? `<i class="generic-progress" style="--progress:${Math.max(0,Math.min(100,Number(panel.progress.value||0)/Math.max(1,Number(panel.progress.max))*100))}%"></i>`
     : '';
@@ -619,6 +628,25 @@ function genericPanel(panel, compact=false){
     ${stats?`<div class="generic-stats">${stats}</div>`:''}
     ${rows?`<div class="generic-rows">${rows}</div>`:''}
     ${grid}
+  </section>`;
+}
+function dragonHeatPanel(panel,compact=false){
+  const heat=Math.max(0,Math.min(2,Number(panel.heat)||0));
+  const reaction=isDragonEvent(appState.experience,appState.projectedEvent,'dragon_fire')
+    ? 'fire'
+    : isDragonEvent(appState.experience,appState.projectedEvent,'dragon_scale')
+      ? 'scale'
+      : isDragonEvent(appState.experience,appState.projectedEvent,'dragon_egg')
+        ? 'egg'
+        : '';
+  return `<section class="dragon-heat-panel ${compact?'compact':''} heat-${heat} react-${reaction}">
+    <div class="dragon-heat-copy">
+      <span>${escapeHtml(panel.title||'DRACHEN-HITZE')}</span>
+      <h3>${escapeHtml(panel.headline||`${heat}/3 FLAMMEN`)}</h3>
+      <p>${escapeHtml(panel.subline||'Die dritte Schuppe entfacht das Feuer')}</p>
+    </div>
+    <img src="${effectAsset(heat>=2?'dragon_fire':'dragon_scale')}" alt="">
+    <div class="dragon-heat-pips">${[0,1,2].map(index=>`<i class="${index<heat?'lit':''}"></i>`).join('')}</div>
   </section>`;
 }
 function controlPlaying(){
@@ -980,6 +1008,30 @@ function candyFireImpact(game,event,playerId){
   </em>`;
 }
 
+function dragonReaction(game,event){
+  const effects=['dragon_egg','dragon_scale','dragon_fire'];
+  if(game?.game_type!=='dragon_eggs' || !effects.includes(event?.effect)) return '';
+  const index=BOARD_ORDER.indexOf(Number(event.field));
+  const radii={
+    double:222, triple:129, single_inner:78, single_outer:176,
+    single_bull:0, double_bull:0,
+  };
+  const radius=radii[event.ring];
+  if(radius===undefined || (Number(event.field)!==25 && index<0)) return '';
+  const [x,y]=event.effect==='dragon_fire' || Number(event.field)===25
+    ? [250,250]
+    : polar(250,250,radius,index*18);
+  const asset=event.effect==='dragon_egg'?'egg':event.effect==='dragon_scale'?'dragon_scale':'dragon_fire';
+  const label=event.effect==='dragon_egg'
+    ? '+30 · EI GEKNACKT!'
+    : event.effect==='dragon_scale'
+      ? `HITZE ${Math.max(1,Number(event.dragon_heat)||1)}/3`
+      : `DRACHENFEUER · −${Math.max(15,Number(event.dragon_fire_penalty)||15)}`;
+  return `<div class="dragon-reaction ${escapeHtml(event.effect)}" style="--dragon-x:${x*2}px;--dragon-y:${y*2}px" aria-hidden="true">
+    <i></i><img src="${effectAsset(asset)}" alt=""><b>${escapeHtml(label)}</b>
+  </div>`;
+}
+
 function projectorPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -987,9 +1039,10 @@ function projectorPlaying(){
   const testMode=testModeEnabled();
   const bombImpact=isExplosionEvent({game},appState.projectedEvent);
   const candyOverheatImpact=isCandyOverheatEvent({game},appState.projectedEvent);
-  return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')};--candy-art:url('${effectAsset('candy')}')">
+  const dragonFireImpact=isDragonEvent({game},appState.projectedEvent,'dragon_fire');
+  return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''} ${dragonFireImpact?'dragon-fire-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')};--candy-art:url('${effectAsset('candy')}')">
     ${modeAmbience(mode,appState.projectedEvent)}
-    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}${candyOverheat(game,appState.projectedEvent)}</div>
+    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}${candyOverheat(game,appState.projectedEvent)}${dragonReaction(game,appState.projectedEvent)}</div>
     <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong data-score-player="${escapeHtml(player.id || '')}">${player.score ?? 0}</strong></header>
     <footer class="projection-bottom">
       <div class="throw-callout">${game.status==='hold'?'DARTS ZIEHEN':escapeHtml(appState.projectedEvent?.label || 'BEREIT')}</div>
@@ -1106,9 +1159,9 @@ function renderBoardEvent(event){
       || item.icon==='mine'
       || String(event.ring)===String(item.ring)
     );
-    const variant=/^[a-z_]+$/.test(String(item.variant || '')) ? item.variant : 'default';
-    const width=item.icon==='milk'?26:item.icon==='mine'?35:30;
-    const height=item.icon==='milk'?36:item.icon==='mine'?39:30;
+    const variant=/^[a-z_-]+$/.test(String(item.variant || '')) ? item.variant : 'default';
+    const width=item.icon==='milk'?26:item.icon==='mine'?35:item.icon==='egg'?26:item.icon==='dragon_scale'?28:30;
+    const height=item.icon==='milk'?36:item.icon==='mine'?39:item.icon==='egg'?34:item.icon==='dragon_scale'?34:30;
     const imageY=y-height/2-(item.label?5:0);
     const labelY=y+height/2+4;
     labelLayer.insertAdjacentHTML('beforeend',`<g class="overlay-prop variant-${variant} ${propHit?'overlay-prop-hit':''}">
@@ -1312,6 +1365,17 @@ function playEventCue(event,experience){
     tone(940,.1,.12,'triangle',.07);
     tone(190,.24,.38,'sawtooth',.12);
     tone(520,.16,.42,'square',.06);
+  } else if(event.type==='hit' && isDragonEvent(experience,event,'dragon_fire')){
+    tone(110,.42,0,'sawtooth',.17);
+    tone(72,.58,.05,'sawtooth',.13);
+    tone(620,.16,.08,'square',.07);
+  } else if(event.type==='hit' && isDragonEvent(experience,event,'dragon_scale')){
+    tone(210,.18,0,'triangle',.12);
+    tone(145,.24,.1,'sawtooth',.08);
+  } else if(event.type==='hit' && isDragonEvent(experience,event,'dragon_egg')){
+    tone(680,.12,0,'triangle',.13);
+    tone(920,.18,.08,'sine',.1);
+    tone(1180,.12,.17,'triangle',.06);
   } else if(event.type==='hit'){
     const base=event.multiplier===3?themeBase*1.45:event.multiplier===2?themeBase*1.22:event.field===25?themeBase*1.7:themeBase;
     tone(base,.16,0,'triangle',.16); tone(base*1.5,.2,.08,'sine',.1);

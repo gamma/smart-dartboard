@@ -26,6 +26,8 @@ Die vollständigen finalen Prompts und Referenzen der Neon-Erweiterung stehen in
 `docs/NEON_ARTWORK_2026-07-30.md`.
 Die vollständigen finalen Prompts und Referenzen des Neon-Frontasset-Packs
 stehen in `docs/NEON_EFFECTS_2026-07-30.md`.
+Die ergänzenden Dragon-Eggs-Schuppen und Feuerreaktionen beider Themes stehen
+in `docs/DRAGON_EGGS_ASSETS_2026-07-30.md`.
 
 Der projektlokale Skill
 `.agents/skills/smart-dartboard-artwork/SKILL.md` beschreibt den verbindlichen
@@ -136,8 +138,8 @@ ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 - Die C2PA-Manifeste der geprüften Original-PNGs nennen
   `OpenAI Media Service API`, den Software-Agenten `gpt-image` in Version `2.0`
   und den digitalen Quelltyp `trainedAlgorithmicMedia`.
-- Aus insgesamt 84 erzeugten Ergebnissen wurden die heute vorhandenen 48 Cover
-  und 32 Theme-Effekte ausgewählt; drei Cover-Kandidaten und die frühere Mine
+- Aus insgesamt 88 erzeugten Ergebnissen wurden die heute vorhandenen 48 Cover
+  und 36 Theme-Effekte ausgewählt; drei Cover-Kandidaten und die frühere Mine
   wurden verworfen oder ersetzt. Sämtliche übergebenen Bildreferenzen zeigen auf
   bereits lokal erzeugte Dateien dieses Projekts. Fremde Bilder, Logos oder
   Markenreferenzen wurden in den protokollierten Aufrufen nicht verwendet.
@@ -149,7 +151,7 @@ ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 |---|---|---|---|---|
 | Playful-Cartoon-Cover | 24 ImageGen-Ergebnisse; `heart_chase` nur aus Text erzeugt, danach als interne Stilreferenz für alle weiteren Cover | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | ImageMagick: mittiger Zuschnitt auf 900 × 640, WebP-Qualität 88 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 | Classic-Neon-Cover | 24 ImageGen-Ergebnisse; `countup`, `x01` und `cricket` nur aus Text, danach ausschließlich projektinterne Neon-Cover als Stilreferenzen | `gpt-image` 2.0; 28.–30.07.2026; gesteuert mit `gpt-5.6-sol` | historische Versionen aus Git-Commit `54ba4a3` wiederhergestellt; elf ergänzende Cover neu erzeugt; alle mittig auf 900 × 640 gebracht und als WebP mit Qualität 88 exportiert | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
-| animierte 3D-Props | 32 aktuelle Theme-Assets; 16 Playful-Cartoon-Ergebnisse und 16 Classic-Neon-Ergebnisse, jeweils ausschließlich mit projektinternen Stil- und Formreferenzen | `gpt-image` 2.0; 29.–30.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt und als Alpha-WebP exportiert; Standardprops 512 × 512, große Bursts 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
+| animierte 3D-Props | 36 aktuelle Theme-Assets; 18 Playful-Cartoon-Ergebnisse und 18 Classic-Neon-Ergebnisse, jeweils ausschließlich mit projektinternen Stil- und Formreferenzen | `gpt-image` 2.0; 29.–30.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt und als Alpha-WebP exportiert; Standardprops 512 × 512, große Bursts 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 
 Der Neon-Basis-Prompt beschreibt somit reproduzierbar die sichtbare
 Bildsprache. Die historischen Einzelprompts sind zusätzlich in der lokalen
@@ -180,6 +182,9 @@ wartbare Zusammenfassung und kein behaupteter wortgleicher Originalprompt.
 9. Anschließend entstanden 16 Classic-Neon-Frontassets. Jedes verwendete
    `countup`, das nächstliegende Neon-Moduscover und den gleichnamigen
    Playful-Cartoon-Prop ausschließlich als projektinterne Referenzen.
+10. Für Dragon Eggs entstanden je Theme eine sichtbare Schuppe und ein
+    Feuerburst. Referenzen waren ausschließlich die eigenen Theme-Anker,
+    Dragon-Eggs-Cover und Ei-Props.
 
 Die zugehörigen Git-Commits sind `179cf40` für die ersten drei Cover,
 `e5f3192` für die ergänzten Neon-Artworks, `475d23f` für das vollständige
@@ -247,6 +252,8 @@ Qualitätsstufe 90 gespeichert. Die aktuelle Bibliothek umfasst:
 | `coin.webp` | goldene Sternmünze | Risk It |
 | `gem.webp` | blauer Spielzeugedelstein | Treasure Hunt |
 | `candy_overheat.webp` | Zuckerstaub-Explosion mit Bonbons und Konfetti | Candy Cannon Overheat und kleiner FIRE-Einschlag |
+| `dragon_scale.webp` | klar erkennbare rote Drachenschuppe | Dragon Eggs Gefahrenfelder und Heat-Anzeige |
+| `dragon_fire.webp` | großer Drachenfeuer-Burst | Dragon Eggs dritter Heat-Treffer |
 
 Für `candy_overheat.webp` wird `[SUBJECT]` im gemeinsamen Prop-Prompt durch
 folgende Effektspezifikation ersetzt:

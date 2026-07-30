@@ -241,7 +241,15 @@
   animation: mine-prop-hit .72s cubic-bezier(.18, .8, .22, 1) forwards;
 }
 
-.overlay-prop.overlay-prop-hit:not(.variant-moldy):not(.variant-milk):not(.variant-mine) {
+.overlay-prop.overlay-prop-hit.variant-dragon-egg {
+  animation: dragon-egg-crack .82s cubic-bezier(.18, .8, .22, 1) forwards;
+}
+
+.overlay-prop.overlay-prop-hit.variant-dragon-scale {
+  animation: dragon-scale-heat .72s ease-out forwards;
+}
+
+.overlay-prop.overlay-prop-hit:not(.variant-moldy):not(.variant-milk):not(.variant-mine):not(.variant-dragon-egg):not(.variant-dragon-scale) {
   animation: cookie-eaten .78s cubic-bezier(.18, .8, .22, 1) forwards;
 }
 
@@ -271,6 +279,20 @@
   100% { opacity: 0; transform: scale(.18) rotate(-20deg); }
 }
 
+@keyframes dragon-egg-crack {
+  0% { opacity: 1; transform: scale(1) rotate(0); }
+  35% { transform: scale(1.5) rotate(-7deg); filter: brightness(1.45); }
+  58% { opacity: 1; transform: scale(1.24) rotate(8deg); }
+  100% { opacity: 0; transform: translateY(-30px) scale(.18) rotate(-24deg); }
+}
+
+@keyframes dragon-scale-heat {
+  0%, 100% { opacity: 1; transform: scale(1) rotate(0); }
+  22% { transform: scale(1.34) rotate(-8deg); filter: brightness(1.55) saturate(1.35); }
+  48% { transform: scale(1.12) rotate(8deg); }
+  72% { opacity: .62; transform: scale(.92) rotate(-4deg); }
+}
+
 .projection-game.test-mode .seg {
   cursor: pointer;
 }
@@ -280,6 +302,149 @@
   z-index: 3;
   inset: 9%;
   pointer-events: none;
+}
+
+.dragon-reaction {
+  position: absolute;
+  z-index: 6;
+  left: var(--dragon-x);
+  top: var(--dragon-y);
+  width: 1px;
+  height: 1px;
+  pointer-events: none;
+}
+
+.dragon-reaction img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 170px;
+  height: 170px;
+  object-fit: contain;
+  opacity: 0;
+  animation: dragon-prop-burst 1.35s cubic-bezier(.16, .78, .2, 1) forwards;
+}
+
+.dragon-reaction > i {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 90px;
+  height: 90px;
+  border: 8px solid #ffd166;
+  border-radius: 50%;
+  opacity: 0;
+  animation: dragon-reaction-ring .9s ease-out forwards;
+}
+
+.dragon-reaction b {
+  position: absolute;
+  left: 50%;
+  top: 92px;
+  min-width: 250px;
+  transform: translateX(-50%);
+  color: #fff4c4;
+  font-size: 25px;
+  line-height: 1;
+  text-align: center;
+  text-shadow: 0 3px 12px #000;
+  opacity: 0;
+  animation: dragon-reaction-label 1.55s .08s ease-out forwards;
+}
+
+.dragon-reaction.dragon_scale img {
+  width: 190px;
+  height: 190px;
+  animation-name: dragon-scale-burst;
+}
+
+.dragon-reaction.dragon_scale > i {
+  border-color: #ff654f;
+}
+
+.dragon-reaction.dragon_fire {
+  left: 500px;
+  top: 500px;
+}
+
+.dragon-reaction.dragon_fire img {
+  width: 650px;
+  height: 650px;
+  animation-name: dragon-fire-burst;
+}
+
+.dragon-reaction.dragon_fire > i {
+  width: 170px;
+  height: 170px;
+  border-color: #ff8a35;
+  animation-name: dragon-fire-ring;
+}
+
+.dragon-reaction.dragon_fire b {
+  top: 250px;
+  min-width: 580px;
+  color: #fff;
+  font-size: 42px;
+  animation-name: dragon-fire-label;
+}
+
+.dragon-fire-impact::after {
+  content: "";
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, rgba(255, 238, 170, .44), rgba(240, 88, 35, .2) 38%, transparent 72%);
+  mix-blend-mode: screen;
+  animation: dragon-fire-flash .85s ease-out forwards;
+}
+
+@keyframes dragon-prop-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.12) rotate(-14deg); }
+  32% { opacity: 1; transform: translate(-50%, -50%) scale(1.14) rotate(5deg); }
+  70% { opacity: 1; transform: translate(-50%, -58%) scale(.98); }
+  100% { opacity: 0; transform: translate(-50%, -85%) scale(.45) rotate(18deg); }
+}
+
+@keyframes dragon-scale-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.15) rotate(-12deg); }
+  28% { opacity: 1; transform: translate(-50%, -50%) scale(1.18) rotate(7deg); }
+  56% { transform: translate(-50%, -50%) scale(.96) rotate(-5deg); }
+  100% { opacity: 0; transform: translate(-50%, -64%) scale(.72) rotate(12deg); }
+}
+
+@keyframes dragon-reaction-ring {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(.15); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(2.1); border-width: 2px; }
+}
+
+@keyframes dragon-reaction-label {
+  0% { opacity: 0; transform: translate(-50%, 16px) scale(.55); }
+  25%, 72% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -20px) scale(.92); }
+}
+
+@keyframes dragon-fire-burst {
+  0% { opacity: 0; transform: translate(-50%, -50%) scale(.08) rotate(-22deg); }
+  30% { opacity: 1; transform: translate(-50%, -50%) scale(1.08) rotate(4deg); }
+  72% { opacity: 1; transform: translate(-50%, -50%) scale(.98); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(1.18); filter: blur(3px); }
+}
+
+@keyframes dragon-fire-ring {
+  0% { opacity: 1; transform: translate(-50%, -50%) scale(.1); }
+  100% { opacity: 0; transform: translate(-50%, -50%) scale(3.5); border-width: 2px; }
+}
+
+@keyframes dragon-fire-label {
+  0% { opacity: 0; transform: translate(-50%, 28px) scale(.4); }
+  25%, 72% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+  100% { opacity: 0; transform: translate(-50%, -30px) scale(.92); }
+}
+
+@keyframes dragon-fire-flash {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
 .bomb-explosion {
@@ -633,6 +798,10 @@
   .candy-fire-hit::before,
   .candy-fire-hit img,
   .candy-fire-hit b,
+  .dragon-reaction img,
+  .dragon-reaction > i,
+  .dragon-reaction b,
+  .dragon-fire-impact::after,
   .projection-roster span.candy-fire-target {
     animation-duration: .01ms !important;
   }
