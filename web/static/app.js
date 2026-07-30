@@ -474,9 +474,9 @@ function controlPlayers(){
     ${sceneHeader(t('step_players'),t('who_plays'),t('choose_players'))}
     <section class="language-picker" aria-label="${t('session_language')}">
       <span>${t('session_language')}</span>
-      <div class="segmented">
-        <button class="${appState.selectedLanguage==='de'?'selected':''}" data-action="set-language" data-language="de">DE · ${t('german')}</button>
-        <button class="${appState.selectedLanguage==='en'?'selected':''}" data-action="set-language" data-language="en">EN · ${t('english')}</button>
+      <div class="segmented language-flags">
+        <button class="${appState.selectedLanguage==='de'?'selected':''}" data-action="set-language" data-language="de" aria-label="${t('german')}" title="${t('german')}"><span aria-hidden="true">🇩🇪</span></button>
+        <button class="${appState.selectedLanguage==='en'?'selected':''}" data-action="set-language" data-language="en" aria-label="${t('english')}" title="${t('english')}"><span aria-hidden="true">🇬🇧</span></button>
       </div>
     </section>
     <div class="player-layout">
