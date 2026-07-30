@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 from collections import deque
 from pathlib import Path
 from time import monotonic
@@ -45,6 +46,9 @@ class SessionController:
         self.game_id: Optional[str] = None
         self.selected_mode: Optional[str] = None
         self.selected_options: Dict[str, Any] = {}
+        self.default_starter_id: Optional[str] = None
+        self.selected_starter_id: Optional[str] = None
+        self.starter_selection = "rotation"
         self.calibration = {
             "corners": [
                 {"x": 0.247, "y": 0.05},
@@ -75,6 +79,14 @@ class SessionController:
             self.game_id = runtime.get("game_id")
             self.selected_mode = runtime.get("selected_mode")
             self.selected_options = dict(runtime.get("selected_options", {}))
+            self.default_starter_id = runtime.get("default_starter_id")
+            self.selected_starter_id = runtime.get("selected_starter_id")
+            stored_selection = runtime.get("starter_selection", "rotation")
+            self.starter_selection = (
+                stored_selection
+                if stored_selection in {"rotation", "manual", "random"}
+                else "rotation"
+            )
         if checkpoint:
             self.engine.import_state(checkpoint)
         self.calibration = self.store.get_runtime_value("calibration", self.calibration)
@@ -99,6 +111,9 @@ class SessionController:
                 "game_id": self.game_id,
                 "selected_mode": self.selected_mode,
                 "selected_options": self.selected_options,
+                "default_starter_id": self.default_starter_id,
+                "selected_starter_id": self.selected_starter_id,
+                "starter_selection": self.starter_selection,
             },
         )
         self.store.set_runtime_value("engine", self.engine.export_state())
@@ -109,6 +124,7 @@ class SessionController:
             if self.session_id
             else None
         )
+        self._ensure_starter(session)
         player_ids = [player["id"] for player in session["players"]] if session else []
         rematch_remaining = max(0.0, self._rematch_armed_until - self._clock())
         rematch_armed = (
@@ -122,6 +138,11 @@ class SessionController:
             "game_id": self.game_id,
             "selected_mode": self.selected_mode,
             "selected_options": self.selected_options,
+            "starter": {
+                "player_id": self.selected_starter_id,
+                "default_player_id": self.default_starter_id,
+                "selection": self.starter_selection,
+            },
             "ui_language": self.ui_language,
             "game": self.engine.state.as_dict(),
             "editable_turns": self.engine.editable_turns(limit=1),
@@ -166,6 +187,63 @@ class SessionController:
         self.screen = "players"
         self._persist()
 
+    def _ensure_starter(
+        self,
+        session: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        if session is None and self.session_id:
+            session = self.store.get_session(self.session_id)
+        player_ids = [
+            player["id"]
+            for player in (session or {}).get("players", [])
+        ]
+        if not player_ids:
+            self.default_starter_id = None
+            self.selected_starter_id = None
+            self.starter_selection = "rotation"
+            return
+        if self.default_starter_id not in player_ids:
+            self.default_starter_id = player_ids[0]
+        if self.selected_starter_id not in player_ids:
+            self.selected_starter_id = self.default_starter_id
+            self.starter_selection = "rotation"
+
+    def _next_session_player_id(self, player_id: Optional[str]) -> Optional[str]:
+        session = self.store.get_session(self.session_id) if self.session_id else None
+        player_ids = [
+            player["id"]
+            for player in (session or {}).get("players", [])
+        ]
+        if not player_ids:
+            return None
+        if player_id not in player_ids:
+            return player_ids[0]
+        return player_ids[(player_ids.index(player_id) + 1) % len(player_ids)]
+
+    def select_starter(
+        self,
+        *,
+        player_id: Optional[str] = None,
+        randomize: bool = False,
+    ) -> str:
+        if self.screen != "instructions" or not self.selected_mode:
+            raise ValueError("A starter can only be selected before a game")
+        session = self.store.get_session(self.session_id) if self.session_id else None
+        players = list((session or {}).get("players", []))
+        if not players:
+            raise ValueError("An active session is required")
+        player_ids = [player["id"] for player in players]
+        if randomize:
+            self.selected_starter_id = secrets.choice(player_ids)
+            self.starter_selection = "random"
+        elif player_id in player_ids:
+            self.selected_starter_id = player_id
+            self.starter_selection = "manual"
+        else:
+            raise ValueError("Selected starter is not part of the session")
+        self._persist()
+        return self.selected_starter_id
+
     def start_session(
         self,
         player_ids: Iterable[str],
@@ -178,6 +256,9 @@ class SessionController:
         self.game_id = None
         self.selected_mode = None
         self.selected_options = {}
+        self.default_starter_id = session["players"][0]["id"]
+        self.selected_starter_id = self.default_starter_id
+        self.starter_selection = "rotation"
         self.screen = "game_select"
         self._persist()
         return session
@@ -196,6 +277,7 @@ class SessionController:
             )
         self.selected_mode = game_type
         self.selected_options = defaults
+        self._ensure_starter(session)
         self.screen = "instructions"
         self._persist()
 
@@ -205,9 +287,20 @@ class SessionController:
         session = self.store.get_session(self.session_id)
         if not session:
             raise ValueError("Active session no longer exists")
+        self._ensure_starter(session)
+        players = list(session["players"])
+        starter_index = next(
+            (
+                index
+                for index, player in enumerate(players)
+                if player["id"] == self.selected_starter_id
+            ),
+            0,
+        )
+        ordered_players = players[starter_index:] + players[:starter_index]
         self.engine.reset(
             self.selected_mode,
-            session["players"],
+            ordered_players,
             options=self.selected_options,
         )
         self.game_id = self.store.start_game(
@@ -238,6 +331,8 @@ class SessionController:
             payload={
                 "game_type": self.selected_mode,
                 "options": self.selected_options,
+                "starter_id": self.selected_starter_id,
+                "starter_selection": self.starter_selection,
             },
             frame=self.engine.state.replay_frame(),
         )
@@ -388,6 +483,9 @@ class SessionController:
             rotated_players,
             options=self.selected_options,
         )
+        self.default_starter_id = rotated_order[0]
+        self.selected_starter_id = rotated_order[0]
+        self.starter_selection = "rotation"
         self.game_id = self.store.start_game(
             self.session_id,
             self.selected_mode,
@@ -414,6 +512,8 @@ class SessionController:
                 "game_type": self.selected_mode,
                 "options": self.selected_options,
                 "rematch": True,
+                "starter_id": rotated_order[0],
+                "starter_selection": "rotation",
             },
             source="system",
         )
@@ -585,11 +685,21 @@ class SessionController:
         self._persist()
 
     def next_game(self) -> None:
+        if (
+            self.game_id
+            and self.engine.state.status == "finished"
+            and self.engine.state.players
+        ):
+            self.default_starter_id = self._next_session_player_id(
+                self.engine.state.players[0].id
+            )
         self._rematch_armed_until = 0.0
         self.engine.clear()
         self.game_id = None
         self.selected_mode = None
         self.selected_options = {}
+        self.selected_starter_id = self.default_starter_id
+        self.starter_selection = "rotation"
         self.screen = "game_select"
         self._persist()
 
@@ -614,6 +724,8 @@ class SessionController:
         self.game_id = None
         self.selected_mode = None
         self.selected_options = {}
+        self.selected_starter_id = self.default_starter_id
+        self.starter_selection = "rotation"
         self.screen = "game_select"
         self._persist()
 
@@ -632,6 +744,9 @@ class SessionController:
         self.game_id = None
         self.selected_mode = None
         self.selected_options = {}
+        self.default_starter_id = None
+        self.selected_starter_id = None
+        self.starter_selection = "rotation"
         self._persist()
 
     def save_calibration(self, calibration: Dict[str, Any]) -> None:

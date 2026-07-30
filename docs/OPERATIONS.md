@@ -94,6 +94,13 @@ Ohne verbundenes BLE-Board läuft die Projektoransicht im Testmodus. In diesem
 Modus erzeugt ein Klick auf ein Scheibensegment den entsprechenden Treffer;
 für einen Fehlwurf steht daneben **MISS** bereit.
 
+Auf dem Anleitungsbildschirm kann der Startspieler direkt angetippt oder über
+**Zufall** ausgelost werden. Ohne Eingriff startet im ersten Spiel der zuerst
+für die Session ausgewählte Spieler. Nach jedem gewerteten Spiel rotiert der
+Start automatisch zum nächsten Session-Spieler. Ein abgebrochenes Spiel
+verändert diese Rotation nicht. Der gewählte Startspieler wird auf Controller
+und Projektor angezeigt.
+
 Nach einem gewerteten Spiel startet ein doppelter Druck auf die
 Spielerwechsel-Taste innerhalb von drei Sekunden eine Revanche mit demselben
 Modus, denselben Optionen und rotierendem Startspieler. Der erste Druck zeigt

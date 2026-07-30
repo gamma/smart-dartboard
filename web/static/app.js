@@ -551,6 +551,32 @@ function instructionSteps(mode){
     <span>${index+1}</span><div><h3>${escapeHtml(step.title)}</h3><p>${escapeHtml(step.body)}</p></div>
   </article>`).join('');
 }
+function starterPlayer(){
+  const starterId=appState.experience?.starter?.player_id;
+  return appState.experience?.session?.players?.find(player=>player.id===starterId);
+}
+function starterSourceLabel(selection){
+  if(selection==='random') return t('starter_random');
+  if(selection==='manual') return t('starter_manual');
+  return t('starter_rotation');
+}
+function starterSelector(){
+  const players=appState.experience.session?.players || [];
+  const starter=appState.experience.starter || {};
+  const selected=starterPlayer();
+  return `<section class="starter-selector">
+    <header><div><span>${t('starter')}</span><h3>${selected?escapeHtml(t('starts_game',{name:selected.name})):t('choose_starter')}</h3></div><small>${starterSourceLabel(starter.selection)}</small></header>
+    <div class="starter-choices">
+      <button type="button" class="starter-random ${starter.selection==='random'?'selected':''}" data-action="random-starter"><i aria-hidden="true">🎲</i><b>${t('random_starter')}</b></button>
+      ${players.map(player=>{
+        const selectedPlayer=player.id===starter.player_id;
+        const drawn=selectedPlayer && starter.selection==='random';
+        return `<button type="button" class="${selectedPlayer && !drawn?'selected':''} ${drawn?'drawn':''}" data-action="set-starter" data-player="${escapeHtml(player.id)}" style="--player:${escapeHtml(player.color)}"><i aria-hidden="true">${avatarEmoji(player.avatar)}</i><b>${escapeHtml(player.name)}</b></button>`;
+      }).join('')}
+    </div>
+    <p>${t('starter_copy')}</p>
+  </section>`;
+}
 function controlGraphic(icon){
   const paths={
     left:'<path d="M20 8 6 20l14 12M7 20h29"/>',
@@ -581,7 +607,7 @@ function controlInstructions(){
     </div>
     <div class="instruction-content">
       <div class="instruction-list">${controlLegend(mode.control_legend,'control-instructions')}${instructionSteps(mode)}</div>
-      <div class="game-options">${mode.options.map(option => optionControl(option,appState.experience.selected_options[option.key])).join('')}</div>
+      <div class="game-options">${starterSelector()}${mode.options.map(option => optionControl(option,appState.experience.selected_options[option.key])).join('')}</div>
     </div>
     <footer class="sticky-actions">
       ${actionButton(t('other_game'),'back-games','ghost')}
@@ -591,11 +617,12 @@ function controlInstructions(){
 }
 
 function controlCountdown(){
+  const starter=starterPlayer();
   return `<section class="control-scene centered-scene">
     <div class="radar-loader"><i></i><b id="countdownValue" aria-live="polite">3</b></div>
     <div class="kicker">${t('projector_running')}</div>
     <h1>${t('game_starts')}</h1>
-    <p>${t('line_ready')}</p>
+    <p>${starter?t('starts_game',{name:escapeHtml(starter.name)}):t('line_ready')}</p>
   </section>`;
 }
 
@@ -1185,17 +1212,19 @@ function projectorGameSelect(){
 }
 function projectorInstructions(){
   const mode = modeBySlug(appState.experience.selected_mode);
+  const starter=starterPlayer();
   const instructions=mode.control_legend?.length
     ? controlLegend(mode.control_legend,'projector-guide')
     : `<div class="projector-step-list">${instructionSteps(mode)}</div>`;
   return projectorBackdrop(mode,`<div class="projector-instructions">
-    <div><div class="kicker">${escapeHtml(mode.tagline)}</div><h1>${escapeHtml(mode.title)}</h1><p>${escapeHtml(mode.description)}</p></div>
+    <div><div class="kicker">${escapeHtml(mode.tagline)}</div><h1>${escapeHtml(mode.title)}</h1><p>${escapeHtml(mode.description)}</p>${starter?`<div class="projector-starter"><span>${t('starter')}</span><b>${avatarEmoji(starter.avatar)} ${escapeHtml(starter.name)}</b><small>${starterSourceLabel(appState.experience.starter?.selection)}</small></div>`:''}</div>
     ${instructions}
   </div>`,'mode-projector');
 }
 function projectorCountdown(){
   const mode = modeBySlug(appState.experience.selected_mode);
-  return projectorBackdrop(mode,`<div class="projector-center"><div id="countdownValue" class="giant-countdown" aria-live="polite">3</div><div class="kicker">GET READY</div></div>`,'countdown-projector');
+  const starter=starterPlayer();
+  return projectorBackdrop(mode,`<div class="projector-center"><div id="countdownValue" class="giant-countdown" aria-live="polite">3</div><div class="kicker">${starter?escapeHtml(t('starts_game',{name:starter.name})):'GET READY'}</div></div>`,'countdown-projector');
 }
 
 function boardSvg(){
@@ -1859,6 +1888,14 @@ document.addEventListener('click',async event=>{
     const value=/^-?\d+(\.\d+)?$/.test(target.dataset.value)?Number(target.dataset.value):target.dataset.value;
     const options={...appState.experience.selected_options,[target.dataset.key]:value};
     await action('/api/game/prepare',{game_type:appState.experience.selected_mode,options}); return;
+  }
+  if(name==='set-starter'){
+    await action('/api/game/starter',{mode:'player',player_id:target.dataset.player});
+    return;
+  }
+  if(name==='random-starter'){
+    await action('/api/game/starter',{mode:'random'});
+    return;
   }
   if(name==='back-games'){ await action('/api/game/next'); return; }
   if(name==='start-game'){ await action('/api/game/start'); return; }

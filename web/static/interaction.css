@@ -32,6 +32,113 @@
   transform: scale(1.05);
 }
 
+.starter-selector {
+  margin-bottom: 12px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  border-radius: 17px;
+  background: color-mix(in srgb, var(--accent) 7%, rgba(255, 255, 255, .035));
+}
+
+.starter-selector header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.starter-selector header span,
+.projector-starter span {
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 1000;
+  letter-spacing: .16em;
+}
+
+.starter-selector h3 {
+  margin: 5px 0 0;
+  font-size: 25px;
+}
+
+.starter-selector header small {
+  color: var(--muted);
+  font-weight: 800;
+  text-align: right;
+}
+
+.starter-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(105px, 1fr));
+  gap: 7px;
+  margin-top: 15px;
+}
+
+.starter-choices button {
+  min-width: 0;
+  min-height: 68px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  padding: 9px 11px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, .2);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.starter-choices button i {
+  font-size: 24px;
+  font-style: normal;
+}
+
+.starter-choices button b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.starter-choices button.selected {
+  border-color: var(--player, var(--accent));
+  background: color-mix(in srgb, var(--player, var(--accent)) 22%, rgba(0, 0, 0, .2));
+  box-shadow: 0 0 20px color-mix(in srgb, var(--player, var(--accent)) 15%, transparent);
+}
+
+.starter-choices button.drawn {
+  border-color: var(--player);
+  outline: 2px dashed color-mix(in srgb, var(--player) 55%, transparent);
+  outline-offset: -5px;
+}
+
+.starter-selector>p {
+  margin: 12px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.projector-starter {
+  width: max-content;
+  max-width: 100%;
+  display: grid;
+  gap: 4px;
+  margin-top: 26px;
+  padding: 14px 18px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, .52);
+}
+
+.projector-starter b {
+  font-size: clamp(22px, 2.2vw, 38px);
+}
+
+.projector-starter small {
+  color: var(--muted);
+  font-weight: 800;
+}
+
 .turn-editor {
   width: 100%;
   display: grid;

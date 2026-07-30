@@ -232,6 +232,8 @@ class SessionControllerTests(unittest.TestCase):
             [bob["id"], ada["id"]],
             [player["id"] for player in rematch["game"]["players"]],
         )
+        self.assertEqual(bob["id"], rematch["starter"]["player_id"])
+        self.assertEqual("rotation", rematch["starter"]["selection"])
         self.assertEqual(
             "finished",
             self.controller.store.get_game(finished_game_id)["status"],
@@ -245,6 +247,55 @@ class SessionControllerTests(unittest.TestCase):
         }
         self.assertEqual(3, standings[ada["id"]]["session_points"])
         self.assertEqual(0, standings[bob["id"]]["session_points"])
+
+    def test_starter_can_be_selected_or_randomized_before_game(self):
+        ada = self.controller.create_player("Ada", "nova", "#ff00aa")
+        bob = self.controller.create_player("Bob", "comet", "#28e7ff")
+        cara = self.controller.create_player("Cara", "spark", "#ffb52b")
+        self.controller.start_session([ada["id"], bob["id"], cara["id"]])
+        self.controller.prepare_game("countup", {})
+
+        self.assertEqual(
+            {
+                "player_id": ada["id"],
+                "default_player_id": ada["id"],
+                "selection": "rotation",
+            },
+            self.controller.public_state()["starter"],
+        )
+
+        self.controller.select_starter(player_id=bob["id"])
+        self.assertEqual("manual", self.controller.public_state()["starter"]["selection"])
+        self.controller.prepare_game("countup", {"rounds": 8})
+        self.controller.close()
+        self.controller = SessionController(self.database)
+        self.assertEqual(bob["id"], self.controller.public_state()["starter"]["player_id"])
+        self.assertEqual("manual", self.controller.public_state()["starter"]["selection"])
+        self.controller.start_game()
+        self.assertEqual(
+            [bob["id"], cara["id"], ada["id"]],
+            [player.id for player in self.controller.engine.state.players],
+        )
+
+        self.controller.abort_game()
+        self.controller.prepare_game("countup", {})
+        random_starter = self.controller.select_starter(randomize=True)
+        self.assertIn(random_starter, {ada["id"], bob["id"], cara["id"]})
+        self.assertEqual("random", self.controller.public_state()["starter"]["selection"])
+
+    def test_completed_game_rotates_starter_but_abort_does_not(self):
+        ada, bob = self._finish_countup_game()
+
+        self.controller.next_game()
+        self.controller.prepare_game("countup", {})
+        self.assertEqual(bob["id"], self.controller.public_state()["starter"]["player_id"])
+        self.controller.start_game()
+        self.assertEqual(bob["id"], self.controller.engine.state.players[0].id)
+
+        self.controller.abort_game()
+        self.controller.prepare_game("countup", {})
+        self.assertEqual(bob["id"], self.controller.public_state()["starter"]["player_id"])
+        self.assertEqual("rotation", self.controller.public_state()["starter"]["selection"])
 
     def test_round_start_hook_can_finish_block_drop_session_game(self):
         ada = self.controller.create_player("Ada", "nova", "#ff00aa")

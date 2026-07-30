@@ -35,6 +35,8 @@ Zum Release:
   Modus-Schwierigkeitswerten und persönlichen Trainingshinweisen
 - getrennte Produktions- und Klick-Testdaten sowie vollständiger JSON-Export
 - schnelle Revanche nach Spielende per doppeltem Spielerwechsel-Tastendruck
+- faire Startspieler-Rotation mit manueller Auswahl und Zufallsauslosung vor
+  jedem Spiel
 - wertungsfreier Spielabbruch zurück zur Spielauswahl
 - grafische Spielauswahl mit umschaltbarem Playful-Cartoon- und
   Classic-Neon-Artwork-Theme

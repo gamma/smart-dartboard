@@ -154,6 +154,11 @@ class GamePrepareRequest(BaseModel):
     options: Dict[str, Any] = Field(default_factory=dict)
 
 
+class GameStarterRequest(BaseModel):
+    mode: Literal["player", "random"]
+    player_id: Optional[str] = None
+
+
 class GameActionRequest(BaseModel):
     action: str
     payload: Dict[str, Any] = Field(default_factory=dict)
@@ -396,6 +401,22 @@ async def prepare_game(req: GamePrepareRequest):
 async def start_game():
     controller.start_game()
     await publish_state({"type": "countdown"})
+    return controller.public_state()
+
+
+@app.post("/api/game/starter")
+async def select_game_starter(req: GameStarterRequest):
+    starter_id = controller.select_starter(
+        player_id=req.player_id,
+        randomize=req.mode == "random",
+    )
+    await publish_state(
+        {
+            "type": "starter_selected",
+            "starter_id": starter_id,
+            "selection": req.mode,
+        }
+    )
     return controller.public_state()
 
 
