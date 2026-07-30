@@ -47,8 +47,9 @@ Die Screenshots entstehen aus einer frischen lokalen Session und nicht aus
 statischen Mockups:
 
 ```bash
+capture_data_dir="$(mktemp -d /tmp/smart-dartboard-capture.XXXXXX)"
 SDB_ENABLE_BLE=0 SDB_ALLOW_TEST_EVENTS=1 \
-  SDB_DATA_DIR=/tmp/smart-dartboard-capture \
+  SDB_DATA_DIR="$capture_data_dir" \
   .venv/bin/uvicorn app:app --host 127.0.0.1 --port 8777
 
 node website/capture-screenshots.mjs
@@ -58,7 +59,9 @@ Das Capture-Skript verwendet standardmäßig das global installierte Playwright
 mit WebKit. Ein abweichendes Modul oder eine andere laufende Instanz kann über
 `PLAYWRIGHT_MODULE` beziehungsweise `SDB_CAPTURE_URL` gesetzt werden.
 Projektor-Testwerkzeuge werden für die Marketing-Aufnahmen ausgeblendet, weil
-sie im normalen BLE-Spielbetrieb ebenfalls nicht sichtbar sind.
+sie im normalen BLE-Spielbetrieb ebenfalls nicht sichtbar sind. Das Skript
+erzeugt zusätzlich ein abgeschlossenes Produktionsspiel für Statistik und
+Replay. Deshalb muss jeder Lauf mit einem neuen, leeren `SDB_DATA_DIR` starten.
 
 ## Freigabecheck
 

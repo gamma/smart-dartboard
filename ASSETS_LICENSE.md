@@ -42,7 +42,7 @@ This prevents the repository from offering rights it may not own.
 | `web/static/assets/effects/{dragon_scale,dragon_fire}.webp` and `web/static/assets/themes/neon/effects/{dragon_scale,dragon_fire}.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; only project-owned theme anchors, Dragon-Eggs covers and egg sprites as references; exact prompts and processing in `docs/DRAGON_EGGS_ASSETS_2026-07-30.md`; provenance commit `bede470` | 2026-07-30 |
 | `website/assets/modes/*.webp` | Gerry Weißbach (gamma / gamma production) | Copies of the cleared Cartoon covers | 2026-07-30 |
 | `website/assets/neon/*.webp` | Gerry Weißbach (gamma / gamma production) | Copies of the cleared Classic-Neon covers | 2026-07-30 |
-| `website/assets/screenshots/*.jpg` | Gerry Weißbach (gamma / gamma production) | Local Playwright/WebKit captures of the cleared project UI and artworks | 2026-07-30 |
+| `website/assets/screenshots/*.jpg` | Gerry Weißbach (gamma / gamma production) | Local Playwright/WebKit captures of the cleared project UI and artworks; reproducible capture commit `f323050` | 2026-07-31 |
 
 Entries cover the files present at provenance commit `0069737`. A later file
 matching one of these globs must receive its own provenance review before it is

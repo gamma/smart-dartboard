@@ -24,6 +24,7 @@
     </button>
     <nav id="site-nav" class="site-nav" aria-label="Hauptnavigation" data-nav>
       <a href="#erlebnis">Erlebnis</a>
+      <a href="#statistiken">Statistiken</a>
       <a href="#spielmodi">Spielmodi</a>
       <a href="#technik">Technik</a>
       <a href="#quickstart">Quickstart</a>
@@ -131,7 +132,54 @@
           <div class="mini-icon session-icon" aria-hidden="true"><i>A</i><i>B</i><i>M</i></div>
           <p class="card-kicker">SESSION READY</p>
           <h3>Ein Abend, viele Spiele.</h3>
-          <p>Gewonnene Games geben Sessionpunkte. Dauerhafte Profile sammeln Statistiken über den Abend hinaus.</p>
+          <p>Gewonnene Games geben Sessionpunkte. Dauerhafte Profile sammeln Ergebnisse, Trefferbilder und persönliche Bestwerte über den Abend hinaus.</p>
+        </article>
+      </div>
+    </section>
+
+    <section id="statistiken" class="section insights">
+      <header class="section-heading compact reveal">
+        <div>
+          <p class="eyebrow"><span></span>DEIN ABEND. DEINE WÜRFE.</p>
+          <h2>Jedes Spiel bleibt<br><em>nachvollziehbar.</em></h2>
+        </div>
+        <p>Statistiken, Heatmaps und vollständige Replays entstehen lokal – ohne Benutzerkonto und ohne Cloud.</p>
+      </header>
+
+      <div class="insights-grid">
+        <button class="insight-shot insight-main reveal" type="button" data-zoom="./assets/screenshots/control-statistics.jpg" aria-label="Statistikansicht vergrößern">
+          <img src="./assets/screenshots/control-statistics.jpg" alt="Lokale Statistikansicht mit Spielerwerten, Treffer-Heatmap, Sessions und Spielmodi.">
+          <span><b>STATISTIK &amp; SPIELVERLAUF</b><small>Siege, 3-Dart-Average, Trefferbilder und abgeschlossene Games.</small></span>
+        </button>
+
+        <div class="insight-stack">
+          <button class="insight-shot reveal" type="button" data-zoom="./assets/screenshots/control-replay.jpg" data-delay="70" aria-label="Replayansicht vergrößern">
+            <img src="./assets/screenshots/control-replay.jpg" alt="Replay eines abgeschlossenen Count-Up-Spiels mit Board, Punktestand und Wurfleiste.">
+            <span><b>WURF FÜR WURF</b><small>Ein Replay hält Boardzustand, Punkte und Korrekturen fest.</small></span>
+          </button>
+          <article class="insight-copy reveal" data-delay="130">
+            <p class="card-kicker">PRIVAT BY DESIGN</p>
+            <h3>Deine Daten bleiben in der Spielhalle.</h3>
+            <p>Nur beendete Games zählen in die Wertung. Testspiele lassen sich getrennt einblenden und die komplette Historie kann als JSON exportiert werden.</p>
+          </article>
+        </div>
+      </div>
+
+      <div class="insight-points">
+        <article class="reveal">
+          <span>DE / EN</span>
+          <h3>Sprache sofort wechseln</h3>
+          <p>Flaggen im Controller schalten die gesamte Oberfläche um. Der Projektor folgt automatisch.</p>
+        </article>
+        <article class="reveal" data-delay="60">
+          <span>3 DARTS</span>
+          <h3>Würfe direkt korrigieren</h3>
+          <p>Treffer auswählen, auf der Korrekturscheibe neu setzen, als Miss markieren oder einen fehlenden Wurf nachtragen.</p>
+        </article>
+        <article class="reveal" data-delay="120">
+          <span>LOCAL DB</span>
+          <h3>Keine Cloud notwendig</h3>
+          <p>Sessions, Spiele und das unveränderliche Ereignisjournal liegen ausschließlich in der lokalen SQLite-Datenbank.</p>
         </article>
       </div>
     </section>
@@ -155,6 +203,10 @@
         <button class="gameplay-shot reveal" type="button" data-zoom="./assets/screenshots/projector-avoid-bomb.jpg" data-delay="140">
           <img src="./assets/screenshots/projector-avoid-bomb.jpg" alt="Avoid the Bomb mit roten Bombenfeldern auf dem Dartboard.">
           <span><b>AVOID THE BOMB</b><small>Punkte sammeln – rote Felder meiden.</small></span>
+        </button>
+        <button class="gameplay-shot reveal" type="button" data-zoom="./assets/screenshots/projector-dragon-eggs.jpg" data-delay="200">
+          <img src="./assets/screenshots/projector-dragon-eggs.jpg" alt="Dragon Eggs mit roten Schuppenfeldern und einer großen Drachenfeuer-Reaktion.">
+          <span><b>DRAGON EGGS</b><small>Eier bergen – die dritte Schuppe entfacht das Feuer.</small></span>
         </button>
       </div>
     </section>
@@ -198,8 +250,8 @@
           <div><span>DUEL</span><h3>Eight Ball</h3><p>Eigene Zahlen räumen, dann Double Bull versenken.</p></div>
         </article>
         <article class="mode-card reveal" data-delay="120">
-          <img src="./assets/modes/heart_chase.webp" alt="">
-          <div><span>ARCADE CHASE</span><h3>Heart Chase</h3><p>Herausforderungen schlagen und Herzen jagen.</p></div>
+          <img src="./assets/modes/dragon_eggs.webp" alt="">
+          <div><span>RISK &amp; REWARD</span><h3>Dragon Eggs</h3><p>Goldene Eier bergen, rote Schuppen und Drachenfeuer meiden.</p></div>
         </article>
       </div>
     </section>
@@ -237,7 +289,7 @@
         <p>Die Scheibe liefert Treffer, der Controller führt durch den Abend, der Projektor macht jeden Wurf sichtbar und hörbar.</p>
         <ul>
           <li><i>01</i><span><b>Kings Dart / SDB-BT BLE-Board</b><small>Treffer kommen seriell und entprellt ins Spiel.</small></span></li>
-          <li><i>02</i><span><b>Touch-Controller</b><small>Spieler, Modi, Korrektur, Abbruch und Setup.</small></span></li>
+          <li><i>02</i><span><b>Touch-Controller</b><small>Spieler, Modi, aktuelle Würfe, Touch-Korrektur, Abbruch und Setup.</small></span></li>
           <li><i>03</i><span><b>Projektor</b><small>Kalibrierte Ziele, Spielstand, Animation und Sound.</small></span></li>
         </ul>
       </div>
@@ -321,13 +373,13 @@
           <p class="eyebrow"><span></span>DOCKER QUICKSTART</p>
           <h2>Vier Schritte.<br><em>Dann fliegen die Darts.</em></h2>
         </div>
-        <p>Das veröffentlichte Image läuft auf AMD64 und ARM64. Docker und Docker Compose genügen für den ersten lokalen Start.</p>
+        <p>Das veröffentlichte Image läuft auf AMD64 und ARM64. Docker genügt für Oberfläche und Testtreffer; echte BLE-Hardware hängt vom Host ab.</p>
       </header>
 
       <div class="quickstart-layout">
         <ol class="quickstart-steps reveal">
           <li><span>01</span><div><b>Repository holen</b><small>Enthält Compose-Datei und sichere Standardwerte.</small></div></li>
-          <li><span>02</span><div><b>Release laden</b><small>Version 0.0.1 wird reproduzierbar aus GHCR geladen.</small></div></li>
+          <li><span>02</span><div><b>Release laden</b><small>Version 0.0.2 wird reproduzierbar aus GHCR geladen.</small></div></li>
           <li><span>03</span><div><b>Container starten</b><small>Der erste Start läuft ohne BLE und erlaubt Testtreffer.</small></div></li>
           <li><span>04</span><div><b>Healthcheck prüfen</b><small>Danach Controller und Projektor im Browser öffnen.</small></div></li>
         </ol>
@@ -335,7 +387,7 @@
         <div class="quickstart-terminal reveal" data-delay="100">
           <header>
             <div><i></i><i></i><i></i></div>
-            <b>SMART DARTBOARD · v0.0.1</b>
+            <b>SMART DARTBOARD · v0.0.2</b>
             <button type="button" data-copy-quickstart aria-label="Docker-Quickstart-Befehle kopieren">
               <span aria-hidden="true">□</span> Befehle kopieren
             </button>
@@ -361,6 +413,24 @@
       </div>
 
       <p class="quickstart-note reveal"><i></i><span><b>Für den festen Spielhallenbetrieb auf Linux:</b> In <code>.env</code> die BLE-Adresse eintragen, <code>SDB_ENABLE_BLE=1</code> und <code>SDB_ALLOW_TEST_EVENTS=0</code> setzen. Der Host benötigt BlueZ und einen erreichbaren <code>/var/run/dbus</code>-Socket.</span></p>
+
+      <div class="platform-grid">
+        <article class="reveal">
+          <span>MACOS / LINUX</span>
+          <h3>Nativ mit BLE</h3>
+          <p><code>./scripts/dev.sh --ble</code> verbindet unterstützte Boards direkt. Unter macOS wird Bluetooth über CoreBluetooth freigegeben.</p>
+        </article>
+        <article class="reveal" data-delay="60">
+          <span>DOCKER DESKTOP</span>
+          <h3>UI und Testbetrieb</h3>
+          <p>Auf macOS und Windows läuft der Container ohne BLE. Projektor-Klicks und Testtreffer stehen für Einrichtung und Demo bereit.</p>
+        </article>
+        <article class="reveal" data-delay="120">
+          <span>LINUX + BLUEZ</span>
+          <h3>Container mit Hardware</h3>
+          <p>Mit Host-Netzwerk, BlueZ und DBus kann auch der Produktionscontainer das BLE-Dartboard direkt erreichen.</p>
+        </article>
+      </div>
     </section>
 
     <section class="final-cta">
@@ -369,8 +439,8 @@
       <div class="reveal">
         <p class="eyebrow"><span></span>READY TO THROW?</p>
         <h2>Bring Arcade-Energie<br><em>auf die echte Scheibe.</em></h2>
-        <p>Release 0.0.1, Setup-Anleitung und der komplette Code liegen auf GitHub.</p>
-        <a class="button button-primary" href="https://github.com/gamma/smart-dartboard/releases/tag/v0.0.1">Release 0.0.1 ansehen <span>↗</span></a>
+        <p>Release 0.0.2, Setup-Anleitung und der komplette Code liegen auf GitHub.</p>
+        <a class="button button-primary" href="https://github.com/gamma/smart-dartboard/releases/tag/v0.0.2">Release 0.0.2 ansehen <span>↗</span></a>
       </div>
     </section>
   </main>
@@ -380,7 +450,7 @@
       <span class="brand-mark" aria-hidden="true"><i></i></span>
       <span><b>SMART DARTS</b><small>ARCADE SYSTEM</small></span>
     </a>
-    <p>Smart Dartboard v0.0.1 · Visuals © 2026 Gerry Weißbach · CC BY-NC-SA 4.0</p>
+    <p>Smart Dartboard v0.0.2 · Visuals © 2026 Gerry Weißbach · CC BY-NC-SA 4.0</p>
     <div><a href="./ASSETS_LICENSE.md">Asset-Lizenz</a><a href="https://github.com/gamma/smart-dartboard">GitHub</a><a href="#top">Nach oben ↑</a></div>
   </footer>
 

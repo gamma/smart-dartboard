@@ -194,8 +194,8 @@ die zwölf Ambient-Props, `bd67109` für `candy_overheat` und `88ee789` für
 
 ### Website-Screenshots
 
-Die fünf JPEGs unter `website/assets/screenshots/` sind keine
-ImageGen-Ergebnisse. Sie wurden am 29.07.2026 mit
+Die acht JPEGs unter `website/assets/screenshots/` sind keine
+ImageGen-Ergebnisse. Sie wurden zuletzt am 31.07.2026 mit
 `website/capture-screenshots.mjs` aus einer frischen lokalen Spielsession
 aufgenommen:
 
@@ -203,12 +203,18 @@ aufgenommen:
 - Controller-Viewports: 1440 × 1000 und 1280 × 900,
 - Projektor-Viewports: 1600 × 900 und 1920 × 1080,
 - Format: JPEG mit Qualität 88,
-- Zustände: echte lokale API-Session mit drei Testspielern und fest
-  protokollierten Testtreffern; keine statischen UI-Mockups.
+- Zustände: echte lokale API-Session mit drei Testspielern, fest
+  protokollierten Testtreffern und einem vollständig beendeten Count-Up-Spiel;
+  keine statischen UI-Mockups,
+- Statistik und Replay basieren ausschließlich auf dem abgeschlossenen
+  Produktionsspiel; die zuvor aufgenommenen Projektor-Modi werden als
+  Testspiele gekennzeichnet und von diesen Kennzahlen ausgeschlossen.
 
-Die Screenshots kamen mit Commit `e01e095` in das Repository. Sie bilden
-allerdings die Spielmodus-Artworks ab und können deshalb erst zusammen mit den
-dargestellten Assets abschließend lizenziert werden.
+Die ersten fünf Screenshots kamen mit Commit `e01e095` in das Repository. Der
+aktuelle Satz einschließlich Statistik, Replay und Dragon Eggs wurde mit
+Commit `f323050` erneuert. Die Aufnahmen bilden Spielmodus-Artworks ab und
+können deshalb erst zusammen mit den dargestellten Assets abschließend
+lizenziert werden.
 
 ## Animierte 3D-Props
 
