@@ -15,14 +15,14 @@ Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 
 ## Projektstatus
 
-`v0.0.1` ist das erste öffentlich installierbare Release. Anwendung,
+`v0.0.2` ist das aktuelle öffentlich installierbare Release. Es ergänzt den
+ersten Release um lokale Statistik, Heatmaps und Replays, die zweisprachige
+Oberfläche, erweiterte Wurfkorrektur sowie überarbeitete Arcade-Modi.
 Multi-Arch-Container und Deployment-Anleitung sind für lokale Test- und
-Arcade-Installationen verfügbar. Die reale Hardwareintegration wird derzeit mit
-einem King-Darts-SDB-BT-Board geprüft; weitere elektronisch auslesbare Boards
-benötigen gegebenenfalls einen eigenen Decoder oder Adapter.
+Arcade-Installationen verfügbar.
 
 Zum Release:
-[Smart Dartboard 0.0.1](https://github.com/gamma/smart-dartboard/releases/tag/v0.0.1)
+[Smart Dartboard 0.0.2](https://github.com/gamma/smart-dartboard/releases/tag/v0.0.2)
 
 ## Funktionen
 
@@ -139,14 +139,14 @@ und WebSocket akzeptieren nur denselben Origin; native Wartungsskripte ohne
 Ein veröffentlichtes Image steht für AMD64 und ARM64 bereit:
 
 ```bash
-docker pull ghcr.io/gamma/smart-dartboard:0.0.1
+docker pull ghcr.io/gamma/smart-dartboard:0.0.2
 ```
 
 Für eine persistente Installation:
 
 ```bash
 cp .env.example .env
-# In .env: SDB_VERSION=0.0.1
+# In .env: SDB_VERSION=0.0.2
 mkdir -p data
 docker compose -f compose.production.yml pull
 docker compose -f compose.production.yml up -d --wait --wait-timeout 60

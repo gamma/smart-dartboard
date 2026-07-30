@@ -52,10 +52,10 @@ ghcr.io/gamma/smart-dartboard:latest
 ```
 
 `latest` wird nur für ein reguläres Release gesetzt, nicht für ein
-Pre-Release. Das erste öffentliche Release wurde so angelegt:
+Pre-Release. Das aktuelle Release wird so angelegt:
 
 ```bash
-gh release create v0.0.1 --generate-notes --title "Smart Dartboard 0.0.1"
+gh release create v0.0.2 --generate-notes --title "Smart Dartboard 0.0.2"
 ```
 
 Der Release-Workflow veröffentlicht ein Multi-Arch-Image für
@@ -80,7 +80,7 @@ cp .env.example .env
 In `.env` mindestens das veröffentlichte Release eintragen:
 
 ```dotenv
-SDB_VERSION=0.0.1
+SDB_VERSION=0.0.2
 SDB_DEVICE_NAME=SDB-BT
 SDB_DEVICE_ADDRESS=
 ```
