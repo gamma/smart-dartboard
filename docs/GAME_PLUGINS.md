@@ -49,7 +49,9 @@ Für feste Rundenzahlen sollte ein Arcade-Modus jeden Rückgabepfad aus
 `apply_throw` über `finish_round_game(...)` führen. Dadurch beendet auch ein
 Miss oder ein neutrales Feld die letzte Aufnahme korrekt. Controller-Aktionen,
 die eine Aufnahme beenden, verwenden entsprechend
-`finish_action_round_game(...)`.
+`finish_action_round_game(...)`. Wird die Option `rounds` verwendet, wertet
+der Core auch einen manuell übersprungenen Zug als abgeschlossene Aufnahme und
+beendet das Spiel nach dem letzten Spieler der letzten Runde.
 
 Ein optionaler Hook `on_turn_start(state, player)` wird nach dem
 Spielerwechsel ausgeführt. Kompetitive Zufallsbedingungen dürfen dort nur neu
@@ -57,6 +59,13 @@ erzeugt werden, wenn `state.round_number` gewechselt hat. Innerhalb einer Runde
 müssen alle Spieler dasselbe Layout beziehungsweise dieselbe Aufgabenfolge
 erhalten. Die verbindliche Regel und Ausnahmen stehen in
 [`FAIRNESS.md`](FAIRNESS.md).
+
+Ein optionaler Hook `on_turn_skipped(state, player)` verarbeitet Regeln, die
+beim manuellen Überspringen des laufenden Spielers gelten müssen. Beispiele
+sind der Vier-Schläge-Wert bei Mini Golf, ein verlorener Risk-It-Pot oder eine
+Koop-Niederlage am Rundenlimit. Setzt der Hook das Spiel nicht selbst auf
+`finished`, verwendet der Core für feste Rundenspiele die normale
+Höchstscore-Auswertung.
 
 Eliminierungsmodi können zusätzlich
 `is_player_active(state, player) -> bool` anbieten. Der Core überspringt

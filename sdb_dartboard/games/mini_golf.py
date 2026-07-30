@@ -114,6 +114,36 @@ class MiniGolfMode:
             outcome = ThrowOutcome(0, "Am Loch vorbei")
         return self._finish(state, outcome)
 
+    def on_turn_skipped(self, state: Any, player: Any) -> None:
+        player.score += 4
+        state.message = f"{player.name} überspringt · 4 Schläge"
+        is_last = state.current_player_index == len(state.players) - 1
+        if not (
+            is_last
+            and state.round_number >= int(state.options["rounds"])
+        ):
+            return
+        low = min(candidate.score for candidate in state.players)
+        leaders = [
+            candidate for candidate in state.players if candidate.score == low
+        ]
+        state.status = "finished"
+        if len(leaders) == 1:
+            state.winner_id = leaders[0].id
+            state.winner_ids = [leaders[0].id]
+            state.result_type = "individual_win"
+            state.message = (
+                f"{leaders[0].name} gewinnt den Platz mit {low} Schlägen!"
+            )
+        else:
+            state.winner_id = None
+            state.winner_ids = []
+            state.result_type = "draw"
+            state.message = (
+                "Unentschieden: "
+                + " · ".join(candidate.name for candidate in leaders)
+            )
+
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         target = state.mode_state.get("target")
         return {

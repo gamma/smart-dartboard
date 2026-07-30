@@ -95,6 +95,10 @@ class RiskItMode:
         # A manually skipped turn must never carry an old Aufnahme-Pot forward.
         self._set_pot(state, player.id, 0)
 
+    def on_turn_skipped(self, state: Any, player: Any) -> None:
+        self._set_pot(state, player.id, 0)
+        state.message = f"{player.name} überspringt · Pot verloren"
+
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         player = state.current_player()
         pot = self._pot(state, player.id) if player else 0

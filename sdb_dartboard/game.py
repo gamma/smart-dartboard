@@ -407,6 +407,11 @@ class GameEngine:
 
     def next_player(self) -> GameState:
         if self.state.status in ("running", "hold"):
+            if self.state.status == "running":
+                self._complete_skipped_turn()
+            if self.state.status == "finished":
+                self.state.last_event = {"type": "next_player"}
+                return self.state
             previous_message = self.state.message
             self._advance_player()
             self.state.last_event = {"type": "next_player"}
@@ -415,6 +420,24 @@ class GameEngine:
                 if self.state.message == previous_message:
                     self.state.message = "Next player"
         return self.state
+
+    def _complete_skipped_turn(self) -> None:
+        """Apply turn-end rules when the operator skips the remaining darts."""
+        player = self.state.current_player()
+        if player is None:
+            return
+        mode = registry.get(self.state.game_type)
+        hook = getattr(mode, "on_turn_skipped", None)
+        if hook is not None:
+            hook(self.state, player)
+        if self.state.status != "running" or "rounds" not in self.state.options:
+            return
+        from .games.arcade import finish_action_round_game
+
+        finish_action_round_game(
+            self.state,
+            f"{{winner}} gewinnt {mode.metadata.title}!",
+        )
 
     def undo(self) -> GameState:
         if not self.state.throws:

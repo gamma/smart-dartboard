@@ -82,6 +82,19 @@ class BossFightMode:
         )
         return ThrowOutcome(turn_value=damage, message=message)
 
+    def on_turn_skipped(self, state: Any, player: Any) -> None:
+        del player
+        final_player = state.current_player_index == len(state.players) - 1
+        final_round = state.round_number >= int(state.options.get("rounds", 8))
+        if final_player and final_round:
+            state.status = "finished"
+            state.winner_id = None
+            state.winner_ids = []
+            state.result_type = "challenge_loss"
+            state.message = (
+                f"Boss gewinnt mit {state.mode_state['boss_hp']} HP!"
+            )
+
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         hp = int(state.mode_state.get("boss_hp", 0))
         weak = state.mode_state.get("weak", [])
