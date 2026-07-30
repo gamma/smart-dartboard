@@ -28,8 +28,8 @@ dokumentieren und mit einem Mehrspieler-Test absichern.
 | Kategorie | Modi | Bewertung |
 | --- | --- | --- |
 | Klassische symmetrische Regeln | Count Up, X01, Cricket, Risk It, King of the Board | Kein persönlicher Zufall; gleiche Grundbedingungen. |
-| Gemeinsames Rundenlayout | Avoid the Bomb, Color Clash, Cookie Monster, Dragon Eggs, Lightning Round, Mini Golf | Zufall wird pro Runde gemeinsam erzeugt. |
-| Gemeinsame Aufgabenfolge | Target Rush, Ghost Chase, Simon Says | Jeder Spieler erhält pro Runde dieselbe Ziel- beziehungsweise Sequenzfolge; persönlicher Fortschritt bleibt getrennt. |
+| Gemeinsames Rundenlayout | Avoid the Bomb, Color Clash, Dragon Eggs, Lightning Round, Mini Golf | Zufall wird pro Runde gemeinsam erzeugt. |
+| Gemeinsame Aufgabenfolge | Cookie Monster, Target Rush, Ghost Chase, Simon Says | Jeder Spieler erhält dieselbe Board-, Ziel- beziehungsweise Sequenzfolge; persönlicher Fortschritt bleibt getrennt. |
 | Gemeinsame Aufgabenkarte | Darts Bingo | Alle starten mit derselben Karte; nach dem ersten Bingo erhalten die übrigen Spieler derselben Runde eine Ausgleichschance. |
 | Koop-Welt | Boss Fight, Block Drop, DartSweeper, Space Defender | Eine gemeinsam veränderte Welt; Team-Sieg und gleiche Sessionpunkte. |
 | Bewusst asymmetrisch | Heart Chase, Robin Hood Hunt, Eight Ball, Candy Cannon | Rollen, Vorgängerziel, feste Kugelgruppen oder Angriffe sind das erklärte Spielprinzip; kein verdeckt unterschiedlich verteilter Zufall. |

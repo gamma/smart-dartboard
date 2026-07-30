@@ -182,19 +182,25 @@ class CartoonModeTests(unittest.TestCase):
 
     def test_cookie_sugar_rush_and_milk_rescue(self):
         engine = GameEngine()
-        engine.reset("cookie_monster", ["Ada"])
-        player = engine.state.players[0]
-        good = next(
-            item for item in engine.state.mode_state["cookies"].values()
-            if item["kind"] == "green"
+        engine.reset(
+            "cookie_monster",
+            ["Ada"],
+            options={"difficulty": "hard"},
         )
-        for seq in range(3):
-            engine.handle_event({"type": "hit", "seq": seq, **good["dart"]})
+        player = engine.state.players[0]
+        board = engine.state.mode_state["layouts"]["1"]
+        good = [
+            item for item in board.values()
+            if item["kind"] == "green"
+        ][:3]
+        for seq, item in enumerate(good):
+            engine.handle_event({"type": "hit", "seq": seq, **item["dart"]})
         self.assertTrue(engine.state.mode_state["sugar"][player.id])
         engine.continue_turn()
         next_good = next(
-            item for item in engine.state.mode_state["cookies"].values()
+            item for cookie_id, item in board.items()
             if item["kind"] == "green"
+            and cookie_id not in engine.state.mode_state["collected"][player.id]
         )
         before = player.score
         engine.handle_event({"type": "hit", "seq": 4, **next_good["dart"]})
@@ -212,7 +218,7 @@ class CartoonModeTests(unittest.TestCase):
         overlay = engine.state.as_dict()["overlay"]
         cookie_items = overlay["bonus"] + overlay["targets"] + overlay["danger"]
 
-        self.assertEqual(12, sum(
+        self.assertEqual(15, sum(
             item.get("icon") in {"cookie", "cookie_moldy"}
             for item in cookie_items
         ))
@@ -223,24 +229,115 @@ class CartoonModeTests(unittest.TestCase):
                 if item.get("icon") == "milk"
             },
         )
-        self.assertEqual(5, len(overlay["visual_legend"]))
+        self.assertEqual(3, len(overlay["visual_legend"]))
+        self.assertEqual(15, len(overlay["zones"]))
+        self.assertTrue(all(
+            item.get("match_field")
+            for item in cookie_items
+            if item.get("icon") in {"cookie", "cookie_moldy"}
+        ))
 
-    def test_cookie_layout_is_identical_for_every_player_in_a_round(self):
+    def test_cookie_boards_are_personal_but_use_the_same_wave_layout(self):
         engine = GameEngine()
         engine.reset("cookie_monster", ["Ada", "Bob"])
-        cookies = engine.state.mode_state["cookies"]
+        ada, bob = engine.state.players
+        board = engine.state.mode_state["layouts"]["1"]
+        cookie_id, cookie = next(
+            (cookie_id, item)
+            for cookie_id, item in board.items()
+            if item["kind"] != "moldy"
+        )
 
-        for seq in range(3):
+        engine.handle_event({"type": "hit", "seq": 1, **cookie["dart"]})
+        self.assertIn(cookie_id, engine.state.mode_state["collected"][ada.id])
+        self.assertNotIn(cookie_id, engine.state.mode_state["collected"][bob.id])
+        for seq in range(2, 4):
             engine.handle_event(MISS | {"seq": seq})
         engine.continue_turn()
-        self.assertIs(cookies, engine.state.mode_state["cookies"])
+        bob_overlay_ids = {
+            item["id"]
+            for item in (
+                engine.state.as_dict()["overlay"]["bonus"]
+                + engine.state.as_dict()["overlay"]["targets"]
+            )
+            if item.get("icon") == "cookie"
+        }
+        self.assertIn(cookie["dart"]["label"], bob_overlay_ids)
 
-        for seq in range(3, 6):
-            engine.handle_event(MISS | {"seq": seq})
-        engine.continue_turn()
+    def test_cookie_board_only_refills_after_all_good_cookies_are_eaten(self):
+        engine = GameEngine()
+        engine.reset("cookie_monster", ["Ada"])
+        player = engine.state.players[0]
+        board = engine.state.mode_state["layouts"]["1"]
+        good_ids = [
+            cookie_id
+            for cookie_id, item in board.items()
+            if item["kind"] != "moldy"
+        ]
+        last_id = good_ids[-1]
+        engine.state.mode_state["collected"][player.id] = good_ids[:-1]
 
-        self.assertEqual(2, engine.state.mode_state["cookie_round"])
-        self.assertIsNot(cookies, engine.state.mode_state["cookies"])
+        engine.handle_event({
+            "type": "hit",
+            "seq": 1,
+            **board[last_id]["dart"],
+        })
+
+        self.assertEqual(2, engine.state.mode_state["wave"][player.id])
+        self.assertEqual([], engine.state.mode_state["collected"][player.id])
+        self.assertIn("2", engine.state.mode_state["layouts"])
+        self.assertEqual(
+            "cookie_board_clear",
+            engine.state.last_event["effect"],
+        )
+
+    def test_cookie_easy_accepts_every_ring_of_a_cookie_number(self):
+        engine = GameEngine()
+        engine.reset("cookie_monster", ["Ada"])
+        player = engine.state.players[0]
+        cookie = next(
+            item
+            for item in engine.state.mode_state["layouts"]["1"].values()
+            if item["kind"] == "blue"
+        )
+        field = cookie["dart"]["field"]
+
+        engine.handle_event(hit(field, "triple", 3, 1))
+
+        self.assertEqual(20, player.score)
+        self.assertEqual("cookie_eaten", engine.state.last_event["effect"])
+
+    def test_king_of_board_easy_double_takes_the_whole_number(self):
+        engine = GameEngine()
+        engine.reset(
+            "king_of_board",
+            ["Ada", "Bob"],
+            options={"ownership": "area"},
+        )
+
+        engine.handle_event(hit(20, "double", 2, 1))
+
+        self.assertEqual(4, engine.state.players[0].score)
+        owned = engine.state.as_dict()["overlay"]["owned"]
+        self.assertEqual(
+            {"single_inner", "triple", "single_outer", "double"},
+            {item["ring"] for item in owned if item["field"] == 20},
+        )
+
+    def test_king_of_board_easy_triple_takes_neighboring_numbers(self):
+        engine = GameEngine()
+        engine.reset(
+            "king_of_board",
+            ["Ada", "Bob"],
+            options={"ownership": "area"},
+        )
+
+        engine.handle_event(hit(20, "triple", 3, 1))
+
+        self.assertEqual(12, engine.state.players[0].score)
+        owned = engine.state.as_dict()["overlay"]["owned"]
+        self.assertEqual({5, 20, 1}, {item["field"] for item in owned})
+        self.assertIn("5 · 20 · 1", engine.state.message)
 
     def test_space_defender_team_win_has_all_winners(self):
         engine = GameEngine()
