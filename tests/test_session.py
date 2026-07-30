@@ -371,6 +371,148 @@ class SessionControllerTests(unittest.TestCase):
         self.assertEqual(60, stats[ada["id"]]["total_points"])
         self.assertEqual(2, stats[ada["id"]]["darts"])
 
+    def test_previous_turn_correction_replays_and_rewrites_storage(self):
+        ada, bob = self._start_game()
+        for seq in range(1, 4):
+            self.controller.process_event(
+                {
+                    "type": "hit",
+                    "label": "S20",
+                    "score": 20,
+                    "seq": seq,
+                    "field": 20,
+                    "ring": "single_outer",
+                    "multiplier": 1,
+                }
+            )
+        self.controller.continue_turn()
+        self.controller.process_event(
+            {
+                "type": "hit",
+                "label": "S10",
+                "score": 10,
+                "seq": 4,
+                "field": 10,
+                "ring": "single_outer",
+                "multiplier": 1,
+            }
+        )
+        previous = next(
+            turn
+            for turn in self.controller.public_state()["editable_turns"]
+            if not turn["current"]
+        )
+
+        self.controller.correct_throw(
+            previous["darts"][0]["action_id"],
+            {
+                "type": "hit",
+                "label": "T20",
+                "score": 60,
+                "field": 20,
+                "ring": "triple",
+                "multiplier": 3,
+            },
+        )
+
+        self.assertEqual(
+            [100, 10],
+            [player.score for player in self.controller.engine.state.players],
+        )
+        detail = self.controller.store.game_detail(self.controller.game_id)
+        self.assertEqual(
+            ["T20", "S20", "S20", "S10"],
+            [throw["event"]["label"] for throw in detail["throws"]],
+        )
+        stats = {
+            item["id"]: item
+            for item in self.controller.public_state()["statistics"]
+        }
+        self.assertEqual(100, stats[ada["id"]]["total_points"])
+        self.assertEqual(10, stats[bob["id"]]["total_points"])
+
+    def test_manual_throw_fills_the_next_open_slot(self):
+        self._start_game()
+        self.controller.manual_throw(
+            {
+                "type": "hit",
+                "label": "D20",
+                "score": 40,
+                "seq": 900,
+                "field": 20,
+                "ring": "double",
+                "multiplier": 2,
+            }
+        )
+
+        throw = self.controller.engine.state.throws[-1]
+        self.assertEqual("manual", throw.source)
+        self.assertEqual("D20", throw.label)
+        current = self.controller.public_state()["editable_turns"][-1]
+        self.assertTrue(current["current"])
+        self.assertEqual(1, current["darts"][0]["dart_in_turn"])
+
+    def test_undo_after_continue_restores_turn_without_deleting_dart(self):
+        self._start_game()
+        for seq in range(1, 4):
+            self.controller.process_event(
+                {
+                    "type": "hit",
+                    "label": "S20",
+                    "score": 20,
+                    "seq": seq,
+                    "field": 20,
+                    "ring": "single_outer",
+                    "multiplier": 1,
+                }
+            )
+        self.controller.continue_turn()
+
+        self.controller.undo()
+
+        self.assertEqual("hold", self.controller.engine.state.status)
+        self.assertEqual("Ada", self.controller.engine.state.current_player().name)
+        detail = self.controller.store.game_detail(self.controller.game_id)
+        self.assertEqual(3, len(detail["throws"]))
+
+    def test_result_screen_throw_can_be_deleted_and_reentered(self):
+        player = self.controller.create_player("Ada", "nova", "#ff00aa")
+        self.controller.start_session([player["id"]])
+        self.controller.prepare_game("countup", {"rounds": 5})
+        self.controller.start_game()
+        self.controller.set_screen("playing")
+        self.controller.engine.state.round_number = 5
+        for seq in range(1, 4):
+            self.controller.process_event(
+                {
+                    "type": "hit",
+                    "label": "S20",
+                    "score": 20,
+                    "seq": seq,
+                    "field": 20,
+                    "ring": "single_outer",
+                    "multiplier": 1,
+                }
+            )
+        self.assertEqual("game_result", self.controller.screen)
+        last_dart = self.controller.public_state()["editable_turns"][-1][
+            "darts"
+        ][-1]
+
+        self.controller.delete_throw(last_dart["action_id"])
+
+        self.assertEqual("playing", self.controller.screen)
+        self.assertEqual("running", self.controller.engine.state.status)
+        self.assertEqual(
+            "running",
+            self.controller.store.get_game(self.controller.game_id)["status"],
+        )
+        self.controller.manual_throw(
+            {"type": "miss", "label": "MISS", "score": 0, "seq": 4}
+        )
+        self.assertEqual("game_result", self.controller.screen)
+        self.assertEqual("finished", self.controller.engine.state.status)
+
     def test_finishing_game_via_plugin_action_updates_session_and_screen(self):
         player = self.controller.create_player("Ada", "robot", "#28e7ff")
         self.controller.start_session([player["id"]])
@@ -474,6 +616,26 @@ class EventPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(2, len(throw_events))
         self.assertTrue(all(item["source"] == "test" for item in throw_events))
         self.assertTrue(all(item["frame"] for item in throw_events))
+
+    async def test_board_events_pause_during_operator_correction(self):
+        event = {
+            "type": "hit",
+            "label": "T20",
+            "score": 60,
+            "seq": 73,
+            "field": 20,
+            "multiplier": 3,
+        }
+        self.controller.set_correction_lock(True)
+        self.assertFalse(await self.pipeline.process(event, source="ble"))
+        self.assertFalse(await self.pipeline.process(event, source="test"))
+        self.assertEqual(0, len(self.controller.engine.state.throws))
+
+        self.controller.manual_throw(
+            {**event, "seq": 74, "ring": "triple"}
+        )
+        self.assertEqual(1, len(self.controller.engine.state.throws))
+        self.assertEqual("manual", self.controller.engine.state.throws[0].source)
 
 
 if __name__ == "__main__":
