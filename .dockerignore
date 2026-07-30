@@ -1,4 +1,7 @@
 .git
+.github
+.agents
+.openai
 .venv
 __pycache__
 *.pyc
@@ -8,3 +11,11 @@ __pycache__
 data
 tests
 docs
+dist
+tmp
+website
+scripts
+.env
+.env.*
+docker-compose.yml
+compose*.yml

@@ -2,13 +2,25 @@ name: Publish GitHub Pages
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - "website/**"
+      - "web/static/assets/modes/**"
+      - "web/static/assets/themes/neon/modes/**"
+      - "ASSETS_LICENSE.md"
+      - "LICENSE"
+      - "NOTICE"
+      - "TRADEMARKS.md"
+      - ".github/workflows/pages.yml"
 
 permissions:
   contents: read
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -20,8 +32,23 @@ jobs:
       - name: Configure Pages
         uses: actions/configure-pages@v5
 
+      - name: Check website JavaScript
+        run: node --check website/app.js
+
       - name: Build static site
         run: bash website/build.sh
+
+      - name: Verify generated site
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s dist/index.html
+          test -s dist/styles.css
+          test -s dist/app.js
+          test "$(find web/static/assets/modes -maxdepth 1 -name '*.webp' | wc -l)" \
+            -eq "$(find dist/assets/modes -maxdepth 1 -name '*.webp' | wc -l)"
+          test "$(find web/static/assets/themes/neon/modes -maxdepth 1 -name '*.webp' | wc -l)" \
+            -eq "$(find dist/assets/neon -maxdepth 1 -name '*.webp' | wc -l)"
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
