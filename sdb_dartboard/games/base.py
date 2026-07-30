@@ -36,6 +36,7 @@ class GameMetadata:
     instructions: List[InstructionStep] = field(default_factory=list)
     control_legend: List[Dict[str, Any]] = field(default_factory=list)
     sound_theme: str = "arena"
+    ruleset_version: int = 1
 
     def as_dict(self) -> Dict[str, Any]:
         return asdict(self)

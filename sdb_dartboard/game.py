@@ -29,6 +29,13 @@ class ThrowEvent:
     player_id: Optional[str]
     raw: Dict[str, Any]
     snapshot_before: Dict[str, Any]
+    context_before: Dict[str, Any] = field(default_factory=dict)
+    round_number: int = 1
+    dart_in_turn: int = 1
+    mode_points: int = 0
+    outcome: str = "neutral"
+    source: str = "unknown"
+    score_after: int = 0
 
 
 @dataclass
@@ -128,6 +135,96 @@ class GameState:
         if getter is None:
             return None
         return getter(self)
+
+    def telemetry_context(self) -> Dict[str, Any]:
+        overlay = self.overlay() or {}
+
+        def normalize(items: Any) -> List[Dict[str, Any]]:
+            result = []
+            for item in items if isinstance(items, list) else []:
+                if not isinstance(item, dict) or item.get("field") is None:
+                    continue
+                rings = item.get("rings")
+                if not isinstance(rings, list):
+                    rings = [item.get("ring")] if item.get("ring") else []
+                result.append({
+                    "field": item.get("field"),
+                    "ring": item.get("ring"),
+                    "rings": rings,
+                    "id": item.get("id"),
+                    "role": item.get("role"),
+                    "value": item.get("value", item.get("label")),
+                })
+            return result
+
+        targets = normalize(overlay.get("targets", [])) + normalize(
+            overlay.get("bonus", [])
+        )
+        dangers = normalize(overlay.get("danger", []))
+        cricket = overlay.get("cricket", {})
+        if isinstance(cricket, dict):
+            for item in cricket.get("remaining", []):
+                if not isinstance(item, dict) or item.get("field") is None:
+                    continue
+                field = int(item["field"])
+                targets.append({
+                    "field": field,
+                    "ring": None,
+                    "rings": (
+                        ["single_bull", "double_bull"]
+                        if field == 25
+                        else ["single_inner", "single_outer", "double", "triple"]
+                    ),
+                    "id": f"cricket-{field}",
+                    "role": "target",
+                    "value": item.get("needed"),
+                })
+        for zone in normalize(overlay.get("zones", [])):
+            if zone.get("role") in {"danger", "mine"}:
+                dangers.append(zone)
+            elif zone.get("role") in {"target", "bonus"}:
+                targets.append(zone)
+        player = self.current_player()
+        return {
+            "round_number": self.round_number,
+            "dart_in_turn": self.darts_in_turn + 1,
+            "player_id": player.id if player else None,
+            "prompt": overlay.get("prompt"),
+            "targets": targets,
+            "dangers": dangers,
+            "overlay": overlay,
+        }
+
+    def replay_frame(self) -> Dict[str, Any]:
+        return {
+            "game_type": self.game_type,
+            "players": [
+                {
+                    "id": player.id,
+                    "name": player.name,
+                    "score": player.score,
+                    "marks": player.marks,
+                    "avatar": player.avatar,
+                    "color": player.color,
+                }
+                for player in self.players
+            ],
+            "current_player_index": self.current_player_index,
+            "current_player_id": self.current_player().id
+            if self.current_player()
+            else None,
+            "darts_in_turn": self.darts_in_turn,
+            "turn_score": self.turn_score,
+            "round_number": self.round_number,
+            "status": self.status,
+            "winner_id": self.winner_id,
+            "winner_ids": self.winner_ids,
+            "result_type": self.result_type,
+            "message": self.message,
+            "options": self.options,
+            "last_event": self.last_event,
+            "overlay": self.overlay(),
+        }
 
     def as_dict(self) -> Dict[str, Any]:
         return {
@@ -255,6 +352,13 @@ class GameEngine:
                     "player_id": throw.player_id,
                     "raw": throw.raw,
                     "snapshot_before": throw.snapshot_before,
+                    "context_before": throw.context_before,
+                    "round_number": throw.round_number,
+                    "dart_in_turn": throw.dart_in_turn,
+                    "mode_points": throw.mode_points,
+                    "outcome": throw.outcome,
+                    "source": throw.source,
+                    "score_after": throw.score_after,
                 }
                 for throw in self.state.throws
             ],
@@ -278,6 +382,13 @@ class GameEngine:
                 player_id=data.get("player_id"),
                 raw=dict(data.get("raw", {})),
                 snapshot_before=dict(data["snapshot_before"]),
+                context_before=dict(data.get("context_before", {})),
+                round_number=int(data.get("round_number", 1)),
+                dart_in_turn=int(data.get("dart_in_turn", 1)),
+                mode_points=int(data.get("mode_points", 0)),
+                outcome=str(data.get("outcome", "neutral")),
+                source=str(data.get("source", "unknown")),
+                score_after=int(data.get("score_after", 0)),
             )
             for data in checkpoint.get("throws", [])
         ]
@@ -417,11 +528,35 @@ class GameEngine:
         if player is None:
             return
         snapshot = self.state.snapshot()
+        context = self.state.telemetry_context()
+        round_number = self.state.round_number
+        dart_in_turn = self.state.darts_in_turn + 1
         label = str(event.get("label", ""))
         score = int(event.get("score", 0))
         outcome = registry.get(self.state.game_type).apply_throw(
             self.state, player, event
         )
+        # A player's stored score is not directionally comparable across
+        # modes (X01 counts down, Mini Golf counts strokes, Risk It defers its
+        # bank). ThrowOutcome.turn_value is the plugin's canonical value for
+        # this individual dart.
+        mode_points = int(outcome.turn_value)
+        event_type = event.get("type")
+        targets = context.get("targets", [])
+        target_match = self._context_match(event, targets)
+        danger_match = self._context_match(event, context.get("dangers", []))
+        if event_type == "miss":
+            outcome_kind = "miss"
+        elif outcome.bust or mode_points < 0 or danger_match:
+            outcome_kind = "danger"
+        elif target_match or (mode_points > 0 and not targets):
+            outcome_kind = "success"
+        elif mode_points > 0:
+            outcome_kind = "partial"
+        else:
+            outcome_kind = "neutral"
+        event["mode_points"] = mode_points
+        event["outcome"] = outcome_kind
 
         self.state.darts_in_turn += 1
         self.state.turn_score += outcome.turn_value
@@ -434,6 +569,13 @@ class GameEngine:
                 player_id=player.id,
                 raw=event,
                 snapshot_before=snapshot,
+                context_before=context,
+                round_number=round_number,
+                dart_in_turn=dart_in_turn,
+                mode_points=mode_points,
+                outcome=outcome_kind,
+                source=str(event.get("_source", "unknown")),
+                score_after=player.score,
             )
         )
         self.state.message = outcome.message
@@ -457,3 +599,17 @@ class GameEngine:
             self.state.status = "hold"
         else:
             self._hold_after_turn()
+
+    @staticmethod
+    def _context_match(event: Dict[str, Any], zones: List[Dict[str, Any]]) -> bool:
+        field = event.get("field")
+        ring = event.get("ring")
+        for zone in zones:
+            if int(zone.get("field", -1) or -1) != int(field or -2):
+                continue
+            rings = zone.get("rings") or (
+                [zone.get("ring")] if zone.get("ring") else []
+            )
+            if not rings or ring in rings:
+                return True
+        return False

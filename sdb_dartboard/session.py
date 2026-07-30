@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from collections import deque
 from pathlib import Path
 from time import monotonic
@@ -42,6 +43,7 @@ class SessionController:
         self.game_id: Optional[str] = None
         self.selected_mode: Optional[str] = None
         self.selected_options: Dict[str, Any] = {}
+        self.selected_language = "de"
         self.calibration = {
             "corners": [
                 {"x": 0.247, "y": 0.05},
@@ -71,6 +73,8 @@ class SessionController:
             self.game_id = runtime.get("game_id")
             self.selected_mode = runtime.get("selected_mode")
             self.selected_options = dict(runtime.get("selected_options", {}))
+            stored_language = runtime.get("selected_language", "de")
+            self.selected_language = stored_language if stored_language in {"de", "en"} else "de"
         if checkpoint:
             self.engine.import_state(checkpoint)
         self.calibration = self.store.get_runtime_value("calibration", self.calibration)
@@ -82,6 +86,7 @@ class SessionController:
         }
         stored_theme = self.store.get_runtime_value("art_theme", "cartoon")
         self.art_theme = stored_theme if stored_theme in {"cartoon", "neon"} else "cartoon"
+        self.store.reconcile_running_games(self.game_id)
 
     def _persist(self) -> None:
         self.store.set_runtime_value(
@@ -92,6 +97,7 @@ class SessionController:
                 "game_id": self.game_id,
                 "selected_mode": self.selected_mode,
                 "selected_options": self.selected_options,
+                "selected_language": self.selected_language,
             },
         )
         self.store.set_runtime_value("engine", self.engine.export_state())
@@ -111,6 +117,11 @@ class SessionController:
             "game_id": self.game_id,
             "selected_mode": self.selected_mode,
             "selected_options": self.selected_options,
+            "language": (
+                session.get("language", self.selected_language)
+                if session
+                else self.selected_language
+            ),
             "game": self.engine.state.as_dict(),
             "modes": registry.as_dicts(),
             "players": self.store.list_players(),
@@ -140,15 +151,20 @@ class SessionController:
         self.screen = "players"
         self._persist()
 
-    def start_session(self, player_ids: Iterable[str]) -> Dict[str, Any]:
+    def start_session(
+        self,
+        player_ids: Iterable[str],
+        language: str = "de",
+    ) -> Dict[str, Any]:
         active = self.store.active_session()
         if active:
             self.store.end_session(active["id"])
-        session = self.store.start_session(player_ids)
+        session = self.store.start_session(player_ids, language)
         self.session_id = session["id"]
         self.game_id = None
         self.selected_mode = None
         self.selected_options = {}
+        self.selected_language = language
         self.screen = "game_select"
         self._persist()
         return session
@@ -185,6 +201,32 @@ class SessionController:
             self.session_id,
             self.selected_mode,
             self.selected_options,
+            players=[
+                {
+                    "id": player.id,
+                    "name": player.name,
+                    "avatar": player.avatar,
+                    "color": player.color,
+                }
+                for player in self.engine.state.players
+            ],
+            ruleset_version=registry.get(
+                self.selected_mode
+            ).metadata.ruleset_version,
+            app_version=os.environ.get("SDB_VERSION", "dev"),
+            # A game starts as production. The event pipeline marks it as test
+            # as soon as the projector simulator injects a synthetic throw.
+            environment="production",
+            initial_state=self.engine.state.replay_frame(),
+        )
+        self.store.record_game_event(
+            self.game_id,
+            "game_started",
+            payload={
+                "game_type": self.selected_mode,
+                "options": self.selected_options,
+            },
+            frame=self.engine.state.replay_frame(),
         )
         self._rematch_armed_until = 0.0
         self.screen = "countdown"
@@ -212,27 +254,87 @@ class SessionController:
         self.engine.handle_event(event)
         if len(self.engine.state.throws) > before_count and self.game_id:
             throw = self.engine.state.throws[-1]
-            player = next(
-                (item for item in self.engine.state.players if item.id == throw.player_id),
-                None,
+            event_id = self.store.record_game_event(
+                self.game_id,
+                "throw",
+                player_id=throw.player_id,
+                source=throw.source,
+                payload=throw.raw,
+                task=throw.context_before,
+                frame=self.engine.state.replay_frame(),
             )
             self.store.record_throw(
                 self.game_id,
                 throw.seq,
                 throw.player_id,
                 throw.raw,
-                player.score if player else 0,
+                throw.score_after,
+                round_number=throw.round_number,
+                dart_in_turn=throw.dart_in_turn,
+                mode_points=throw.mode_points,
+                outcome=throw.outcome,
+                source=throw.source,
+                task=throw.context_before,
+                event_id=event_id,
             )
-        if self.engine.state.status == "finished" and self.game_id:
-            game = self.store.get_game(self.game_id)
-            if game and game["status"] != "finished":
-                self.store.finish_game(
-                    self.game_id,
-                    self.engine.state.winner_id,
-                    self.engine.state.winner_ids,
-                )
-            self.screen = "game_result"
+        self._finish_game_if_needed()
         self._persist()
+
+    def _record_event(
+        self,
+        event_type: str,
+        *,
+        payload: Optional[Dict[str, Any]] = None,
+        source: str = "control",
+        corrects_event_id: Optional[int] = None,
+    ) -> Optional[int]:
+        if not self.game_id:
+            return None
+        return self.store.record_game_event(
+            self.game_id,
+            event_type,
+            player_id=self.engine.state.current_player().id
+            if self.engine.state.players
+            else None,
+            source=source,
+            payload=payload,
+            frame=self.engine.state.replay_frame(),
+            corrects_event_id=corrects_event_id,
+        )
+
+    def _finish_game_if_needed(self, *, force: bool = False) -> bool:
+        if self.engine.state.status != "finished" or not self.game_id:
+            return False
+        game = self.store.get_game(self.game_id)
+        if game and (force or game["status"] != "finished"):
+            final_scores = {
+                player.id: player.score for player in self.engine.state.players
+            }
+            self._record_event(
+                "game_finished",
+                payload={
+                    "winner_ids": self.engine.state.winner_ids,
+                    "result_type": self.engine.state.result_type,
+                    "message": self.engine.state.message,
+                },
+                source="system",
+            )
+            self.store.finish_game(
+                self.game_id,
+                self.engine.state.winner_id,
+                self.engine.state.winner_ids,
+                result_type=self.engine.state.result_type,
+                finish_reason=(
+                    self.engine.state.last_event.get("effect", "")
+                    if self.engine.state.last_event
+                    else ""
+                )
+                or "completed",
+                final_state=self.engine.state.replay_frame(),
+                final_scores=final_scores,
+            )
+        self.screen = "game_result"
+        return True
 
     def rematch_button(self) -> bool:
         """Arm or start a same-mode rematch from the physical board button."""
@@ -277,6 +379,30 @@ class SessionController:
             self.session_id,
             self.selected_mode,
             self.selected_options,
+            players=[
+                {
+                    "id": player.id,
+                    "name": player.name,
+                    "avatar": player.avatar,
+                    "color": player.color,
+                }
+                for player in self.engine.state.players
+            ],
+            ruleset_version=registry.get(
+                self.selected_mode
+            ).metadata.ruleset_version,
+            app_version=os.environ.get("SDB_VERSION", "dev"),
+            environment="production",
+            initial_state=self.engine.state.replay_frame(),
+        )
+        self._record_event(
+            "game_started",
+            payload={
+                "game_type": self.selected_mode,
+                "options": self.selected_options,
+                "rematch": True,
+            },
+            source="system",
         )
         self._rematch_armed_until = 0.0
         self.screen = "countdown"
@@ -285,28 +411,14 @@ class SessionController:
 
     def continue_turn(self) -> None:
         self.engine.continue_turn()
-        if self.engine.state.status == "finished" and self.game_id:
-            game = self.store.get_game(self.game_id)
-            if game and game["status"] != "finished":
-                self.store.finish_game(
-                    self.game_id,
-                    self.engine.state.winner_id,
-                    self.engine.state.winner_ids,
-                )
-            self.screen = "game_result"
+        self._record_event("continue_turn")
+        self._finish_game_if_needed()
         self._persist()
 
     def next_player(self) -> None:
         self.engine.next_player()
-        if self.engine.state.status == "finished" and self.game_id:
-            game = self.store.get_game(self.game_id)
-            if game and game["status"] != "finished":
-                self.store.finish_game(
-                    self.game_id,
-                    self.engine.state.winner_id,
-                    self.engine.state.winner_ids,
-                )
-            self.screen = "game_result"
+        self._record_event("next_player")
+        self._finish_game_if_needed()
         self._persist()
 
     def undo(self) -> None:
@@ -314,7 +426,13 @@ class SessionController:
         was_finished = self.engine.state.status == "finished"
         self.engine.undo()
         if had_throw and self.game_id:
+            corrected_event_id = self.store.invalidate_last_throw_event(self.game_id)
             self.store.delete_last_throw(self.game_id)
+            self._record_event(
+                "undo",
+                payload={"kind": "throw"},
+                corrects_event_id=corrected_event_id,
+            )
         if was_finished and self.game_id and self.engine.state.status != "finished":
             self.store.reopen_game(self.game_id)
             self.screen = "playing"
@@ -328,9 +446,6 @@ class SessionController:
         was_finished = self.engine.state.status == "finished"
         self.engine.correct_turn_throw(turn_index, replacement)
         if self.game_id:
-            final_scores = {
-                player.id: player.score for player in self.engine.state.players
-            }
             self.store.replace_game_throws(
                 self.game_id,
                 [
@@ -338,18 +453,30 @@ class SessionController:
                         "seq": throw.seq,
                         "player_id": throw.player_id,
                         "event": throw.raw,
-                        "score_after": final_scores.get(throw.player_id, 0),
+                        "score_after": throw.score_after,
+                        "round_number": throw.round_number,
+                        "dart_in_turn": throw.dart_in_turn,
+                        "field": throw.raw.get("field"),
+                        "ring": throw.raw.get("ring"),
+                        "multiplier": throw.raw.get("multiplier"),
+                        "dart_score": throw.score,
+                        "mode_points": throw.mode_points,
+                        "outcome": throw.outcome,
+                        "source": "correction",
+                        "task": throw.context_before,
                     }
                     for throw in self.engine.state.throws
                 ],
             )
+            self._record_event(
+                "throw_corrected",
+                payload={
+                    "turn_index": turn_index,
+                    "replacement": replacement,
+                },
+            )
             if self.engine.state.status == "finished":
-                self.store.finish_game(
-                    self.game_id,
-                    self.engine.state.winner_id,
-                    self.engine.state.winner_ids,
-                )
-                self.screen = "game_result"
+                self._finish_game_if_needed(force=True)
             elif was_finished:
                 self.store.reopen_game(self.game_id)
                 self.screen = "playing"
@@ -357,13 +484,8 @@ class SessionController:
 
     def game_action(self, action: str, payload: Dict[str, Any] | None = None) -> None:
         self.engine.handle_action(action, payload or {})
-        if self.engine.state.status == "finished" and self.game_id:
-            self.store.finish_game(
-                self.game_id,
-                self.engine.state.winner_id,
-                self.engine.state.winner_ids,
-            )
-            self.screen = "game_result"
+        self._record_event("game_action", payload={"action": action, **(payload or {})})
+        self._finish_game_if_needed()
         self._persist()
 
     def next_game(self) -> None:
@@ -381,7 +503,16 @@ class SessionController:
         game = self.store.get_game(self.game_id)
         if not game or game["status"] != "running":
             raise ValueError("Only a running game can be aborted")
-        self.store.abort_game(self.game_id)
+        self._record_event(
+            "game_aborted",
+            payload={"reason": "user_abort"},
+            source="control",
+        )
+        self.store.abort_game(
+            self.game_id,
+            reason="user_abort",
+            final_state=self.engine.state.replay_frame(),
+        )
         self._rematch_armed_until = 0.0
         self.engine.clear()
         self.game_id = None
@@ -489,5 +620,11 @@ class EventPipeline:
                     self._recent_set.discard(oldest)
                 self._recent.append(identity)
                 self._recent_set.add(identity)
-            self.controller.process_event(event)
+            enriched = {**event, "_source": source}
+            if source == "test" and self.controller.game_id:
+                self.controller.store.set_game_environment(
+                    self.controller.game_id,
+                    "test",
+                )
+            self.controller.process_event(enriched)
             return True

@@ -103,6 +103,14 @@ class GameEngineTests(unittest.TestCase):
         self.assertTrue(engine.state.last_event["bust"])
         self.assertIn("Bust", engine.state.message)
 
+    def test_x01_countdown_is_recorded_as_success_telemetry(self):
+        engine = GameEngine()
+        engine.reset("x01", ["Ada"], options={"start_score": 301})
+        engine.handle_event(hit(60, 1, field=20, multiplier=3, label="T20"))
+        self.assertEqual(241, engine.state.players[0].score)
+        self.assertEqual(60, engine.state.throws[-1].mode_points)
+        self.assertEqual("success", engine.state.throws[-1].outcome)
+
     def test_double_out_requires_a_double(self):
         engine = GameEngine()
         engine.reset(
@@ -189,6 +197,19 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual("target_rush", state["game_type"])
         self.assertTrue(state["overlay"]["targets"])
         self.assertIn("Triff", state["overlay"]["prompt"])
+        target = state["overlay"]["targets"][0]
+        engine.handle_event(
+            {
+                "type": "hit",
+                "label": target["label"],
+                "score": target["field"],
+                "seq": 1,
+                "field": target["field"],
+                "ring": target["ring"],
+                "multiplier": 1,
+            }
+        )
+        self.assertEqual("success", engine.state.throws[-1].outcome)
 
     def test_avoid_bomb_exposes_danger_overlay(self):
         engine = GameEngine()

@@ -7,7 +7,7 @@ import os
 import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
@@ -143,6 +143,7 @@ class PlayerRequest(BaseModel):
 
 class SessionStartRequest(BaseModel):
     player_ids: List[str] = Field(min_length=1, max_length=8)
+    language: Literal["de", "en"] = "de"
 
 
 class GamePrepareRequest(BaseModel):
@@ -262,9 +263,93 @@ async def create_player(req: PlayerRequest):
 
 @app.post("/api/session/start")
 async def start_session(req: SessionStartRequest):
-    session = controller.start_session(req.player_ids)
+    session = controller.start_session(req.player_ids, req.language)
     await publish_state({"type": "session_started", "session_id": session["id"]})
     return controller.public_state()
+
+
+@app.get("/api/history/sessions")
+async def history_sessions(limit: int = 50):
+    return {"sessions": controller.store.list_sessions(limit)}
+
+
+@app.get("/api/history/sessions/{session_id}")
+async def history_session(session_id: str):
+    detail = controller.store.session_detail(session_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return detail
+
+
+@app.get("/api/history/games/{game_id}")
+async def history_game(game_id: str):
+    detail = controller.store.game_detail(game_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return detail
+
+
+@app.get("/api/history/games/{game_id}/replay")
+async def history_game_replay(game_id: str):
+    replay = controller.store.game_replay(game_id)
+    if replay is None:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return replay
+
+
+@app.get("/api/statistics/players")
+async def player_statistics(include_test: bool = False):
+    return {
+        "players": controller.store.statistics(
+            completed_only=True,
+            include_nonproduction=include_test,
+        )
+    }
+
+
+@app.get("/api/statistics/heatmap")
+async def statistics_heatmap(
+    player_id: Optional[str] = None,
+    session_id: Optional[str] = None,
+    game_type: Optional[str] = None,
+    include_test: bool = False,
+):
+    return controller.store.heatmap(
+        player_id=player_id,
+        session_id=session_id,
+        game_type=game_type,
+        include_nonproduction=include_test,
+    )
+
+
+@app.get("/api/statistics/modes")
+async def mode_statistics(include_test: bool = False):
+    return {
+        "modes": controller.store.mode_statistics(
+            include_nonproduction=include_test
+        )
+    }
+
+
+@app.get("/api/training/{player_id}/recommendations")
+async def training_recommendations(player_id: str):
+    if not any(
+        player["id"] == player_id for player in controller.store.list_players()
+    ):
+        raise HTTPException(status_code=404, detail="Player not found")
+    return controller.store.training_recommendations(player_id)
+
+
+@app.get("/api/data/export")
+async def export_data():
+    return JSONResponse(
+        content=controller.store.export_data(),
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="smart-dartboard-history.json"'
+            )
+        },
+    )
 
 
 @app.post("/api/session/end")
