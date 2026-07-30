@@ -125,7 +125,7 @@ class SessionController:
                 else self.selected_language
             ),
             "game": self.engine.state.as_dict(),
-            "editable_turns": self.engine.editable_turns(),
+            "editable_turns": self.engine.editable_turns(limit=1),
             "modes": registry.as_dicts(),
             "players": self.store.list_players(),
             "statistics": self.store.statistics(player_ids or None),

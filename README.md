@@ -45,8 +45,8 @@ Zum Release:
 - persistenter Spielzustand mit Recovery und Undo nach einem Neustart
 - serielle BLE-Verarbeitung und Schutz vor doppelten Notifications
 - Drei-Dart-Hold für sicheres Entfernen der Darts
-- editierbare Anzeige des aktuellen und vorherigen Spielzugs mit
-  Touch-Korrekturscheibe, Löschen und manuellem Nachtragen
+- editierbare Anzeige des aktuellen Spielzugs mit Touch-Korrekturscheibe,
+  Löschen und manuellem Nachtragen
 - direkt anklickbare Projektorscheibe für Testtreffer ohne Hardware
 - perspektivische Vierpunkt-Projektorkalibrierung mit automatischem,
   seitenverhältnisabhängigem Rund-und-mittig-Reset

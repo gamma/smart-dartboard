@@ -148,16 +148,18 @@ folgende Daten wiederhergestellt:
 
 ## Wurfkorrektur am Controller
 
-Während eines Spiels zeigt der Controller den aktuellen und den unmittelbar
-vorherigen Spielzug:
+Während eines Spiels zeigt der Controller ausschließlich die drei Dartplätze
+des aktuell aktiven Spielers:
 
 - Belegten Dart antippen, um ihn über die Scheibe zu ersetzen, als `MISS` zu
   werten oder zu löschen.
 - Den nächsten freien Dartplatz antippen, um einen vom Board nicht erkannten
   Wurf manuell nachzutragen.
-- Direkt nach einem Spielerwechsel nimmt `Letzten Wurf zurück` zuerst den
-  Wechsel zurück. Die drei Würfe des vorherigen Spielers bleiben dabei
-  erhalten.
+- Direkt nach einem Spielerwechsel nimmt `Letzte Aktion zurück` beim ersten
+  Drücken nur den Wechsel zurück. Der vorherige Spieler wird wieder aktiv und
+  alle drei Würfe bleiben sichtbar.
+- Erst ein zweites `Letzte Aktion zurück` entfernt den letzten Dart dieses
+  Spielers. Das ist bewusst ein Double-Back-Ablauf.
 - Auf dem Ergebnisbildschirm kann der letzte Spielzug ebenfalls korrigiert
   werden. Sieger und Sessionpunkte werden danach neu berechnet.
 
