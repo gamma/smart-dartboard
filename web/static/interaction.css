@@ -484,7 +484,7 @@
   top: -20px;
   width: 80px;
   height: 40px;
-  background: url("/static/assets/effects/candy.webp") center/contain no-repeat;
+  background: var(--candy-art) center/contain no-repeat;
   filter: drop-shadow(0 0 14px rgba(255, 220, 91, .95));
   opacity: 0;
   animation: candy-fire-projectile .48s cubic-bezier(.15, .7, .22, 1) forwards;

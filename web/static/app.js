@@ -57,11 +57,20 @@ const MODE_AMBIENCE = {
   robin_hood:'leaves', simon_says:'signals', space_defender:'space',
   target_rush:'streaks', treasure_hunt:'gems', x01:'streaks',
 };
+const EFFECT_ASSET_NAMES = {
+  hearts:'heart', eggs:'egg', cookies:'cookie', candy:'candy',
+  blocks:'block', billiards:'billiard', golf:'golf', wisps:'wisp',
+  leaves:'leaf', mines:'mine', coins:'coin', gems:'gem',
+};
+const NEON_EFFECT_ASSETS = new Set([
+  'heart','egg','cookie','cookie_moldy','milk','candy','block','billiard',
+  'golf','wisp','leaf','mine','mine_explosion','coin','gem','candy_overheat',
+]);
 const OVERLAY_ICON_ASSETS = {
-  cookie:'/static/assets/effects/cookie.webp',
-  cookie_moldy:'/static/assets/effects/cookie_moldy.webp',
-  milk:'/static/assets/effects/milk.webp',
-  mine:'/static/assets/effects/mine.webp',
+  cookie:'cookie',
+  cookie_moldy:'cookie_moldy',
+  milk:'milk',
+  mine:'mine',
 };
 
 function $(id){ return document.getElementById(id); }
@@ -80,7 +89,8 @@ function promptMarkup(value){
   return `<i class="stacked-prompt">${parts.map(part=>`<em>${escapeHtml(part)}</em>`).join('\n')}</i>`;
 }
 function overlayIconAsset(icon){
-  return OVERLAY_ICON_ASSETS[String(icon || '')] || '';
+  const name=OVERLAY_ICON_ASSETS[String(icon || '')];
+  return name ? effectAsset(name) : '';
 }
 function visualLegendMarkup(items, placement){
   const entries=(items || []).map(item=>{
@@ -102,6 +112,14 @@ function modeAsset(slug){
     return `/static/assets/themes/neon/modes/${encodeURIComponent(safe)}.webp`;
   }
   return `/static/assets/modes/${encodeURIComponent(safe)}.webp`;
+}
+function effectAsset(name){
+  const safe=/^[a-z0-9_]+$/.test(String(name || '')) ? name : '';
+  if(!safe) return '';
+  if(appState.experience?.art_theme === 'neon' && NEON_EFFECT_ASSETS.has(safe)){
+    return `/static/assets/themes/neon/effects/${encodeURIComponent(safe)}.webp`;
+  }
+  return `/static/assets/effects/${encodeURIComponent(safe)}.webp`;
 }
 function avatarEmoji(avatar){
   return AVATARS.find(option => option.id === avatar)?.emoji || '🎯';
@@ -892,8 +910,10 @@ function projectorModePanel(game){
 }
 function modeAmbience(mode, event, frozen=false){
   const effect=MODE_AMBIENCE[mode?.slug] || 'sparkles';
+  const prop=EFFECT_ASSET_NAMES[effect];
   const reaction=event?.type==='hit' ? 'react-hit' : event?.type==='miss' ? 'react-miss' : '';
-  return `<div class="game-ambience ${reaction} ${frozen?'frozen':''}" data-mode="${escapeHtml(mode?.slug || '')}" aria-hidden="true" style="--game-art:url('${modeAsset(mode?.slug || 'countup')}')">
+  const propStyle=prop ? `;--effect-art:url('${effectAsset(prop)}')` : '';
+  return `<div class="game-ambience ${reaction} ${frozen?'frozen':''}" data-mode="${escapeHtml(mode?.slug || '')}" aria-hidden="true" style="--game-art:url('${modeAsset(mode?.slug || 'countup')}')${propStyle}">
     <div class="game-art-backdrop"></div>
     <div class="ambient-vignette"></div>
     <div class="ambient-ribbons"><i></i><i></i></div>
@@ -922,7 +942,7 @@ function bombExplosion(game,event){
     [35,142],[-50,136],[-126,82],[-151,-6],[-82,-48],[74,58],
   ];
   return `<div class="bomb-explosion" style="--blast-x:${x*2}px;--blast-y:${y*2}px" aria-hidden="true">
-    <img src="/static/assets/effects/mine_explosion.webp" alt="">
+    <img src="${effectAsset('mine_explosion')}" alt="">
     <b>BOOM!</b>
     ${vectors.map(([dx,dy],index)=>`<i style="--dx:${dx}px;--dy:${dy}px;--delay:${index%3*25}ms"></i>`).join('')}
   </div>`;
@@ -932,7 +952,7 @@ function candyOverheat(game,event){
   if(!isCandyOverheatEvent({game},event)) return '';
   return `<div class="candy-overheat" aria-hidden="true">
     <i></i>
-    <img src="/static/assets/effects/candy_overheat.webp" alt="">
+    <img src="${effectAsset('candy_overheat')}" alt="">
     <b>ÜBERHITZT!</b>
     <span>LADUNG VERLOREN</span>
   </div>`;
@@ -942,7 +962,7 @@ function candyFireImpact(game,event,playerId){
   if(!isCandyFireEvent({game},event) || event.target_player_id!==playerId) return '';
   const loss=Math.max(0,Number(event.target_score_loss)||0);
   return `<em class="candy-fire-hit" aria-hidden="true">
-    <img src="/static/assets/effects/candy_overheat.webp" alt="">
+    <img src="${effectAsset('candy_overheat')}" alt="">
     <b>${loss>0?`−${loss}`:'TREFFER!'}</b>
   </em>`;
 }
@@ -954,7 +974,7 @@ function projectorPlaying(){
   const testMode=testModeEnabled();
   const bombImpact=isExplosionEvent({game},appState.projectedEvent);
   const candyOverheatImpact=isCandyOverheatEvent({game},appState.projectedEvent);
-  return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
+  return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')};--candy-art:url('${effectAsset('candy')}')">
     ${modeAmbience(mode,appState.projectedEvent)}
     <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}${candyOverheat(game,appState.projectedEvent)}</div>
     <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong data-score-player="${escapeHtml(player.id || '')}">${player.score ?? 0}</strong></header>

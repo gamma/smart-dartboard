@@ -24,6 +24,8 @@ beiden Theme-Packs. Die historischen Cover blieben unverändert.
 
 Die vollständigen finalen Prompts und Referenzen der Neon-Erweiterung stehen in
 `docs/NEON_ARTWORK_2026-07-30.md`.
+Die vollständigen finalen Prompts und Referenzen des Neon-Frontasset-Packs
+stehen in `docs/NEON_EFFECTS_2026-07-30.md`.
 
 Der projektlokale Skill
 `.agents/skills/smart-dartboard-artwork/SKILL.md` beschreibt den verbindlichen
@@ -134,9 +136,9 @@ ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 - Die C2PA-Manifeste der geprüften Original-PNGs nennen
   `OpenAI Media Service API`, den Software-Agenten `gpt-image` in Version `2.0`
   und den digitalen Quelltyp `trainedAlgorithmicMedia`.
-- Aus insgesamt 68 erzeugten Ergebnissen wurden die heute vorhandenen 48 Cover
-  und 16 Effekte ausgewählt; drei Cover-Kandidaten und die frühere Mine wurden
-  verworfen oder ersetzt. Sämtliche übergebenen Bildreferenzen zeigen auf
+- Aus insgesamt 84 erzeugten Ergebnissen wurden die heute vorhandenen 48 Cover
+  und 32 Theme-Effekte ausgewählt; drei Cover-Kandidaten und die frühere Mine
+  wurden verworfen oder ersetzt. Sämtliche übergebenen Bildreferenzen zeigen auf
   bereits lokal erzeugte Dateien dieses Projekts. Fremde Bilder, Logos oder
   Markenreferenzen wurden in den protokollierten Aufrufen nicht verwendet.
 - Die finalen WebP-Dateien enthalten das C2PA-Manifest nicht mehr, weil es bei
@@ -147,7 +149,7 @@ ImageGen-Originale erlauben inzwischen eine genauere Rekonstruktion:
 |---|---|---|---|---|
 | Playful-Cartoon-Cover | 24 ImageGen-Ergebnisse; `heart_chase` nur aus Text erzeugt, danach als interne Stilreferenz für alle weiteren Cover | `gpt-image` 2.0; 29.07.2026; gesteuert mit `gpt-5.6-sol` | ImageMagick: mittiger Zuschnitt auf 900 × 640, WebP-Qualität 88 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 | Classic-Neon-Cover | 24 ImageGen-Ergebnisse; `countup`, `x01` und `cricket` nur aus Text, danach ausschließlich projektinterne Neon-Cover als Stilreferenzen | `gpt-image` 2.0; 28.–30.07.2026; gesteuert mit `gpt-5.6-sol` | historische Versionen aus Git-Commit `54ba4a3` wiederhergestellt; elf ergänzende Cover neu erzeugt; alle mittig auf 900 × 640 gebracht und als WebP mit Qualität 88 exportiert | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
-| animierte 3D-Props | 16 aktuelle ImageGen-Ergebnisse; zwölf ursprüngliche Props mit `heart_chase`, mode-spezifische Ergänzungen zusätzlich mit passenden projektinternen Props; die ursprüngliche Mine wurde ersetzt | `gpt-image` 2.0; 29.–30.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt und als Alpha-WebP exportiert; Standardprops höchstens 512 × 512, große Bursts 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
+| animierte 3D-Props | 32 aktuelle Theme-Assets; 16 Playful-Cartoon-Ergebnisse und 16 Classic-Neon-Ergebnisse, jeweils ausschließlich mit projektinternen Stil- und Formreferenzen | `gpt-image` 2.0; 29.–30.07.2026; gesteuert mit `gpt-5.6-sol` | Chroma-Key mit weicher Matte entfernt und als Alpha-WebP exportiert; Standardprops 512 × 512, große Bursts 768 × 768 | CC BY-NC-SA 4.0; Gerry Weißbach (gamma / gamma production) |
 
 Der Neon-Basis-Prompt beschreibt somit reproduzierbar die sichtbare
 Bildsprache. Die historischen Einzelprompts sind zusätzlich in der lokalen
@@ -175,6 +177,9 @@ wartbare Zusammenfassung und kein behaupteter wortgleicher Originalprompt.
 8. Ebenfalls am 30.07.2026 entstanden elf ergänzende Classic-Neon-Cover mit
    `countup` als primärer und `target_rush`, `treasure_hunt` oder `boss_fight`
    als zweiter projektinterner Akzentreferenz.
+9. Anschließend entstanden 16 Classic-Neon-Frontassets. Jedes verwendete
+   `countup`, das nächstliegende Neon-Moduscover und den gleichnamigen
+   Playful-Cartoon-Prop ausschließlich als projektinterne Referenzen.
 
 Die zugehörigen Git-Commits sind `179cf40` für die ersten drei Cover,
 `e5f3192` für die ergänzten Neon-Artworks, `475d23f` für das vollständige
@@ -203,8 +208,10 @@ dargestellten Assets abschließend lizenziert werden.
 ## Animierte 3D-Props
 
 Die Ambient-Animationen verwenden freigestellte Einzelobjekte aus
-`web/static/assets/effects/`. Als Stilreferenz dient ebenfalls
-`web/static/assets/modes/heart_chase.webp`. Der gemeinsame Prompt lautet:
+`web/static/assets/effects/` für Playful Cartoon und
+`web/static/assets/themes/neon/effects/` für Classic Neon. Für Cartoon dient
+`web/static/assets/modes/heart_chase.webp` als Stilreferenz. Der gemeinsame
+Cartoon-Prompt lautet:
 
 ```text
 Use case: stylized-concept

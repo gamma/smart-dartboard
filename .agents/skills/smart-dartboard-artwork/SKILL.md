@@ -22,8 +22,10 @@ this skill.
   `web/static/assets/modes/<slug>.webp`
 - Classic Neon cover:
   `web/static/assets/themes/neon/modes/<slug>.webp`
-- Transparent animated prop:
+- Playful Cartoon transparent prop:
   `web/static/assets/effects/<name>.webp`
+- Classic Neon transparent prop:
+  `web/static/assets/themes/neon/effects/<name>.webp`
 
 Never overwrite the other theme while producing one pack. Preserve historical
 Neon covers unless the user explicitly asks to replace a named asset.
