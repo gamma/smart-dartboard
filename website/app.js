@@ -89,3 +89,39 @@ document.addEventListener("keydown", event => {
     lightbox.close();
   }
 });
+
+const quickstartCopyButton = document.querySelector("[data-copy-quickstart]");
+const quickstartCode = document.querySelector("[data-quickstart-code]");
+
+async function copyQuickstart() {
+  if (!quickstartCopyButton || !quickstartCode) return;
+  const commands = quickstartCode.textContent.trim();
+
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(commands);
+    } else {
+      const textarea = document.createElement("textarea");
+      textarea.value = commands;
+      textarea.setAttribute("readonly", "");
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.append(textarea);
+      textarea.select();
+      const copied = document.execCommand("copy");
+      textarea.remove();
+      if (!copied) throw new Error("Copy command was rejected");
+    }
+
+    quickstartCopyButton.classList.add("copied");
+    quickstartCopyButton.innerHTML = '<span aria-hidden="true">✓</span> Kopiert';
+    window.setTimeout(() => {
+      quickstartCopyButton.classList.remove("copied");
+      quickstartCopyButton.innerHTML = '<span aria-hidden="true">□</span> Befehle kopieren';
+    }, 2200);
+  } catch {
+    quickstartCopyButton.textContent = "Bitte manuell markieren";
+  }
+}
+
+quickstartCopyButton?.addEventListener("click", copyQuickstart);

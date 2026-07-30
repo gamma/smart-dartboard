@@ -26,6 +26,7 @@
       <a href="#erlebnis">Erlebnis</a>
       <a href="#spielmodi">Spielmodi</a>
       <a href="#technik">Technik</a>
+      <a href="#quickstart">Quickstart</a>
       <a class="nav-github" href="https://github.com/gamma/smart-dartboard">GitHub <span aria-hidden="true">↗</span></a>
     </nav>
   </header>
@@ -312,6 +313,54 @@
       <div class="tech-row reveal">
         <span>PYTHON</span><i></i><span>FASTAPI</span><i></i><span>WEBSOCKET</span><i></i><span>SQLITE</span><i></i><span>BLE INPUT</span>
       </div>
+    </section>
+
+    <section id="quickstart" class="section quickstart">
+      <header class="section-heading compact reveal">
+        <div>
+          <p class="eyebrow"><span></span>DOCKER QUICKSTART</p>
+          <h2>Vier Schritte.<br><em>Dann fliegen die Darts.</em></h2>
+        </div>
+        <p>Das veröffentlichte Image läuft auf AMD64 und ARM64. Docker und Docker Compose genügen für den ersten lokalen Start.</p>
+      </header>
+
+      <div class="quickstart-layout">
+        <ol class="quickstart-steps reveal">
+          <li><span>01</span><div><b>Repository holen</b><small>Enthält Compose-Datei und sichere Standardwerte.</small></div></li>
+          <li><span>02</span><div><b>Release laden</b><small>Version 0.0.1 wird reproduzierbar aus GHCR geladen.</small></div></li>
+          <li><span>03</span><div><b>Container starten</b><small>Der erste Start läuft ohne BLE und erlaubt Testtreffer.</small></div></li>
+          <li><span>04</span><div><b>Healthcheck prüfen</b><small>Danach Controller und Projektor im Browser öffnen.</small></div></li>
+        </ol>
+
+        <div class="quickstart-terminal reveal" data-delay="100">
+          <header>
+            <div><i></i><i></i><i></i></div>
+            <b>SMART DARTBOARD · v0.0.1</b>
+            <button type="button" data-copy-quickstart aria-label="Docker-Quickstart-Befehle kopieren">
+              <span aria-hidden="true">□</span> Befehle kopieren
+            </button>
+          </header>
+          <pre><code data-quickstart-code><span>git clone</span> https://github.com/gamma/smart-dartboard.git
+<span>cd</span> smart-dartboard
+<span>cp</span> .env.example .env
+<span>mkdir</span> -p data
+
+<span>docker compose</span> -f compose.production.yml pull
+<span>SDB_ENABLE_BLE=0 SDB_ALLOW_TEST_EVENTS=1</span> \
+  docker compose -f compose.production.yml up -d --wait --wait-timeout 60
+
+<span>curl</span> http://localhost:8000/api/health</code></pre>
+          <div class="quickstart-open">
+            <p><b>Danach öffnen</b><small>Auf anderen Geräten <code>localhost</code> durch die IP des Docker-Rechners ersetzen.</small></p>
+            <div>
+              <a href="http://localhost:8000/control">/control <span>↗</span></a>
+              <a href="http://localhost:8000/projector">/projector <span>↗</span></a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="quickstart-note reveal"><i></i><span><b>Für den festen Spielhallenbetrieb auf Linux:</b> In <code>.env</code> die BLE-Adresse eintragen, <code>SDB_ENABLE_BLE=1</code> und <code>SDB_ALLOW_TEST_EVENTS=0</code> setzen. Der Host benötigt BlueZ und einen erreichbaren <code>/var/run/dbus</code>-Socket.</span></p>
     </section>
 
     <section class="final-cta">

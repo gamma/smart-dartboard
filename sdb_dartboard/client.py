@@ -73,6 +73,13 @@ class SdbDartboardClient:
                 await self._connect_once(address)
             except asyncio.CancelledError:
                 raise
+            except FileNotFoundError as exc:
+                LOG.warning(
+                    "BLE backend unavailable: BlueZ D-Bus socket not found. "
+                    "Use SDB_ENABLE_BLE=0 for a UI-only container start."
+                )
+                await self._report_status("error", str(exc))
+                await asyncio.sleep(max(self.reconnect_delay, 30.0))
             except Exception as exc:
                 LOG.warning("BLE connection loop error: %s", exc)
                 await self._report_status("error", str(exc))
