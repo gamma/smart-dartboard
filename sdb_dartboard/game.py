@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 import copy
+import random
 
 from .games import registry
 from .games.cricket import CRICKET_TARGETS
@@ -274,10 +275,21 @@ class GameState:
 class GameEngine:
     def __init__(self) -> None:
         self.state = GameState(players=[Player(id=str(uuid4()), name="Player 1")])
+        self._history_origin: Optional[Dict[str, Any]] = None
+        self._actions: List[Dict[str, Any]] = []
+        self._next_action_id = 1
+        self._replaying = False
+        self.last_action: Optional[Dict[str, Any]] = None
+        self.last_undo_action: Optional[Dict[str, Any]] = None
 
     def clear(self) -> GameState:
         """Discard the transient board state when leaving a game."""
         self.state = GameState(status="idle", players=[])
+        self._history_origin = None
+        self._actions = []
+        self._next_action_id = 1
+        self.last_action = None
+        self.last_undo_action = None
         return self.state
 
     def reset(
@@ -333,6 +345,13 @@ class GameEngine:
         initializer = getattr(mode, "initialize_state", None)
         if initializer is not None:
             initializer(self.state, resolved_options)
+        # Capture the editable origin lazily with the first action. This also
+        # includes any operator/test setup applied immediately after reset.
+        self._history_origin = None
+        self._actions = []
+        self._next_action_id = 1
+        self.last_action = None
+        self.last_undo_action = None
         return self.state
 
     def export_state(self) -> Dict[str, Any]:
@@ -343,24 +362,11 @@ class GameEngine:
             "options": self.state.options,
             "state": self.state.snapshot(),
             "last_event": self.state.last_event,
+            "history_origin": copy.deepcopy(self._history_origin),
+            "actions": copy.deepcopy(self._actions),
+            "next_action_id": self._next_action_id,
             "throws": [
-                {
-                    "seq": throw.seq,
-                    "type": throw.type,
-                    "label": throw.label,
-                    "score": throw.score,
-                    "player_id": throw.player_id,
-                    "raw": throw.raw,
-                    "snapshot_before": throw.snapshot_before,
-                    "context_before": throw.context_before,
-                    "round_number": throw.round_number,
-                    "dart_in_turn": throw.dart_in_turn,
-                    "mode_points": throw.mode_points,
-                    "outcome": throw.outcome,
-                    "source": throw.source,
-                    "score_after": throw.score_after,
-                }
-                for throw in self.state.throws
+                self._throw_to_dict(throw) for throw in self.state.throws
             ],
         }
 
@@ -374,28 +380,266 @@ class GameEngine:
         self.state.restore_snapshot(checkpoint["state"])
         self.state.last_event = checkpoint.get("last_event")
         self.state.throws = [
-            ThrowEvent(
-                seq=int(data["seq"]),
-                type=str(data.get("type", "throw")),
-                label=str(data.get("label", "")),
-                score=int(data.get("score", 0)),
-                player_id=data.get("player_id"),
-                raw=dict(data.get("raw", {})),
-                snapshot_before=dict(data["snapshot_before"]),
-                context_before=dict(data.get("context_before", {})),
-                round_number=int(data.get("round_number", 1)),
-                dart_in_turn=int(data.get("dart_in_turn", 1)),
-                mode_points=int(data.get("mode_points", 0)),
-                outcome=str(data.get("outcome", "neutral")),
-                source=str(data.get("source", "unknown")),
-                score_after=int(data.get("score_after", 0)),
-            )
+            self._throw_from_dict(data)
             for data in checkpoint.get("throws", [])
         ]
+        origin = checkpoint.get("history_origin")
+        self._history_origin = copy.deepcopy(origin) if origin else {
+            "state": self.state.snapshot(),
+            "random_state": random.getstate(),
+            "throws": [
+                self._throw_to_dict(throw) for throw in self.state.throws
+            ],
+        }
+        self._actions = copy.deepcopy(checkpoint.get("actions", []))
+        self._next_action_id = int(
+            checkpoint.get(
+                "next_action_id",
+                max(
+                    [
+                        int(action.get("id", 0))
+                        for action in self._actions
+                    ]
+                    or [0]
+                )
+                + 1,
+            )
+        )
+        self.last_action = None
+        self.last_undo_action = None
+        return self.state
+
+    @staticmethod
+    def _throw_to_dict(throw: ThrowEvent) -> Dict[str, Any]:
+        return {
+            "seq": throw.seq,
+            "type": throw.type,
+            "label": throw.label,
+            "score": throw.score,
+            "player_id": throw.player_id,
+            "raw": throw.raw,
+            "snapshot_before": throw.snapshot_before,
+            "context_before": throw.context_before,
+            "round_number": throw.round_number,
+            "dart_in_turn": throw.dart_in_turn,
+            "mode_points": throw.mode_points,
+            "outcome": throw.outcome,
+            "source": throw.source,
+            "score_after": throw.score_after,
+        }
+
+    @staticmethod
+    def _throw_from_dict(data: Dict[str, Any]) -> ThrowEvent:
+        return ThrowEvent(
+            seq=int(data["seq"]),
+            type=str(data.get("type", "throw")),
+            label=str(data.get("label", "")),
+            score=int(data.get("score", 0)),
+            player_id=data.get("player_id"),
+            raw=dict(data.get("raw", {})),
+            snapshot_before=dict(data["snapshot_before"]),
+            context_before=dict(data.get("context_before", {})),
+            round_number=int(data.get("round_number", 1)),
+            dart_in_turn=int(data.get("dart_in_turn", 1)),
+            mode_points=int(data.get("mode_points", 0)),
+            outcome=str(data.get("outcome", "neutral")),
+            source=str(data.get("source", "unknown")),
+            score_after=int(data.get("score_after", 0)),
+        )
+
+    def _new_action(self, kind: str, **data: Any) -> Dict[str, Any]:
+        if self._replaying:
+            action = copy.deepcopy(getattr(self, "_replay_action", {}))
+            if action.get("kind") != kind:
+                raise ValueError(
+                    f"Replay expected {action.get('kind')}, received {kind}"
+                )
+            return action
+        if self._history_origin is None:
+            self._history_origin = {
+                "state": self.state.snapshot(),
+                "random_state": random.getstate(),
+                "throws": [
+                    self._throw_to_dict(throw)
+                    for throw in self.state.throws
+                ],
+            }
+        action = {"id": self._next_action_id, "kind": kind, **data}
+        self._next_action_id += 1
+        return action
+
+    def _commit_action(self, action: Dict[str, Any]) -> None:
+        if self._replaying:
+            return
+        stored = copy.deepcopy(action)
+        self._actions.append(stored)
+        self.last_action = copy.deepcopy(stored)
+        self.last_undo_action = None
+
+    @staticmethod
+    def _tuple_tree(value: Any) -> Any:
+        if isinstance(value, list):
+            return tuple(GameEngine._tuple_tree(item) for item in value)
+        if isinstance(value, tuple):
+            return tuple(GameEngine._tuple_tree(item) for item in value)
+        return value
+
+    def _replay_actions(self) -> None:
+        if not self._history_origin:
+            raise ValueError("This game has no editable action history")
+        actions = copy.deepcopy(self._actions)
+        self.state.restore_snapshot(
+            copy.deepcopy(self._history_origin["state"])
+        )
+        self.state.throws = [
+            self._throw_from_dict(data)
+            for data in self._history_origin.get("throws", [])
+        ]
+        self.state.last_event = None
+        random.setstate(
+            self._tuple_tree(self._history_origin["random_state"])
+        )
+        self._replaying = True
+        try:
+            for action in actions:
+                self._replay_action = action
+                kind = action["kind"]
+                if kind == "throw":
+                    self.handle_event(copy.deepcopy(action["event"]))
+                elif kind == "continue":
+                    if self.state.status == "hold":
+                        self.continue_turn()
+                    elif self.state.status == "running":
+                        # A previously completed turn remains a turn boundary
+                        # when one of its darts is later deleted.
+                        self._complete_skipped_turn()
+                        if self.state.status != "finished":
+                            self._advance_player()
+                            self.state.status = "running"
+                            self.state.last_event = {"type": "continue"}
+                elif kind == "next_player":
+                    self.next_player()
+                elif kind == "game_action":
+                    self.handle_action(
+                        str(action["action"]),
+                        copy.deepcopy(action.get("payload", {})),
+                    )
+        finally:
+            self._replaying = False
+            self._replay_action = {}
+        self.last_action = copy.deepcopy(actions[-1]) if actions else None
+
+    def editable_turns(self, limit: int = 2) -> List[Dict[str, Any]]:
+        """Return the current and immediately previous turn for operator edits."""
+        players = {player.id: player for player in self.state.players}
+        groups: List[Dict[str, Any]] = []
+        for throw in self.state.throws:
+            action_id = int(throw.raw.get("_action_id", 0) or 0)
+            if not action_id:
+                continue
+            key = (throw.round_number, throw.player_id)
+            if not groups or groups[-1]["_key"] != key:
+                player = players.get(throw.player_id or "")
+                groups.append({
+                    "_key": key,
+                    "round_number": throw.round_number,
+                    "player_id": throw.player_id,
+                    "player_name": player.name if player else "",
+                    "current": False,
+                    "darts": [],
+                })
+            groups[-1]["darts"].append({
+                "action_id": action_id,
+                "dart_in_turn": throw.dart_in_turn,
+                "label": throw.label or "MISS",
+                "score": throw.score,
+                "source": throw.source,
+            })
+
+        current = self.state.current_player()
+        current_key = (
+            self.state.round_number,
+            current.id if current else None,
+        )
+        if groups and groups[-1]["_key"] == current_key:
+            groups[-1]["current"] = True
+        elif current:
+            groups.append({
+                "_key": current_key,
+                "round_number": self.state.round_number,
+                "player_id": current.id,
+                "player_name": current.name,
+                "current": True,
+                "darts": [],
+            })
+        selected = groups[-max(1, int(limit)):]
+        for group in selected:
+            group.pop("_key", None)
+            group["can_add"] = bool(
+                group["current"] and self.state.status == "running"
+            )
+        return selected
+
+    def correct_throw(self, action_id: int, replacement: Dict[str, Any]) -> GameState:
+        editable_ids = {
+            int(dart["action_id"])
+            for turn in self.editable_turns()
+            for dart in turn["darts"]
+        }
+        if action_id not in editable_ids:
+            raise ValueError("Only darts from the last two turns can be corrected")
+        target = next(
+            (
+                action
+                for action in self._actions
+                if action["kind"] == "throw" and int(action["id"]) == action_id
+            ),
+            None,
+        )
+        if target is None:
+            raise ValueError("Throw no longer exists")
+        corrected = copy.deepcopy(replacement)
+        corrected["seq"] = target["event"].get(
+            "seq", corrected.get("seq", -1)
+        )
+        corrected["corrected"] = True
+        corrected["_source"] = "correction"
+        corrected["_action_id"] = action_id
+        target["event"] = corrected
+        self._replay_actions()
+        self.last_action = {
+            "id": action_id,
+            "kind": "throw_corrected",
+            "event": copy.deepcopy(corrected),
+        }
+        return self.state
+
+    def delete_throw(self, action_id: int) -> GameState:
+        editable_ids = {
+            int(dart["action_id"])
+            for turn in self.editable_turns()
+            for dart in turn["darts"]
+        }
+        if action_id not in editable_ids:
+            raise ValueError("Only darts from the last two turns can be deleted")
+        before = len(self._actions)
+        self._actions = [
+            action
+            for action in self._actions
+            if not (
+                action["kind"] == "throw"
+                and int(action["id"]) == action_id
+            )
+        ]
+        if len(self._actions) == before:
+            raise ValueError("Throw no longer exists")
+        self._replay_actions()
+        self.last_action = {"id": action_id, "kind": "throw_deleted"}
         return self.state
 
     def continue_turn(self) -> GameState:
         if self.state.status == "hold":
+            action = self._new_action("continue")
             previous_message = self.state.message
             self._advance_player()
             self.state.last_event = {"type": "continue"}
@@ -403,14 +647,17 @@ class GameEngine:
                 self.state.status = "running"
                 if self.state.message == previous_message:
                     self.state.message = "Next player"
+            self._commit_action(action)
         return self.state
 
     def next_player(self) -> GameState:
         if self.state.status in ("running", "hold"):
+            action = self._new_action("next_player")
             if self.state.status == "running":
                 self._complete_skipped_turn()
             if self.state.status == "finished":
                 self.state.last_event = {"type": "next_player"}
+                self._commit_action(action)
                 return self.state
             previous_message = self.state.message
             self._advance_player()
@@ -419,6 +666,7 @@ class GameEngine:
                 self.state.status = "running"
                 if self.state.message == previous_message:
                     self.state.message = "Next player"
+            self._commit_action(action)
         return self.state
 
     def _complete_skipped_turn(self) -> None:
@@ -440,12 +688,38 @@ class GameEngine:
         )
 
     def undo(self) -> GameState:
-        if not self.state.throws:
+        if not self._actions:
+            if not self.state.throws:
+                self.last_undo_action = None
+                return self.state
+            last = self.state.throws.pop()
+            self.state.restore_snapshot(last.snapshot_before)
+            self.last_undo_action = {
+                "id": 0,
+                "kind": "throw",
+                "event": copy.deepcopy(last.raw),
+                "legacy": True,
+            }
+            self.state.last_event = {
+                "type": "undo",
+                "undone": last.label,
+            }
+            self.state.message = f"Undo {last.label}"
             return self.state
-        last = self.state.throws.pop()
-        self.state.restore_snapshot(last.snapshot_before)
-        self.state.last_event = {"type": "undo", "undone": last.label}
-        self.state.message = f"Undo {last.label}"
+        undone = self._actions.pop()
+        self.last_undo_action = copy.deepcopy(undone)
+        self._replay_actions()
+        label = (
+            str(undone.get("event", {}).get("label") or "MISS")
+            if undone["kind"] == "throw"
+            else undone["kind"]
+        )
+        self.state.last_event = {
+            "type": "undo",
+            "undone": label,
+            "action_id": undone["id"],
+        }
+        self.state.message = f"Undo {label}"
         return self.state
 
     def correct_turn_throw(
@@ -453,37 +727,21 @@ class GameEngine:
         turn_index: int,
         replacement: Dict[str, Any],
     ) -> GameState:
-        """Replace one throw in the active three-dart turn and replay the rest."""
-        turn_count = self.state.darts_in_turn
-        if turn_count <= 0:
-            raise ValueError("There are no throws in the current turn")
-        if turn_index < 0 or turn_index >= turn_count:
+        """Compatibility wrapper for the original active-turn correction API."""
+        current = next(
+            (
+                turn
+                for turn in reversed(self.editable_turns())
+                if turn["current"]
+            ),
+            None,
+        )
+        if current is None or turn_index < 0 or turn_index >= len(current["darts"]):
             raise ValueError("Throw index is outside the current turn")
-        target_position = len(self.state.throws) - turn_count + turn_index
-        if target_position < 0:
-            raise ValueError("Throw history is incomplete")
-
-        target = self.state.throws[target_position]
-        current_player = self.state.current_player()
-        if current_player is None or target.player_id != current_player.id:
-            raise ValueError("Only throws from the current player can be corrected")
-
-        subsequent_events = [
-            dict(throw.raw) for throw in self.state.throws[target_position + 1 :]
-        ]
-        prefix = list(self.state.throws[:target_position])
-        self.state.restore_snapshot(target.snapshot_before)
-        self.state.throws = prefix
-
-        corrected = dict(replacement)
-        corrected["seq"] = target.seq
-        corrected["corrected"] = True
-        self.handle_event(corrected)
-        for event in subsequent_events:
-            replay = dict(event)
-            replay.pop("bust", None)
-            self.handle_event(replay)
-        return self.state
+        return self.correct_throw(
+            int(current["darts"][turn_index]["action_id"]),
+            replacement,
+        )
 
     def handle_action(self, action: str, payload: Dict[str, Any] | None = None) -> GameState:
         self.state.last_event = {"type": "game_action", "action": action, "payload": payload or {}}
@@ -491,7 +749,13 @@ class GameEngine:
         handler = getattr(mode, "handle_action", None)
         if handler is None:
             raise ValueError(f"Game mode {self.state.game_type} does not support actions")
+        timeline_action = self._new_action(
+            "game_action",
+            action=action,
+            payload=copy.deepcopy(payload or {}),
+        )
         handler(self.state, action, payload or {})
+        self._commit_action(timeline_action)
         return self.state
 
     def handle_event(self, event: Dict[str, Any]) -> GameState:
@@ -507,12 +771,19 @@ class GameEngine:
             return self.state
 
         if event_type == "hit":
-            self._apply_throw(event)
+            self._apply_timeline_throw(event)
         elif event_type == "miss":
             miss = {**event, "label": "MISS", "score": 0}
             self.state.last_event = miss
-            self._apply_throw(miss)
+            self._apply_timeline_throw(miss)
         return self.state
+
+    def _apply_timeline_throw(self, event: Dict[str, Any]) -> None:
+        action = self._new_action("throw", event=copy.deepcopy(event))
+        event["_action_id"] = action["id"]
+        action["event"]["_action_id"] = action["id"]
+        self._apply_throw(event)
+        self._commit_action(action)
 
     def _advance_player(self) -> None:
         players = self.state.players

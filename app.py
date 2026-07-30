@@ -191,8 +191,17 @@ class ArtThemeRequest(BaseModel):
 
 
 class ThrowCorrectionRequest(BaseModel):
-    turn_index: int = Field(ge=0, le=2)
+    turn_index: Optional[int] = Field(default=None, ge=0, le=2)
+    action_id: Optional[int] = Field(default=None, ge=1)
     event: DartEventRequest
+
+
+class ThrowDeleteRequest(BaseModel):
+    action_id: int = Field(ge=1)
+
+
+class CorrectionLockRequest(BaseModel):
+    enabled: bool
 
 
 @app.exception_handler(ValueError)
@@ -502,14 +511,49 @@ async def undo():
 @app.post("/api/throw/correct")
 async def correct_throw(req: ThrowCorrectionRequest):
     replacement = req.event.normalized()
-    controller.correct_turn_throw(req.turn_index, replacement)
+    if req.action_id is not None:
+        controller.correct_throw(req.action_id, replacement)
+    elif req.turn_index is not None:
+        controller.correct_turn_throw(req.turn_index, replacement)
+    else:
+        raise HTTPException(
+            status_code=422,
+            detail="action_id or turn_index is required",
+        )
     correction_event = {
         "type": "throw_corrected",
+        "action_id": req.action_id,
         "turn_index": req.turn_index,
         "replacement": replacement,
     }
     await publish_state(correction_event)
     return engine.state.as_dict()
+
+
+@app.post("/api/throw/delete")
+async def delete_throw(req: ThrowDeleteRequest):
+    controller.delete_throw(req.action_id)
+    await publish_state(
+        {"type": "throw_deleted", "action_id": req.action_id}
+    )
+    return engine.state.as_dict()
+
+
+@app.post("/api/throw/manual")
+async def manual_throw(req: DartEventRequest):
+    event = req.normalized()
+    controller.manual_throw(event)
+    await publish_state({**event, "source": "manual"})
+    return engine.state.as_dict()
+
+
+@app.post("/api/correction/lock")
+async def correction_lock(req: CorrectionLockRequest):
+    controller.set_correction_lock(req.enabled)
+    await publish_state(
+        {"type": "correction_lock", "enabled": req.enabled}
+    )
+    return controller.public_state()
 
 
 @app.post("/api/event")
@@ -518,8 +562,9 @@ async def inject_event(req: DartEventRequest):
     if ble_enabled and not allow:
         raise HTTPException(status_code=403, detail="Test events are disabled")
     event = req.normalized()
-    await pipeline.process(event, source="test")
-    await publish_state(event)
+    accepted = await pipeline.process(event, source="test")
+    if accepted:
+        await publish_state(event)
     return engine.state.as_dict()
 
 

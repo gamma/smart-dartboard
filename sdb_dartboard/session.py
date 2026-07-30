@@ -23,6 +23,7 @@ SCREENS = {
     "calibration",
 }
 REMATCH_CONFIRM_SECONDS = 3.0
+CORRECTION_LOCK_SECONDS = 60.0
 
 
 class SessionController:
@@ -38,6 +39,7 @@ class SessionController:
         self.engine = engine or GameEngine()
         self._clock = clock or monotonic
         self._rematch_armed_until = 0.0
+        self._correction_locked_until = 0.0
         self.screen = "attract"
         self.session_id: Optional[str] = None
         self.game_id: Optional[str] = None
@@ -123,6 +125,7 @@ class SessionController:
                 else self.selected_language
             ),
             "game": self.engine.state.as_dict(),
+            "editable_turns": self.engine.editable_turns(),
             "modes": registry.as_dicts(),
             "players": self.store.list_players(),
             "statistics": self.store.statistics(player_ids or None),
@@ -142,7 +145,20 @@ class SessionController:
                 if rematch_armed
                 else 0,
             },
+            "correction_lock": {
+                "active": self.correction_locked(),
+            },
         }
+
+    def correction_locked(self) -> bool:
+        return self._clock() < self._correction_locked_until
+
+    def set_correction_lock(self, enabled: bool) -> None:
+        self._correction_locked_until = (
+            self._clock() + CORRECTION_LOCK_SECONDS
+            if enabled
+            else 0.0
+        )
 
     def create_player(self, name: str, avatar: str, color: str) -> Dict[str, Any]:
         return self.store.create_player(name, avatar, color)
@@ -411,26 +427,44 @@ class SessionController:
 
     def continue_turn(self) -> None:
         self.engine.continue_turn()
-        self._record_event("continue_turn")
+        self._record_event(
+            "continue_turn",
+            payload=self._last_action_payload(),
+        )
         self._finish_game_if_needed()
         self._persist()
 
     def next_player(self) -> None:
         self.engine.next_player()
-        self._record_event("next_player")
+        self._record_event(
+            "next_player",
+            payload=self._last_action_payload(),
+        )
         self._finish_game_if_needed()
         self._persist()
 
     def undo(self) -> None:
-        had_throw = bool(self.engine.state.throws)
         was_finished = self.engine.state.status == "finished"
         self.engine.undo()
-        if had_throw and self.game_id:
-            corrected_event_id = self.store.invalidate_last_throw_event(self.game_id)
-            self.store.delete_last_throw(self.game_id)
+        undone = self.engine.last_undo_action
+        if undone and self.game_id:
+            action_id = int(undone["id"])
+            corrected_event_id = (
+                self.store.invalidate_gameplay_event(
+                    self.game_id,
+                    action_id=action_id,
+                )
+                if action_id
+                else self.store.invalidate_last_throw_event(self.game_id)
+            )
+            if undone["kind"] == "throw":
+                self._replace_persisted_throws()
             self._record_event(
                 "undo",
-                payload={"kind": "throw"},
+                payload={
+                    "kind": undone["kind"],
+                    "action_id": undone["id"],
+                },
                 corrects_event_id=corrected_event_id,
             )
         if was_finished and self.game_id and self.engine.state.status != "finished":
@@ -443,37 +477,41 @@ class SessionController:
         turn_index: int,
         replacement: Dict[str, Any],
     ) -> None:
+        current = next(
+            (
+                turn
+                for turn in reversed(self.engine.editable_turns())
+                if turn["current"]
+            ),
+            None,
+        )
+        if current is None or turn_index >= len(current["darts"]):
+            raise ValueError("Throw index is outside the current turn")
+        self.correct_throw(
+            int(current["darts"][turn_index]["action_id"]),
+            replacement,
+        )
+
+    def correct_throw(
+        self,
+        action_id: int,
+        replacement: Dict[str, Any],
+    ) -> None:
         was_finished = self.engine.state.status == "finished"
-        self.engine.correct_turn_throw(turn_index, replacement)
+        self.engine.correct_throw(action_id, replacement)
         if self.game_id:
-            self.store.replace_game_throws(
+            corrected_event_id = self.store.invalidate_gameplay_event(
                 self.game_id,
-                [
-                    {
-                        "seq": throw.seq,
-                        "player_id": throw.player_id,
-                        "event": throw.raw,
-                        "score_after": throw.score_after,
-                        "round_number": throw.round_number,
-                        "dart_in_turn": throw.dart_in_turn,
-                        "field": throw.raw.get("field"),
-                        "ring": throw.raw.get("ring"),
-                        "multiplier": throw.raw.get("multiplier"),
-                        "dart_score": throw.score,
-                        "mode_points": throw.mode_points,
-                        "outcome": throw.outcome,
-                        "source": "correction",
-                        "task": throw.context_before,
-                    }
-                    for throw in self.engine.state.throws
-                ],
+                action_id=action_id,
             )
+            self._replace_persisted_throws()
             self._record_event(
                 "throw_corrected",
                 payload={
-                    "turn_index": turn_index,
+                    "action_id": action_id,
                     "replacement": replacement,
                 },
+                corrects_event_id=corrected_event_id,
             )
             if self.engine.state.status == "finished":
                 self._finish_game_if_needed(force=True)
@@ -482,9 +520,70 @@ class SessionController:
                 self.screen = "playing"
         self._persist()
 
+    def delete_throw(self, action_id: int) -> None:
+        was_finished = self.engine.state.status == "finished"
+        self.engine.delete_throw(action_id)
+        if self.game_id:
+            corrected_event_id = self.store.invalidate_gameplay_event(
+                self.game_id,
+                action_id=action_id,
+            )
+            self._replace_persisted_throws()
+            self._record_event(
+                "throw_deleted",
+                payload={"action_id": action_id},
+                corrects_event_id=corrected_event_id,
+            )
+            if self.engine.state.status == "finished":
+                self._finish_game_if_needed(force=True)
+            elif was_finished:
+                self.store.reopen_game(self.game_id)
+                self.screen = "playing"
+        self._persist()
+
+    def manual_throw(self, event: Dict[str, Any]) -> None:
+        self.process_event({**event, "_source": "manual"})
+
+    def _last_action_payload(self) -> Dict[str, Any]:
+        action = self.engine.last_action or {}
+        return {"_action_id": action.get("id")} if action.get("id") else {}
+
+    def _replace_persisted_throws(self) -> None:
+        if not self.game_id:
+            return
+        self.store.replace_game_throws(
+            self.game_id,
+            [
+                {
+                    "seq": throw.seq,
+                    "player_id": throw.player_id,
+                    "event": throw.raw,
+                    "score_after": throw.score_after,
+                    "round_number": throw.round_number,
+                    "dart_in_turn": throw.dart_in_turn,
+                    "field": throw.raw.get("field"),
+                    "ring": throw.raw.get("ring"),
+                    "multiplier": throw.raw.get("multiplier"),
+                    "dart_score": throw.score,
+                    "mode_points": throw.mode_points,
+                    "outcome": throw.outcome,
+                    "source": throw.source,
+                    "task": throw.context_before,
+                }
+                for throw in self.engine.state.throws
+            ],
+        )
+
     def game_action(self, action: str, payload: Dict[str, Any] | None = None) -> None:
         self.engine.handle_action(action, payload or {})
-        self._record_event("game_action", payload={"action": action, **(payload or {})})
+        self._record_event(
+            "game_action",
+            payload={
+                "action": action,
+                **(payload or {}),
+                **self._last_action_payload(),
+            },
+        )
         self._finish_game_if_needed()
         self._persist()
 
@@ -611,6 +710,12 @@ class EventPipeline:
 
     async def process(self, event: Dict[str, Any], source: str = "ble") -> bool:
         async with self._lock:
+            if (
+                source in {"ble", "test"}
+                and event.get("type") in {"hit", "miss"}
+                and self.controller.correction_locked()
+            ):
+                return False
             if source == "ble" and "seq" in event:
                 identity = (int(event["seq"]), str(event.get("raw", event.get("code", ""))))
                 if identity in self._recent_set:

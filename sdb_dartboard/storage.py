@@ -466,6 +466,47 @@ class DartboardStore:
             )
         return event_id
 
+    def invalidate_gameplay_event(
+        self,
+        game_id: str,
+        *,
+        action_id: Optional[int] = None,
+    ) -> Optional[int]:
+        """Invalidate one effective gameplay event while retaining its audit row."""
+        gameplay_types = {
+            "throw",
+            "continue_turn",
+            "next_player",
+            "game_action",
+        }
+        with self._lock, self._connection:
+            rows = self._connection.execute(
+                """
+                SELECT id, event_type, payload_json
+                FROM game_events
+                WHERE game_id=? AND effective=1
+                ORDER BY ordinal DESC
+                """,
+                (game_id,),
+            ).fetchall()
+            event_id = None
+            for row in rows:
+                if row["event_type"] not in gameplay_types:
+                    continue
+                payload = json.loads(row["payload_json"] or "{}")
+                if action_id is not None and int(
+                    payload.get("_action_id", 0) or 0
+                ) != int(action_id):
+                    continue
+                event_id = int(row["id"])
+                break
+            if event_id is not None:
+                self._connection.execute(
+                    "UPDATE game_events SET effective=0 WHERE id=?",
+                    (event_id,),
+                )
+        return event_id
+
     def record_throw(
         self,
         game_id: str,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import unittest
 
 from sdb_dartboard.game import GameEngine
@@ -269,6 +270,80 @@ class GameEngineTests(unittest.TestCase):
 
         self.assertEqual(21, engine.state.players[0].score)
         self.assertEqual(80, engine.state.turn_score)
+
+    def test_previous_turn_can_be_corrected_after_next_player_throws(self):
+        engine = GameEngine()
+        engine.reset("countup", ["Ada", "Bob"], options={"rounds": 5})
+        for seq in range(1, 4):
+            engine.handle_event(hit(20, seq))
+        engine.continue_turn()
+        engine.handle_event(hit(10, 4, field=10, label="S10"))
+
+        turns = engine.editable_turns()
+        previous = next(turn for turn in turns if not turn["current"])
+        engine.correct_throw(
+            previous["darts"][0]["action_id"],
+            hit(60, 99, multiplier=3, label="T20"),
+        )
+
+        self.assertEqual([100, 10], [player.score for player in engine.state.players])
+        self.assertEqual("Bob", engine.state.current_player().name)
+        self.assertEqual(1, engine.state.darts_in_turn)
+        self.assertEqual(
+            ["T20", "S20", "S20", "S10"],
+            [throw.label for throw in engine.state.throws],
+        )
+
+    def test_deleting_previous_dart_preserves_the_player_transition(self):
+        engine = GameEngine()
+        engine.reset("countup", ["Ada", "Bob"], options={"rounds": 5})
+        for seq in range(1, 4):
+            engine.handle_event(hit(20, seq))
+        engine.continue_turn()
+        engine.handle_event(hit(10, 4, field=10, label="S10"))
+        previous = next(
+            turn for turn in engine.editable_turns() if not turn["current"]
+        )
+
+        engine.delete_throw(previous["darts"][2]["action_id"])
+
+        self.assertEqual([40, 10], [player.score for player in engine.state.players])
+        self.assertEqual("Bob", engine.state.current_player().name)
+        self.assertEqual(1, engine.state.darts_in_turn)
+
+    def test_undo_after_player_change_restores_completed_turn_first(self):
+        engine = GameEngine()
+        engine.reset("countup", ["Ada", "Bob"], options={"rounds": 5})
+        for seq in range(1, 4):
+            engine.handle_event(hit(20, seq))
+        engine.continue_turn()
+
+        engine.undo()
+
+        self.assertEqual("Ada", engine.state.current_player().name)
+        self.assertEqual("hold", engine.state.status)
+        self.assertEqual(3, engine.state.darts_in_turn)
+        self.assertEqual("continue", engine.last_undo_action["kind"])
+
+    def test_editable_timeline_survives_json_checkpoint_restore(self):
+        engine = GameEngine()
+        engine.reset("countup", ["Ada", "Bob"], options={"rounds": 5})
+        for seq in range(1, 4):
+            engine.handle_event(hit(20, seq))
+        engine.continue_turn()
+        restored = GameEngine()
+        restored.import_state(json.loads(json.dumps(engine.export_state())))
+        previous = next(
+            turn for turn in restored.editable_turns() if not turn["current"]
+        )
+
+        restored.correct_throw(
+            previous["darts"][0]["action_id"],
+            hit(40, 99, multiplier=2, label="D20"),
+        )
+
+        self.assertEqual(80, restored.state.players[0].score)
+        self.assertEqual("Bob", restored.state.current_player().name)
 
     def test_target_rush_exposes_overlay(self):
         engine = GameEngine()
