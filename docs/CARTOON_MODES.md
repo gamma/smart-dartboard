@@ -27,7 +27,7 @@ dieselben zufällig erzeugten Bedingungen.
 | `candy_cannon` | Persönliche Ladung bleibt über Turns: Single +1, Double +2, Triple +3, Bull +4. Bei 8–10 wird Bull zum Abzug: Der nächste SBull- oder DBull-Treffer feuert automatisch, gibt +50 und zieht dem führenden Gegner 25 ab (Minimum null; Gleichstand nach Turn-Reihenfolge). Andere Treffer können weiter überladen; über 10 setzt die Ladung auf null. Kein Control-Button. 5/8 Runden, mindestens zwei Spieler. |
 | `mini_golf` | Alle spielen dasselbe Loch. Easy: Zahl genügt; Normal: exaktes Single/Double; Hard: exaktes Double/Triple/Bull. Treffer mit Dart 1/2/3 zählt 1/2/3 Schläge, kompletter Fehlschlag 4. 6/9 Löcher, niedrigster Score. |
 | `eight_ball` | Exakt zwei Spieler. Spieler 1 räumt Singles 1–7, Spieler 2 Singles 9–15. Richtig +20 und bis maximal drei Darts weiterspielen; falsches Feld oder Miss beendet den Turn. Double Bull gewinnt erst nach Abräumen, zu frühes Double Bull schenkt dem Gegner den Sieg. |
-| `block_drop` | Koop ohne Timer auf 5×8 Raster. Vier zusammenhängende Farbbögen steuern links/rechts sowie links/rechts drehen. SBull und DBull setzen den Stein sofort; DBull gibt zusätzlich +25. Standardmäßig darf der Spieler mit verbleibenden Darts am neuen Stein weiterwerfen; optional beendet ein Drop den Zug. Miss macht nichts. Erst nachdem alle Spieler dran waren, fällt der Stein automatisch eine Zeile. Fünf Linien gewinnen, Top-out verliert; Blockpunkte zählen für alle. |
+| `block_drop` | Koop ohne Timer auf 5×8 Raster. Vier zusammenhängende Farbbögen steuern links/rechts sowie links/rechts drehen. Drop-Ziele: Easy Double/Triple/Bull, Mittel Double/Bull, Schwer nur Bull; DBull gibt zusätzlich +25. Nach einem Drop darf standardmäßig weitergeworfen werden. Klassisch sinkt nach jeder Teamrunde und spielt auf fünf Linien; Action sinkt nach jedem Dart und spielt auf zehn. Top-out verliert; Blockpunkte zählen für alle. |
 | `dart_sweeper` | Koop auf den 20 Zahlenfeldern. Single deckt das direkte Feld auf; Double zusätzlich einen, Triple zwei sichere Nachbarn. Ein direkter Minentreffer explodiert unabhängig vom Ring. SBull scannt ein, DBull zwei sichere Felder. Kein Flood Reveal. Presets: 3/5/7 Minen und 5/3/2 Leben. Erster Direkttreffer plus unmittelbare Nachbarn sind minenfrei. |
 
 ## Gemeinsame Prinzipien
@@ -707,24 +707,22 @@ kleine, klar erkennbare Blöcke
 
 ### Steuerung über Dartsegmente
 
-Feste, leicht merkbare Steuerzonen:
+Vier feste, zusammenhängende Farbbögen steuern:
 
 ```text
-S1–S5      -> Stein nach links
-S6–S10     -> Stein nach rechts
-S11–S15    -> Stein drehen
-S16–S20    -> Hard Drop
-Bull       -> Power Drop / sofortige Sonderaktion
-Miss       -> Stein fällt eine Reihe
+Gelb       -> Stein nach links
+Lila       -> links drehen
+Orange     -> rechts drehen
+Grün       -> Stein nach rechts
 ```
 
-Alternative für Einsteiger: Projektor hebt jeweils nur drei große Aktionszonen hervor:
+Die cyan markierten Drop-Ziele hängen von der Schwierigkeit ab:
 
 ```text
-LINKS
-DREHEN
-RECHTS
-DROP
+Easy       -> Double, Triple und Bull
+Mittel     -> Double und Bull
+Schwer     -> nur Bull
+DBull      -> Power Drop mit +25
 ```
 
 ### Turn-Ablauf
@@ -732,9 +730,22 @@ DROP
 1. Ein Tetris-Stein erscheint oben im Raster.
 2. Spieler hat bis zu drei Darts, um ihn zu steuern.
 3. Jeder Dart löst eine Aktion aus.
-4. Nach drei Darts oder Hard Drop landet der Stein.
+4. Ein Treffer auf ein cyan markiertes Ziel droppt und setzt den Stein.
 5. Volle Linien werden gelöscht.
-6. Nächster Spieler erhält den nächsten Stein.
+6. Standardmäßig darf mit verbleibenden Darts am nächsten Stein weitergespielt
+   werden; optional beendet ein Drop den Zug.
+
+### Spieltempo
+
+```text
+Klassisch  -> nach jeder vollständigen Teamrunde eine Reihe sinken
+              fünf gelöschte Linien gewinnen
+Action     -> nach jedem Dart eine Reihe sinken
+              zehn gelöschte Linien gewinnen
+```
+
+Im Action-Modus sinkt auch ein Miss. Ein bewusster Drop setzt den Stein sofort
+und lässt nicht zusätzlich den neu erschienenen Stein sinken.
 
 ### Scoring
 
@@ -750,9 +761,9 @@ Bull Power Drop: +25 Bonus
 ### Fehler / Cartoon-Regeln
 
 ```text
-Miss: Stein rutscht unkontrolliert eine Reihe nach unten
-Treffer auf falsche Steuerzone: Aktion passiert trotzdem, aber ohne Bonus
-Stein über Oberkante: Spieler verliert ein Herz oder -100 Punkte
+Klassisch + Miss: keine Steueraktion
+Action + Miss: Stein sinkt eine Reihe
+Stein über Oberkante: Team verliert
 ```
 
 ### Varianten

@@ -377,6 +377,41 @@ class CartoonModeTests(unittest.TestCase):
         self.assertEqual("running", double_engine.state.status)
         self.assertEqual(1, double_engine.state.darts_in_turn)
 
+    def test_block_drop_difficulty_changes_drop_rings(self):
+        easy = GameEngine()
+        easy.reset("block_drop", ["Ada"], options={"difficulty": "easy"})
+        easy_piece_index = easy.state.mode_state["piece_index"]
+        easy.handle_event(hit(20, "triple", 3, 1))
+        self.assertEqual(easy_piece_index + 1, easy.state.mode_state["piece_index"])
+
+        normal = GameEngine()
+        normal.reset("block_drop", ["Ada"], options={"difficulty": "normal"})
+        normal_piece_index = normal.state.mode_state["piece_index"]
+        normal.handle_event(hit(20, "triple", 3, 2))
+        self.assertEqual(normal_piece_index, normal.state.mode_state["piece_index"])
+        normal.handle_event(hit(20, "double", 2, 3))
+        self.assertEqual(normal_piece_index + 1, normal.state.mode_state["piece_index"])
+
+        hard = GameEngine()
+        hard.reset("block_drop", ["Ada"], options={"difficulty": "hard"})
+        hard_piece_index = hard.state.mode_state["piece_index"]
+        hard.handle_event(hit(20, "double", 2, 4))
+        self.assertEqual(hard_piece_index, hard.state.mode_state["piece_index"])
+        hard.handle_event(hit(25, "single_bull", 1, 5))
+        self.assertEqual(hard_piece_index + 1, hard.state.mode_state["piece_index"])
+
+    def test_block_drop_action_pace_sinks_after_every_dart(self):
+        engine = GameEngine()
+        engine.reset("block_drop", ["Ada"], options={"pace": "action"})
+        start_y = engine.state.mode_state["piece"]["y"]
+
+        engine.handle_event({**MISS, "seq": 1})
+        self.assertEqual(start_y + 1, engine.state.mode_state["piece"]["y"])
+        self.assertIn("SINK", engine.state.message)
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertEqual(10, overlay["panel"]["progress"]["max"])
+        self.assertIn("NACH JEDEM DART", overlay["panel"]["subline"])
+
     def test_block_drop_can_end_turn_after_drop_by_option(self):
         engine = GameEngine()
         engine.reset("block_drop", ["Ada"], options={"drop_flow": "hold"})
@@ -394,6 +429,8 @@ class CartoonModeTests(unittest.TestCase):
         normal = [zone for zone in zones if zone["field"] != 25]
         fields_by_color = {}
         for zone in normal:
+            if zone["color"] == "#28e7ff":
+                continue
             fields_by_color.setdefault(zone["color"], []).append(zone["field"])
         self.assertEqual(
             {
@@ -403,6 +440,15 @@ class CartoonModeTests(unittest.TestCase):
                 "#e9c46a": [16, 8, 11, 14, 9],
             },
             fields_by_color,
+        )
+        drop_zones = [
+            zone
+            for zone in normal
+            if zone["color"] == "#28e7ff"
+        ]
+        self.assertEqual(20, len(drop_zones))
+        self.assertTrue(
+            all(zone["rings"] == ["triple", "double"] for zone in drop_zones)
         )
         self.assertEqual(
             ["left", "rotate_left", "rotate_right", "right", "drop"],

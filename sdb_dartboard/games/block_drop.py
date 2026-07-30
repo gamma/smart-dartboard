@@ -47,7 +47,7 @@ CONTROL_LEGEND = [
         "color": "#28e7ff",
         "secondary_color": "#e76f51",
         "label": "Stein droppen",
-        "detail": "SBULL / DBULL",
+        "detail": "CYAN MARKIERT",
     },
 ]
 
@@ -64,6 +64,27 @@ class BlockDropMode:
         icon="blocks",
         options=[
             GameOption(
+                "difficulty",
+                "Drop-Ziel",
+                "choice",
+                "easy",
+                [
+                    {"value": "easy", "label": "Easy · Double, Triple oder Bull"},
+                    {"value": "normal", "label": "Mittel · Double oder Bull"},
+                    {"value": "hard", "label": "Schwer · nur Bull"},
+                ],
+            ),
+            GameOption(
+                "pace",
+                "Spieltempo",
+                "choice",
+                "classic",
+                [
+                    {"value": "classic", "label": "Klassisch · 5 Linien"},
+                    {"value": "action", "label": "Action · 10 Linien, Sink je Dart"},
+                ],
+            ),
+            GameOption(
                 "drop_flow",
                 "Nach Drop",
                 "choice",
@@ -76,9 +97,9 @@ class BlockDropMode:
         ],
         instructions=[
             InstructionStep("Vier große Flächen", "Die vier Farbbögen bewegen links/rechts oder drehen links/rechts.", "controls"),
-            InstructionStep("Bull ist Drop", "Beide Bulls setzen sofort. Standardmäßig darfst du mit dem nächsten Stein weiterwerfen.", "power"),
-            InstructionStep("Gemeinsamer Takt", "Erst nachdem alle gespielt haben, fällt der Stein automatisch eine Zeile.", "round"),
-            InstructionStep("Fünf Linien", "Löscht gemeinsam fünf Linien, bevor ein Stein oben herausragt.", "blocks"),
+            InstructionStep("Cyan ist Drop", "Easy nutzt Double, Triple und Bull. Mittel nutzt Double und Bull. Schwer nutzt nur Bull.", "power"),
+            InstructionStep("Wählt das Tempo", "Klassisch sinkt nach jeder Teamrunde. Action sinkt nach jedem Dart und spielt auf zehn Linien.", "round"),
+            InstructionStep("Linien löschen", "Baut gemeinsam das gewählte Linienziel, bevor ein Stein oben herausragt.", "blocks"),
         ],
         control_legend=CONTROL_LEGEND,
         sound_theme="arcade",
@@ -205,6 +226,21 @@ class BlockDropMode:
         state.result_type = "team_win" if won else "challenge_loss"
         state.message = message
 
+    def _line_goal(self, state: Any) -> int:
+        return 10 if state.options.get("pace", "classic") == "action" else 5
+
+    def _win_message(self, state: Any) -> str:
+        lines = int(state.mode_state["lines"])
+        return f"LINIENZIEL! Das Team gewinnt mit {lines} Linien"
+
+    def _drop_rings(self, state: Any) -> List[str]:
+        difficulty = state.options.get("difficulty", "easy")
+        if difficulty == "easy":
+            return ["triple", "double"]
+        if difficulty == "normal":
+            return ["double"]
+        return []
+
     def _lock_piece(
         self,
         state: Any,
@@ -218,6 +254,8 @@ class BlockDropMode:
 
     def on_turn_start(self, state: Any, player: Any) -> None:
         del player
+        if state.options.get("pace", "classic") == "action":
+            return
         gravity_round = int(state.mode_state.get("gravity_round", 1))
         if state.round_number <= gravity_round:
             return
@@ -228,11 +266,11 @@ class BlockDropMode:
 
         cleared, points, can_continue = self._lock_piece(state)
         lines = int(state.mode_state["lines"])
-        if lines >= 5:
+        if lines >= self._line_goal(state):
             self._finish_state(
                 state,
                 True,
-                f"FÜNF LINIEN! Das Team gewinnt mit {lines} Linien",
+                self._win_message(state),
             )
         elif not can_continue:
             self._finish_state(state, False, "BLOCK OUT! Das Feld ist voll")
@@ -243,6 +281,7 @@ class BlockDropMode:
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         force_lock = False
         power_bonus = 0
+        drop_rings = self._drop_rings(state)
         if event.get("type") != "hit":
             action = "MISS · keine Aktion"
         elif int(event.get("field", 0)) == 25:
@@ -253,6 +292,11 @@ class BlockDropMode:
                 action = "DOUBLE BULL · POWER DROP!"
             else:
                 action = "SINGLE BULL · DROP!"
+        elif event.get("ring") in drop_rings:
+            self._hard_drop(state)
+            force_lock = True
+            ring_label = "TRIPLE" if event.get("ring") == "triple" else "DOUBLE"
+            action = f"{ring_label} · DROP!"
         else:
             field = int(event.get("field", 0))
             if field in CONTROL_ZONES["left"]:
@@ -269,15 +313,27 @@ class BlockDropMode:
                 action = "RECHTS DREHEN"
 
         if not force_lock:
-            return ThrowOutcome(0, action)
+            if state.options.get("pace", "classic") != "action":
+                return ThrowOutcome(0, action)
+            if self._soft_drop(state):
+                return ThrowOutcome(0, f"{action} · SINK ↓")
+
+            cleared, points, can_continue = self._lock_piece(state)
+            lines = int(state.mode_state["lines"])
+            if lines >= self._line_goal(state):
+                return self._finish(state, True, self._win_message(state), points)
+            if not can_continue:
+                return self._finish(state, False, "BLOCK OUT! Das Feld ist voll", points)
+            detail = f" · {cleared} Linie{'n' if cleared != 1 else ''}!" if cleared else ""
+            return ThrowOutcome(points, f"{action} · SINK setzt den Stein · +{points}{detail}")
 
         cleared, points, can_continue = self._lock_piece(
             state,
             power_bonus=power_bonus,
         )
         lines = int(state.mode_state["lines"])
-        if lines >= 5:
-            return self._finish(state, True, f"FÜNF LINIEN! Das Team gewinnt mit {lines} Linien", points)
+        if lines >= self._line_goal(state):
+            return self._finish(state, True, self._win_message(state), points)
         if not can_continue:
             return self._finish(state, False, "BLOCK OUT! Das Feld ist voll", points)
         detail = f" · {cleared} Linie{'n' if cleared != 1 else ''}!" if cleared else ""
@@ -305,14 +361,28 @@ class BlockDropMode:
             "rotate_right": "#f4a261",
             "right": "#81b29a",
         }
+        drop_rings = self._drop_rings(state)
+        control_rings = [
+            ring
+            for ring in ["single_inner", "triple", "single_outer", "double"]
+            if ring not in drop_rings
+        ]
         zones = []
         for action, color in control_colors.items():
             for field in CONTROL_ZONES[action]:
                 zones.append({
                     "field": field,
-                    "rings": ["single_inner", "triple", "single_outer", "double"],
+                    "rings": control_rings,
                     "role": "control",
                     "color": color,
+                })
+        if drop_rings:
+            for field in range(1, 21):
+                zones.append({
+                    "field": field,
+                    "rings": drop_rings,
+                    "role": "control",
+                    "color": "#28e7ff",
                 })
         zones.extend([
             {
@@ -329,14 +399,26 @@ class BlockDropMode:
             },
         ])
         lines = int(state.mode_state.get("lines", 0))
+        line_goal = self._line_goal(state)
+        difficulty = state.options.get("difficulty", "easy")
+        drop_label = {
+            "easy": "DOUBLE · TRIPLE · BULL = DROP",
+            "normal": "DOUBLE · BULL = DROP",
+            "hard": "BULL = DROP",
+        }.get(difficulty, "BULL = DROP")
+        pace_label = (
+            "NACH JEDEM DART SINK ↓"
+            if state.options.get("pace", "classic") == "action"
+            else "SINK NACH TEAMRUNDE"
+        )
         return {
-            "prompt": "GELB ← · LILA ↶ · ORANGE ↷ · GRÜN → · BULL DROP",
+            "prompt": f"GELB ← · LILA ↶ · ORANGE ↷ · GRÜN → · {drop_label}",
             "zones": zones,
             "panel": {
                 "title": "BLOCK DROP",
-                "headline": f"{lines}/5 Linien",
-                "subline": "Alle bauen gemeinsam",
-                "progress": {"value": lines, "max": 5},
+                "headline": f"{lines}/{line_goal} Linien",
+                "subline": f"Alle bauen gemeinsam · {pace_label}",
+                "progress": {"value": lines, "max": line_goal},
                 "grid": {"columns": WIDTH, "cells": cells},
             },
         }
