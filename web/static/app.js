@@ -21,6 +21,14 @@ const appState = {
   reportedAudioStatus: '',
   scoreCountdown: null,
   scoreCountdownFrame: null,
+  selectedLanguage: 'de',
+  languageTouched: false,
+  localView: null,
+  history: {
+    sessions: [], players: [], modes: [], heatmap: null,
+    session: null, game: null, replay: null, replayIndex: 0,
+    playerId: '', recommendations: null, includeTest: false, loading: false,
+  },
 };
 
 const BOARD_ORDER = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
@@ -79,6 +87,21 @@ const OVERLAY_ICON_ASSETS = {
 
 function $(id){ return document.getElementById(id); }
 function isProjector(){ return location.pathname.includes('projector'); }
+function language(){
+  return appState.experience?.session?.language
+    || appState.selectedLanguage
+    || appState.experience?.language
+    || 'de';
+}
+function t(key, vars){
+  return window.SDB_I18N?.t(key,language(),vars) || key;
+}
+function localText(value){
+  return window.SDB_I18N?.text(value,language()) ?? value;
+}
+function localMode(mode){
+  return window.SDB_I18N?.mode(mode,language()) || mode;
+}
 function escapeHtml(value){
   return String(value ?? '').replace(/[&<>"']/g, char => ({
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'
@@ -102,13 +125,13 @@ function visualLegendMarkup(items, placement){
     if(!asset) return '';
     return `<div class="visual-legend-item variant-${escapeHtml(item.icon)}" style="--legend-color:${escapeHtml(item.color || '#e9a23b')}">
       <img src="${asset}" alt="">
-      <p><strong>${escapeHtml(item.label || '')}</strong><small>${escapeHtml(item.value || '')}</small></p>
+      <p><strong>${escapeHtml(localText(item.label || ''))}</strong><small>${escapeHtml(localText(item.value || ''))}</small></p>
     </div>`;
   }).join('');
   return entries ? `<div class="overlay-visual-legend ${escapeHtml(placement || '')}">${entries}</div>` : '';
 }
 function modeBySlug(slug){
-  return appState.experience?.modes.find(mode => mode.slug === slug);
+  return localMode(appState.experience?.modes.find(mode => mode.slug === slug));
 }
 function modeAsset(slug){
   const safe = /^[a-z0-9_]+$/.test(String(slug || '')) ? slug : 'countup';
@@ -207,6 +230,12 @@ async function api(path, body = {}){
   if(!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
   return payload;
 }
+async function getJson(path){
+  const response=await fetch(path);
+  const payload=await response.json();
+  if(!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
+  return payload;
+}
 async function action(path, body = {}){
   try { return await api(path, body); }
   catch(error){ showToast(error.message); throw error; }
@@ -266,6 +295,10 @@ function updateExperience(experience, event){
     Math.max(0,Number(experience.rematch?.expires_in_ms)||0),
   );
   appState.experience = experience;
+  if(experience.session?.language || !appState.languageTouched){
+    appState.selectedLanguage=experience.session?.language || experience.language || 'de';
+  }
+  document.documentElement.lang=language();
   clearTimeout(appState.rematchTimer);
   if(experience.rematch?.armed){
     appState.rematchArmedUntil=Date.now()+rematchDelay;
@@ -379,6 +412,18 @@ function actionButton(label, actionName, kind = 'primary', extra = ''){
 function renderControl(){
   const root = $('controlRoot');
   if(!root) return;
+  if(appState.localView==='history'){
+    root.innerHTML=controlHistory();
+    if($('historyHeatmapBoard')){
+      buildBoardElement($('historyHeatmapBoard'));
+      applyHistoryHeatmap();
+    }
+    if($('replayBoard')){
+      buildBoardElement($('replayBoard'));
+      applyReplayFrame();
+    }
+    return;
+  }
   const screen = appState.experience.screen;
   const renderers = {
     attract: controlAttract,
@@ -398,12 +443,13 @@ function renderControl(){
 function controlAttract(){
   return `<section class="control-scene attract-control">
     <div class="hero-copy">
-      <div class="kicker">READY WHEN YOU ARE</div>
-      <h1>Deine Darts.<br><span>Deine Session.</span></h1>
-      <p>Spieler auswählen, Modus antippen und loslegen.</p>
+      <div class="kicker">${t('ready_when_you_are')}</div>
+      <h1>${escapeHtml(t('hero_title'))}</h1>
+      <p>${t('hero_copy')}</p>
       <div class="button-row">
-        ${actionButton('Session starten', 'choose-players')}
-        ${actionButton('Projektor kalibrieren', 'calibrate', 'ghost')}
+        ${actionButton(t('start_session'), 'choose-players')}
+        ${actionButton(t('calibrate'), 'calibrate', 'ghost')}
+        ${actionButton(t('statistics'), 'open-history', 'ghost')}
       </div>
     </div>
     <div class="hero-orbit" aria-hidden="true"><i></i><i></i><i></i><b>◎</b></div>
@@ -413,7 +459,7 @@ function controlAttract(){
 function playerCard(player, selected){
   return `<button class="player-select ${selected ? 'selected' : ''}" data-action="toggle-player" data-id="${escapeHtml(player.id)}">
     <span class="avatar avatar-${escapeHtml(player.avatar)}" style="--player:${escapeHtml(player.color)}" aria-label="${escapeHtml(player.avatar)}">${avatarEmoji(player.avatar)}</span>
-    <span><b>${escapeHtml(player.name)}</b><small>${selected ? 'Ausgewählt' : 'Antippen'}</small></span>
+    <span><b>${escapeHtml(player.name)}</b><small>${selected ? t('selected') : t('tap')}</small></span>
     <i>${selected ? '✓' : '+'}</i>
   </button>`;
 }
@@ -421,32 +467,40 @@ function controlPlayers(){
   const players = appState.experience.players;
   const cards = players.map(player => playerCard(player, appState.selectedPlayers.has(player.id))).join('');
   return `<section class="control-scene">
-    ${sceneHeader('SCHRITT 1 VON 2','Wer spielt heute?','Wähle bis zu acht Spieler für diese Session.')}
+    ${sceneHeader(t('step_players'),t('who_plays'),t('choose_players'))}
+    <section class="language-picker" aria-label="${t('session_language')}">
+      <span>${t('session_language')}</span>
+      <div class="segmented">
+        <button class="${appState.selectedLanguage==='de'?'selected':''}" data-action="set-language" data-language="de">DE · ${t('german')}</button>
+        <button class="${appState.selectedLanguage==='en'?'selected':''}" data-action="set-language" data-language="en">EN · ${t('english')}</button>
+      </div>
+    </section>
     <div class="player-layout">
-      <div class="selection-grid">${cards || '<div class="empty-state">Lege deinen ersten Spieler an.</div>'}</div>
+      <div class="selection-grid">${cards || `<div class="empty-state">${t('create_first_player')}</div>`}</div>
       <form id="newPlayerForm" class="new-player-card">
-        <h2>Neuer Spieler</h2>
-        <label>Name<input name="name" maxlength="32" autocomplete="off" placeholder="Spielername" required></label>
-        <div class="choice-label">Avatar</div>
+        <h2>${t('new_player')}</h2>
+        <label>${t('name')}<input name="name" maxlength="32" autocomplete="off" placeholder="${t('player_name')}" required></label>
+        <div class="choice-label">${t('avatar')}</div>
         <div class="avatar-choices">${AVATARS.map((avatar,index) =>
           `<label class="mini-choice" title="${escapeHtml(avatar.label)}"><input type="radio" name="avatar" value="${escapeHtml(avatar.id)}" ${index===0?'checked':''}><span>${avatar.emoji}</span></label>`
         ).join('')}</div>
-        <div class="choice-label">Farbe</div>
+        <div class="choice-label">${t('color')}</div>
         <div class="color-choices">${COLORS.map((color,index) =>
           `<label><input type="radio" name="color" value="${color}" ${index===0?'checked':''}><span style="--swatch:${color}"></span></label>`
         ).join('')}</div>
-        ${actionButton('Spieler anlegen','create-player','secondary','type="submit"')}
+        ${actionButton(t('create_player'),'create-player','secondary','type="submit"')}
       </form>
     </div>
     <footer class="sticky-actions">
-      ${actionButton('Zurück','home','ghost')}
-      <div><b>${appState.selectedPlayers.size}</b> Spieler gewählt</div>
-      ${actionButton('Weiter zur Spielwahl','start-session','primary',appState.selectedPlayers.size ? '' : 'disabled')}
+      ${actionButton(t('back'),'home','ghost')}
+      <div>${t('players_selected',{count:`<b>${appState.selectedPlayers.size}</b>`})}</div>
+      ${actionButton(t('continue_games'),'start-session','primary',appState.selectedPlayers.size ? '' : 'disabled')}
     </footer>
   </section>`;
 }
 
 function modeCard(mode){
+  mode=localMode(mode);
   return `<button class="mode-card" data-action="select-mode" data-mode="${escapeHtml(mode.slug)}" style="--accent:${escapeHtml(mode.accent)}">
     <img src="${modeAsset(mode.slug)}" alt="" loading="eager" onerror="this.onerror=null;this.src='/static/assets/modes/countup.webp'">
     <span class="mode-shade"></span>
@@ -457,19 +511,19 @@ function modeCard(mode){
 function controlGameSelect(){
   const session = appState.experience.session;
   return `<section class="control-scene">
-    ${sceneHeader('SCHRITT 2 VON 2','Wählt euer Spiel',`${session?.players.length || 0} Spieler · alle Modi sind sofort startklar.`)}
+    ${sceneHeader(t('step_games'),t('choose_game'),t('modes_ready',{count:session?.players.length || 0}))}
     ${sessionScoreStrip()}
     <div class="mode-grid">${appState.experience.modes.map(modeCard).join('')}</div>
     <footer class="sticky-actions">
-      ${actionButton('Session beenden','end-session','ghost')}
+      <div class="footer-actions">${actionButton(t('statistics'),'open-history','ghost')}${actionButton(t('end_session'),'end-session','ghost')}</div>
       <div class="session-people">${(session?.players || []).map(player => `<span style="--player:${escapeHtml(player.color)}">${escapeHtml(player.name)}</span>`).join('')}</div>
     </footer>
   </section>`;
 }
 
 function optionControl(option, selected){
-  return `<div class="option-block"><div class="choice-label">${escapeHtml(option.label)}</div><div class="segmented">
-    ${option.choices.map(choice => `<button class="${String(choice.value)===String(selected) ? 'selected' : ''}" data-action="set-option" data-key="${escapeHtml(option.key)}" data-value="${escapeHtml(choice.value)}">${escapeHtml(choice.label)}</button>`).join('')}
+  return `<div class="option-block"><div class="choice-label">${escapeHtml(localText(option.label))}</div><div class="segmented">
+    ${option.choices.map(choice => `<button class="${String(choice.value)===String(selected) ? 'selected' : ''}" data-action="set-option" data-key="${escapeHtml(option.key)}" data-value="${escapeHtml(choice.value)}">${escapeHtml(localText(choice.label))}</button>`).join('')}
   </div></div>`;
 }
 function instructionSteps(mode){
@@ -494,7 +548,7 @@ function controlLegend(items,placement){
     <div>${items.map(item=>`<div class="control-legend-row">
       <i class="control-legend-icon">${controlGraphic(item.icon)}</i>
       <i class="control-legend-color" style="--control-color:${escapeHtml(item.color || '#28e7ff')};--control-color-2:${escapeHtml(item.secondary_color || item.color || '#28e7ff')}"></i>
-      <b>${escapeHtml(item.label || '')}${item.detail?`<small>${escapeHtml(item.detail)}</small>`:''}</b>
+      <b>${escapeHtml(localText(item.label || ''))}${item.detail?`<small>${escapeHtml(localText(item.detail))}</small>`:''}</b>
     </div>`).join('')}</div>
   </aside>`;
 }
@@ -510,8 +564,8 @@ function controlInstructions(){
       <div class="game-options">${mode.options.map(option => optionControl(option,appState.experience.selected_options[option.key])).join('')}</div>
     </div>
     <footer class="sticky-actions">
-      ${actionButton('Andere Spielart','back-games','ghost')}
-      ${actionButton('Spiel starten','start-game')}
+      ${actionButton(t('other_game'),'back-games','ghost')}
+      ${actionButton(t('start_game'),'start-game')}
     </footer>
   </section>`;
 }
@@ -519,9 +573,9 @@ function controlInstructions(){
 function controlCountdown(){
   return `<section class="control-scene centered-scene">
     <div class="radar-loader"><i></i><b id="countdownValue" aria-live="polite">3</b></div>
-    <div class="kicker">PROJEKTOR LÄUFT</div>
-    <h1>Spiel startet …</h1>
-    <p>Alle Spieler bereit an die Linie.</p>
+    <div class="kicker">${t('projector_running')}</div>
+    <h1>${t('game_starts')}</h1>
+    <p>${t('line_ready')}</p>
   </section>`;
 }
 
@@ -553,29 +607,29 @@ function turnDartCards(game){
   return [0,1,2].map(index=>{
     const dart=throws[index];
     if(!dart){
-      return `<div class="turn-dart empty"><span>${index+1}</span><b>—</b><small>NOCH OFFEN</small></div>`;
+      return `<div class="turn-dart empty"><span>${index+1}</span><b>—</b><small>${language()==='en'?'OPEN':'NOCH OFFEN'}</small></div>`;
     }
     return `<button class="turn-dart ${appState.selectedCorrectionIndex===index?'selected':''}" data-action="select-correction" data-index="${index}">
-      <span>${index+1}</span><b>${escapeHtml(dart.label || 'MISS')}</b><small>${dart.score} PUNKTE · ANTIPPEN ZUM KORRIGIEREN</small>
+      <span>${index+1}</span><b>${escapeHtml(dart.label || 'MISS')}</b><small>${dart.score} ${language()==='en'?'POINTS · TAP TO CORRECT':'PUNKTE · ANTIPPEN ZUM KORRIGIEREN'}</small>
     </button>`;
   }).join('');
 }
 function correctionPanel(){
   const selected=appState.selectedCorrectionIndex;
   if(selected===null){
-    return '<div class="correction-hint">Zum Korrigieren einen der aktuellen Würfe antippen.</div>';
+    return `<div class="correction-hint">${t('correction_hint')}</div>`;
   }
   return `<section class="correction-panel">
     <div class="correction-board-shell">
       <svg id="dartboardSvg" class="dartboard-svg correction-board" viewBox="0 0 500 500" aria-label="Korrektur-Dartboard"></svg>
     </div>
     <div class="correction-copy">
-      <div class="kicker">WURF ${selected+1} KORRIGIEREN</div>
-      <h2>Neues Feld antippen</h2>
-      <p>Wähle den tatsächlich getroffenen Bereich direkt auf der Scheibe. Der aktuelle Spielstand und alle folgenden Würfe werden automatisch neu berechnet.</p>
+      <div class="kicker">${t('correct_throw',{number:selected+1})}</div>
+      <h2>${t('tap_actual_segment')}</h2>
+      <p>${t('correction_copy')}</p>
       <div class="correction-actions">
-        ${actionButton('Als MISS werten','correct-miss','danger')}
-        ${actionButton('Abbrechen','cancel-correction','ghost')}
+        ${actionButton(t('count_as_miss'),'correct-miss','danger')}
+        ${actionButton(t('cancel'),'cancel-correction','ghost')}
       </div>
     </div>
   </section>`;
@@ -585,11 +639,15 @@ function x01AdvicePanel(game){
   if(game.game_type !== 'x01' || !advice || !advice.primary) return '';
   const sequence = (advice.sequence || []).map(dart => `<b>${escapeHtml(dart.label)}</b>`).join('<span>→</span>');
   const follow = advice.setup?.remaining_checkout?.length ? advice.setup.remaining_checkout.map(dart => dart.label).join(' → ') : '';
-  const title = advice.status === 'checkout' ? 'Finish möglich' : advice.status === 'setup' ? 'Clever stellen' : 'Runterspielen';
+  const title = advice.status === 'checkout'
+    ? (language()==='en'?'Checkout available':'Finish möglich')
+    : advice.status === 'setup'
+      ? (language()==='en'?'Set up':'Clever stellen')
+      : (language()==='en'?'Score down':'Runterspielen');
   return `<aside class="x01-advice ${escapeHtml(advice.status)}">
-    <div><span class="kicker">X01 ADVISOR · ${advice.darts_left} DARTS</span><h2>${title}: ${escapeHtml(advice.primary.label)}</h2><p>${escapeHtml(advice.message || '')}</p></div>
+    <div><span class="kicker">X01 ADVISOR · ${advice.darts_left} ${t('darts')}</span><h2>${title}: ${escapeHtml(advice.primary.label)}</h2><p>${escapeHtml(localText(advice.message || ''))}</p></div>
     ${sequence ? `<div class="checkout-sequence">${sequence}</div>` : ''}
-    ${follow ? `<small>Danach: ${escapeHtml(follow)}</small>` : ''}
+    ${follow ? `<small>${language()==='en'?'Then':'Danach'}: ${escapeHtml(follow)}</small>` : ''}
   </aside>`;
 }
 
@@ -611,7 +669,7 @@ function controlModePrompt(game){
   const visualLegend=visualLegendMarkup(overlay.visual_legend,'control-visual-legend');
   return `<aside class="control-mode-prompt">
     <span>AKTUELLE AUFGABE</span>
-    <b>${promptMarkup(overlay.prompt)}</b>
+    <b>${promptMarkup(localText(overlay.prompt))}</b>
     ${detail ? `<small>${escapeHtml(detail)}</small>` : ''}
     ${visualLegend}
   </aside>`;
@@ -622,13 +680,13 @@ function genericPanel(panel, compact=false){
   const progress=panel.progress && Number.isFinite(Number(panel.progress.max))
     ? `<i class="generic-progress" style="--progress:${Math.max(0,Math.min(100,Number(panel.progress.value||0)/Math.max(1,Number(panel.progress.max))*100))}%"></i>`
     : '';
-  const stats=(panel.stats||[]).map(item=>`<b><small>${escapeHtml(item.label||'')}</small><strong>${escapeHtml(item.value??'')}</strong></b>`).join('');
-  const rows=(panel.rows||[]).map(item=>`<div class="${item.state?`state-${escapeHtml(item.state)}`:''}"><span>${escapeHtml(item.label||'')}</span><strong>${escapeHtml(item.value??'')}</strong></div>`).join('');
+  const stats=(panel.stats||[]).map(item=>`<b><small>${escapeHtml(localText(item.label||''))}</small><strong>${escapeHtml(localText(item.value??''))}</strong></b>`).join('');
+  const rows=(panel.rows||[]).map(item=>`<div class="${item.state?`state-${escapeHtml(item.state)}`:''}"><span>${escapeHtml(localText(item.label||''))}</span><strong>${escapeHtml(localText(item.value??''))}</strong></div>`).join('');
   const grid=panel.grid ? `<div class="generic-grid" style="--columns:${Math.max(1,Math.min(12,Number(panel.grid.columns)||1))}">${(panel.grid.cells||[]).map(cell=>`<i class="${cell.state?`state-${escapeHtml(cell.state)}`:''}" title="${escapeHtml(cell.label||'')}">${escapeHtml(cell.value??'')}</i>`).join('')}</div>` : '';
   return `<section class="generic-mode-panel ${compact?'compact':''}">
-    <span>${escapeHtml(panel.title||'SPIELSTATUS')}</span>
-    ${panel.headline?`<h3>${escapeHtml(panel.headline)}</h3>`:''}
-    ${panel.subline?`<p>${escapeHtml(panel.subline)}</p>`:''}
+    <span>${escapeHtml(localText(panel.title||'SPIELSTATUS'))}</span>
+    ${panel.headline?`<h3>${escapeHtml(localText(panel.headline))}</h3>`:''}
+    ${panel.subline?`<p>${escapeHtml(localText(panel.subline))}</p>`:''}
     ${progress}
     ${stats?`<div class="generic-stats">${stats}</div>`:''}
     ${rows?`<div class="generic-rows">${rows}</div>`:''}
@@ -646,9 +704,9 @@ function dragonHeatPanel(panel,compact=false){
         : '';
   return `<section class="dragon-heat-panel ${compact?'compact':''} heat-${heat} react-${reaction}">
     <div class="dragon-heat-copy">
-      <span>${escapeHtml(panel.title||'DRACHEN-HITZE')}</span>
-      <h3>${escapeHtml(panel.headline||`${heat}/3 FLAMMEN`)}</h3>
-      <p>${escapeHtml(panel.subline||'Die dritte Schuppe entfacht das Feuer')}</p>
+      <span>${escapeHtml(localText(panel.title||'DRACHEN-HITZE'))}</span>
+      <h3>${escapeHtml(localText(panel.headline||`${heat}/3 FLAMMEN`))}</h3>
+      <p>${escapeHtml(localText(panel.subline||'Die dritte Schuppe entfacht das Feuer'))}</p>
     </div>
     <img src="${effectAsset(heat>=2?'dragon_fire':'dragon_scale')}" alt="">
     <div class="dragon-heat-pips">${[0,1,2].map(index=>`<i class="${index<heat?'lit':''}"></i>`).join('')}</div>
@@ -659,8 +717,8 @@ function controlPlaying(){
   const mode = modeBySlug(game.game_type);
   return `<section class="control-scene play-control" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')}">
     <div class="play-heading">
-    <div><div class="kicker">${escapeHtml(mode?.title || game.game_type)} · RUNDE ${game.round_number}</div><h1>${game.status==='hold'?'Aufnahme beendet':`${escapeHtml(currentPlayer(game)?.name || '')} ist dran`}</h1></div>
-      <div class="turn-counter"><span>${game.darts_in_turn}</span><small>/ 3 DARTS</small><b>${game.turn_score} PTS</b></div>
+    <div><div class="kicker">${escapeHtml(mode?.title || game.game_type)} · ${t('round')} ${game.round_number}</div><h1>${game.status==='hold'?t('turn_finished'):t('player_turn',{name:escapeHtml(currentPlayer(game)?.name || '')})}</h1></div>
+      <div class="turn-counter"><span>${game.darts_in_turn}</span><small>/ 3 ${t('darts')}</small><b>${game.turn_score} ${t('points_short')}</b></div>
     </div>
     ${x01AdvicePanel(game)}
     ${controlModePrompt(game)}
@@ -670,30 +728,30 @@ function controlPlaying(){
     ${genericPanel(game.overlay?.panel)}
     <div class="operator-panel">
       ${overlayActionButtons(game)}
-      ${game.status==='hold' ? actionButton('Weiter zum nächsten Spieler','continue','primary') : skipPlayerControls()}
-      ${actionButton('Letzten Wurf zurück','undo','danger')}
+      ${game.status==='hold' ? actionButton(t('continue_player'),'continue','primary') : skipPlayerControls()}
+      ${actionButton(t('undo'),'undo','danger')}
       ${abortControls()}
     </div>
   </section>`;
 }
 function skipPlayerControls(){
   if(!appState.skipArmed){
-    return actionButton('Aufnahme vorzeitig beenden','arm-skip','secondary');
+    return actionButton(t('early_end'),'arm-skip','secondary');
   }
   return `<div class="skip-confirm">
-    <b>Restliche Darts wirklich überspringen?</b>
-    ${actionButton('Spieler wechseln','next-player','danger')}
-    ${actionButton('Weiterspielen','cancel-skip','ghost')}
+    <b>${t('skip_confirm')}</b>
+    ${actionButton(t('switch_player'),'next-player','danger')}
+    ${actionButton(t('keep_playing'),'cancel-skip','ghost')}
   </div>`;
 }
 function abortControls(){
   if(!appState.abortArmed){
-    return actionButton('Spiel abbrechen','arm-abort','ghost');
+    return actionButton(t('abort_game'),'arm-abort','ghost');
   }
   return `<div class="abort-confirm">
-    <b>Dieses Spiel wird nicht gewertet.</b>
-    ${actionButton('Abbrechen bestätigen','abort-game','danger')}
-    ${actionButton('Weiterspielen','cancel-abort','ghost')}
+    <b>${t('abort_warning')}</b>
+    ${actionButton(t('confirm_abort'),'abort-game','danger')}
+    ${actionButton(t('keep_playing'),'cancel-abort','ghost')}
   </div>`;
 }
 
@@ -704,7 +762,7 @@ function sessionScoreStrip(){
   const standings=sessionStandings();
   if(!standings.length) return '';
   return `<section class="session-score-strip">
-    <span>SESSION-WERTUNG · 3 PUNKTE PRO SIEG</span>
+    <span>${t('session_score')}</span>
     <div>${standings.map((player,index)=>`<b style="--player:${escapeHtml(player.color)}"><i>${index+1}</i>${escapeHtml(player.name)}<strong>${player.session_points}</strong></b>`).join('')}</div>
   </section>`;
 }
@@ -715,23 +773,23 @@ function winner(){
 }
 function resultCopy(game, champion){
   if(game.result_type==='team_win'){
-    return {icon:'★', label:'TEAM-SIEG', title:'Gemeinsam geschafft!', points:'+3 FÜR ALLE'};
+    return {icon:'★', label:t('team_win'), title:t('together_done'), points:t('for_everyone')};
   }
   if(champion || game.result_type==='individual_win'){
-    return {icon:'♛', label:'SPIEL ENTSCHIEDEN', title:champion?.name || 'Spiel gewonnen', points:'+3 SESSIONSPUNKTE'};
+    return {icon:'♛', label:t('game_decided'), title:champion?.name || t('game_won'), points:t('session_points_award')};
   }
   const draw=game.result_type==='draw' || String(game.message || '').startsWith('Unentschieden');
   return draw
-    ? {icon:'=', label:'GLEICHSTAND', title:'Unentschieden', points:'KEINE SESSIONSPUNKTE'}
-    : {icon:'☠', label:'CHALLENGE VERLOREN', title:'Boss gewinnt', points:'KEINE SESSIONSPUNKTE'};
+    ? {icon:'=', label:t('draw'), title:t('draw_title'), points:t('no_session_points')}
+    : {icon:'☠', label:t('challenge_lost'), title:t('boss_wins'), points:t('no_session_points')};
 }
 function rematchPrompt(compact=false){
   const armed=Date.now()<appState.rematchArmedUntil;
-  const title=armed ? 'NOCH EINMAL DRÜCKEN' : '2× SPIELERWECHSEL DRÜCKEN';
-  const detail=armed ? 'Revanche wird bestätigt' : 'Gleiches Spiel · Startspieler wechselt';
+  const title=armed ? t('press_again') : t('double_press');
+  const detail=armed ? t('rematch_confirm') : t('same_game_rotates');
   return compact
-    ? `<small class="rematch-prompt ${armed?'armed':''}">${title} · REVANCHE</small>`
-    : `<aside class="rematch-prompt ${armed?'armed':''}"><span>SCHEIBEN-TASTE</span><b>${title}</b><small>${detail}</small></aside>`;
+    ? `<small class="rematch-prompt ${armed?'armed':''}">${title} · ${t('rematch')}</small>`
+    : `<aside class="rematch-prompt ${armed?'armed':''}"><span>${t('board_button')}</span><b>${title}</b><small>${detail}</small></aside>`;
 }
 function controlGameResult(){
   const game=appState.experience.game;
@@ -739,13 +797,17 @@ function controlGameResult(){
   const result=resultCopy(game,champion);
   return `<section class="control-scene result-control">
     <div class="trophy-orbit">${result.icon}</div>
-    <div class="kicker">GAME COMPLETE</div>
+    <div class="kicker">${t('game_complete')}</div>
     <h1>${escapeHtml(result.title)}</h1>
-    <p>${game.result_type==='team_win' ? escapeHtml(game.message || 'Das Team gewinnt gemeinsam.') : champion ? 'holt sich den Sieg und 3 Sessionpunkte.' : escapeHtml(game.message || 'Keine Sessionpunkte in diesem Spiel.')}</p>
+    <p>${game.result_type==='team_win'
+      ? escapeHtml(localText(game.message || 'Das Team gewinnt gemeinsam.'))
+      : champion
+        ? escapeHtml(language()==='en'?'wins the game and earns 3 session points.':'holt sich den Sieg und 3 Sessionpunkte.')
+        : escapeHtml(localText(game.message || 'Keine Sessionpunkte in diesem Spiel.'))}</p>
     ${sessionScoreStrip()}
     ${rematchPrompt()}
     <div class="result-actions">
-      ${actionButton('Zurück zur Spielauswahl','next-game')}
+      ${actionButton(t('back_to_games'),'next-game')}
     </div>
   </section>`;
 }
@@ -753,17 +815,195 @@ function statCards(){
   const stats=sessionStandings().length ? sessionStandings() : appState.experience.statistics;
   return stats.map(stat => `<article class="stat-card" style="--player:${escapeHtml(stat.color)}">
     <h3>${escapeHtml(stat.name)}</h3>
-    <div>${Number.isFinite(stat.session_points)?`<span><b>${stat.session_points}</b><small>Sessionpunkte</small></span>`:''}<span><b>${stat.wins}</b><small>Siege</small></span><span><b>${stat.games}</b><small>Spiele</small></span><span><b>${stat.win_rate}%</b><small>Siegquote</small></span><span><b>${stat.darts}</b><small>Darts</small></span><span><b>${stat.three_dart_average}</b><small>Board 3-Dart Ø</small></span></div>
+    <div>${Number.isFinite(stat.session_points)?`<span><b>${stat.session_points}</b><small>${t('session_points')}</small></span>`:''}<span><b>${stat.wins}</b><small>${t('wins')}</small></span><span><b>${stat.games}</b><small>${t('games')}</small></span><span><b>${stat.win_rate}%</b><small>${t('win_rate')}</small></span><span><b>${stat.darts}</b><small>${t('darts')}</small></span><span><b>${stat.three_dart_average}</b><small>${t('three_dart_average')}</small></span></div>
   </article>`).join('');
 }
 function controlSessionSummary(){
   return `<section class="control-scene">
-    ${sceneHeader('SESSION COMPLETE','Eure Highlights','Alle Ergebnisse wurden dauerhaft gespeichert.')}
+    ${sceneHeader(t('session_complete'),t('highlights'),t('saved'))}
     <div class="stats-grid">${statCards()}</div>
     <footer class="sticky-actions">
-      ${actionButton('Zur Startseite','close-session')}
+      ${actionButton(t('statistics'),'open-history','ghost')}
+      ${actionButton(t('home'),'close-session')}
     </footer>
   </section>`;
+}
+
+function formatDate(value){
+  if(!value) return '—';
+  return new Intl.DateTimeFormat(language()==='en'?'en-GB':'de-DE',{
+    dateStyle:'medium',timeStyle:'short',
+  }).format(new Date(value));
+}
+async function loadHistory(){
+  const h=appState.history;
+  h.loading=true;
+  renderControl();
+  const suffix=h.includeTest?'?include_test=true':'';
+  try{
+    const [sessions,players,modes]=await Promise.all([
+      getJson('/api/history/sessions?limit=100'),
+      getJson(`/api/statistics/players${suffix}`),
+      getJson(`/api/statistics/modes${suffix}`),
+    ]);
+    h.sessions=sessions.sessions || [];
+    h.players=players.players || [];
+    h.modes=modes.modes || [];
+    await loadHistoryHeatmap();
+  }catch(error){
+    showToast(error.message);
+  }finally{
+    h.loading=false;
+    renderControl();
+  }
+}
+async function loadHistoryHeatmap(){
+  const h=appState.history;
+  const params=new URLSearchParams();
+  if(h.playerId) params.set('player_id',h.playerId);
+  if(h.includeTest) params.set('include_test','true');
+  h.heatmap=await getJson(`/api/statistics/heatmap?${params}`);
+}
+async function openHistory(){
+  appState.localView='history';
+  appState.history.session=null;
+  appState.history.game=null;
+  appState.history.replay=null;
+  renderControl();
+  await loadHistory();
+}
+async function openHistorySession(id){
+  appState.history.session=await getJson(`/api/history/sessions/${encodeURIComponent(id)}`);
+  appState.history.game=null;
+  appState.history.replay=null;
+  renderControl();
+}
+async function openHistoryGame(id){
+  const [game,replay]=await Promise.all([
+    getJson(`/api/history/games/${encodeURIComponent(id)}`),
+    getJson(`/api/history/games/${encodeURIComponent(id)}/replay`),
+  ]);
+  appState.history.game=game;
+  appState.history.replay=replay;
+  appState.history.replayIndex=Math.max(0,(replay.events?.length || 1)-1);
+  renderControl();
+}
+function historyStatCard(player){
+  return `<article class="history-player" style="--player:${escapeHtml(player.color)}">
+    <header><span>${avatarEmoji(player.avatar)}</span><div><b>${escapeHtml(player.name)}</b><small>${player.games} ${t('games')}</small></div></header>
+    <div><b>${player.wins}<small>${t('wins')}</small></b><b>${player.win_rate}%<small>${t('win_rate')}</small></b><b>${player.three_dart_average}<small>${t('three_dart_average')}</small></b><b>${player.darts}<small>${t('throws')}</small></b></div>
+    <button data-action="history-player" data-player="${escapeHtml(player.id)}">${t('heatmap')} · ${t('training')}</button>
+  </article>`;
+}
+function modeOptionSummary(item){
+  const mode=modeBySlug(item.game_type);
+  return Object.entries(item.options || {}).map(([key,value])=>{
+    const option=mode?.options?.find(entry=>entry.key===key);
+    const choice=option?.choices?.find(entry=>String(entry.value)===String(value));
+    return `${localText(option?.label || key)}: ${localText(choice?.label || value)}`;
+  }).join(' · ');
+}
+function historyOverview(){
+  const h=appState.history;
+  const sessions=h.sessions.map(session=>`<button class="history-session-row" data-action="history-session" data-id="${escapeHtml(session.id)}">
+    <span><b>${formatDate(session.started_at)}</b><small>${session.language.toUpperCase()} · ${session.player_count} ${t('players')}</small></span>
+    <span><b>${session.finished_games}</b><small>${t('completed_games')}</small></span><i>→</i>
+  </button>`).join('');
+  const modes=h.modes.map(item=>{
+    const mode=modeBySlug(item.game_type);
+    return `<article class="history-mode-row"><span><b>${escapeHtml(mode?.title || item.game_type)}</b><small>v${item.ruleset_version} · ${item.starts} Starts<br>${escapeHtml(modeOptionSummary(item))}</small></span><b>${item.success_rate}%<small>${t('success_rate')}</small></b><b>${item.completion_rate}%<small>${t('completion_rate')}</small></b></article>`;
+  }).join('');
+  return `<div class="history-dashboard">
+    <section><h2>${t('players')}</h2><div class="history-player-grid">${h.players.map(historyStatCard).join('') || `<div class="empty-state">${t('no_data')}</div>`}</div></section>
+    <section><h2>${t('heatmap')}</h2>
+      <div class="history-heatmap-layout">
+        <div class="history-board"><svg id="historyHeatmapBoard" class="dartboard-svg" viewBox="0 0 500 500" aria-label="${t('heatmap')}"></svg></div>
+        <div class="heatmap-copy"><strong>${h.heatmap?.board_hits || 0}</strong><span>${t('hits')}</span><p>${h.heatmap?.misses || 0} Miss · ${h.heatmap?.total_darts || 0} ${t('throws')}<br>${h.playerId ? escapeHtml(h.players.find(item=>item.id===h.playerId)?.name || '') : t('production_only')}</p>
+          ${h.recommendations ? `<h3>${t('recommendation')}</h3><div class="training-recommendations">${h.recommendations.recommendations.map(item=>`<b>${escapeHtml(item.ring)} ${item.field}<small>${item.attempts ? `${item.success_rate}% · ${item.attempts} ${t('throws')}` : t('insufficient_data')}</small></b>`).join('')}</div>` : ''}
+        </div>
+      </div>
+    </section>
+    <section><h2>${t('sessions')}</h2><div class="history-list">${sessions || `<div class="empty-state">${t('no_data')}</div>`}</div></section>
+    <section><h2>${t('game_modes')}</h2><div class="history-mode-list">${modes || `<div class="empty-state">${t('no_data')}</div>`}</div></section>
+  </div>`;
+}
+function historySessionDetail(session){
+  const games=(session.games || []).map(game=>{
+    const mode=modeBySlug(game.game_type);
+    return `<button class="history-game-row" data-action="history-game" data-id="${escapeHtml(game.id)}">
+      <img src="${modeAsset(game.game_type)}" alt=""><span><b>${escapeHtml(mode?.title || game.game_type)}</b><small>${formatDate(game.started_at)} · ${escapeHtml(game.status)} · ${game.darts} ${t('throws')}</small></span><i>→</i>
+    </button>`;
+  }).join('');
+  return `<section class="history-detail">
+    <button class="history-back" data-action="history-overview">← ${t('overview')}</button>
+    ${sceneHeader(t('sessions'),formatDate(session.started_at),`${session.players.length} ${t('players')} · ${session.games.length} ${t('games')}`)}
+    <div class="history-session-players">${session.statistics.map(historyStatCard).join('')}</div>
+    <div class="history-list">${games || `<div class="empty-state">${t('no_data')}</div>`}</div>
+  </section>`;
+}
+function historyReplay(game,replay){
+  const events=replay?.events || [];
+  const index=Math.min(appState.history.replayIndex,Math.max(0,events.length-1));
+  const item=events[index] || {};
+  const frame=item.frame || game.final_state || game.initial_state || {};
+  const player=frame.players?.find(entry=>entry.id===item.player_id);
+  return `<section class="history-detail replay-view">
+    <button class="history-back" data-action="history-session-back">← ${t('sessions')}</button>
+    ${sceneHeader(t('replay'),modeBySlug(game.game_type)?.title || game.game_type,`${formatDate(game.started_at)} · ${game.environment.toUpperCase()} · Ruleset v${game.ruleset_version}`)}
+    <div class="replay-layout">
+      <div class="history-board"><svg id="replayBoard" class="dartboard-svg" viewBox="0 0 500 500" aria-label="${t('replay')}"></svg></div>
+      <div class="replay-state">
+        <span>${t('event')} ${events.length ? index+1 : 0}/${events.length}</span>
+        <h2>${escapeHtml(item.payload?.label || item.event_type || '—')}</h2>
+        <p>${escapeHtml(player?.name || '')} · ${t('round')} ${frame.round_number || 1}</p>
+        <div class="replay-scores">${(frame.players || []).map(entry=>`<b style="--player:${escapeHtml(entry.color)}">${escapeHtml(entry.name)}<strong>${entry.score}</strong></b>`).join('')}</div>
+        <input id="replayRange" type="range" min="0" max="${Math.max(0,events.length-1)}" value="${index}" ${events.length?'':'disabled'}>
+        <div class="button-row">${actionButton(t('previous'),'replay-prev','ghost',index<=0?'disabled':'')}${actionButton(t('next'),'replay-next','secondary',index>=events.length-1?'disabled':'')}</div>
+      </div>
+    </div>
+    <div class="throw-ledger">${game.throws.map(item=>`<span class="${item.outcome}"><b>${escapeHtml(item.event.label || 'MISS')}</b><small>${escapeHtml(item.outcome)} · ${item.mode_points >= 0 ? '+' : ''}${item.mode_points}</small></span>`).join('')}</div>
+  </section>`;
+}
+function controlHistory(){
+  const h=appState.history;
+  const body=h.loading
+    ? '<div class="history-loading"><i></i></div>'
+    : h.game
+      ? historyReplay(h.game,h.replay)
+      : h.session
+        ? historySessionDetail(h.session)
+        : historyOverview();
+  return `<section class="control-scene history-control">
+    <header class="history-toolbar">
+      <div><div class="kicker">${t('statistics')}</div><h1>${t('stats_title')}</h1><p>${t('stats_copy')}</p></div>
+      <div class="history-toolbar-actions">
+        <label class="test-data-toggle"><input type="checkbox" data-action="history-test" ${h.includeTest?'checked':''}><span>${t('test_data')}</span></label>
+        <a class="action-button secondary history-export" href="/api/data/export" download>${t('export_data')}</a>
+        ${actionButton(t('close'),'close-history','ghost')}
+      </div>
+    </header>
+    ${body}
+  </section>`;
+}
+function applyHistoryHeatmap(){
+  const segments=appState.history.heatmap?.segments || [];
+  const max=Math.max(1,...segments.map(item=>Number(item.darts)||0));
+  for(const item of segments){
+    const zone=ringToZone(item.ring);
+    const segment=$(boardSegmentId(zone,item.field));
+    if(!segment) continue;
+    const intensity=.15+(Number(item.darts)||0)/max*.85;
+    segment.style.fill=`color-mix(in srgb, var(--cyan) ${Math.round(intensity*100)}%, #101820)`;
+    segment.style.opacity=String(.45+intensity*.55);
+  }
+}
+function applyReplayFrame(){
+  const events=appState.history.replay?.events || [];
+  const item=events[appState.history.replayIndex];
+  if(!item?.payload) return;
+  const zone=ringToZone(item.payload.ring);
+  const segment=$(boardSegmentId(zone,item.payload.field));
+  if(segment) segment.classList.add('hit');
 }
 
 function cornerControls(calibration){
@@ -776,15 +1016,15 @@ function cornerControls(calibration){
 function controlCalibration(){
   const geometry=appState.experience.projector_geometry || {width:1600,height:900};
   return `<section class="control-scene calibration-control">
-    ${sceneHeader('EINMALIGES SETUP','Projektor ausrichten','Verschiebe die vier Eckpunkte, bis der äußere Ring exakt auf der echten Scheibe liegt.')}
+    ${sceneHeader(t('one_time_setup'),t('calibrate_title'),t('calibrate_copy'))}
     <div class="calibration-grid">${cornerControls(appState.experience.calibration)}</div>
     ${artThemeSetup()}
     ${soundSetup()}
     <p class="calibration-note">Gemeldete Projektorfläche: <b>${geometry.width} × ${geometry.height}</b>. „Rund und mittig“ setzt eine unverzerrte quadratische Fläche mit 5 % Sicherheitsrand auf der kürzeren Browserseite. Danach kannst du die vier Ecken fein auf die echte Scheibe legen.</p>
     <footer class="sticky-actions">
-      ${actionButton('Abbrechen','home','ghost')}
-      ${actionButton('Rund und mittig zurücksetzen','reset-calibration','secondary')}
-      ${actionButton('Kalibrierung speichern','save-calibration')}
+      ${actionButton(t('cancel'),'home','ghost')}
+      ${actionButton(t('reset_center'),'reset-calibration','secondary')}
+      ${actionButton(t('save_calibration'),'save-calibration')}
     </footer>
   </section>`;
 }
@@ -885,14 +1125,16 @@ function projectorBackdrop(mode, inner, className=''){
   return `<section class="projector-scene ${className}" style="--scene-image:url('${image}');--accent:${escapeHtml(mode?.accent || '#28e7ff')}"><div class="cinema-shade"></div>${inner}</section>`;
 }
 function projectorAttract(){
-  return projectorBackdrop(null,`<div class="projector-center"><div class="projector-logo">◎</div><div class="kicker">SMART DART EXPERIENCE</div><h1>Bereit für<br><span>eure Session?</span></h1><p>Am Control-Screen starten</p></div>`,'attract-projector');
+  const title=language()==='en'?'Ready for your session?':'Bereit für eure Session?';
+  const copy=language()==='en'?'Start from the Control screen':'Am Control-Screen starten';
+  return projectorBackdrop(null,`<div class="projector-center"><div class="projector-logo">◎</div><div class="kicker">SMART DART EXPERIENCE</div><h1>${escapeHtml(title)}</h1><p>${escapeHtml(copy)}</p></div>`,'attract-projector');
 }
 function projectorPlayers(){
-  return projectorBackdrop(null,`<div class="projector-center"><div class="kicker">SESSION SETUP</div><h1>Wer spielt heute?</h1><p>Wählt eure Spieler am Control-Screen.</p></div>`);
+  return projectorBackdrop(null,`<div class="projector-center"><div class="kicker">SESSION SETUP</div><h1>${t('who_plays')}</h1><p>${language()==='en'?'Choose players on the Control screen.':'Wählt eure Spieler am Control-Screen.'}</p></div>`);
 }
 function projectorGameSelect(){
   const players = appState.experience.session?.players || [];
-  return projectorBackdrop(null,`<div class="projector-center"><div class="kicker">TEAM READY</div><h1>${players.map(player=>escapeHtml(player.name)).join(' · ')}</h1><p>Wählt jetzt euren Spielmodus.</p></div>`);
+  return projectorBackdrop(null,`<div class="projector-center"><div class="kicker">TEAM READY</div><h1>${players.map(player=>escapeHtml(player.name)).join(' · ')}</h1><p>${language()==='en'?'Choose your game mode.':'Wählt jetzt euren Spielmodus.'}</p></div>`);
 }
 function projectorInstructions(){
   const mode = modeBySlug(appState.experience.selected_mode);
@@ -915,7 +1157,11 @@ function boardSvg(){
 function projectorAdvice(game){
   const advice = game.advice;
   if(game.game_type !== 'x01' || !advice || !advice.primary || game.status === 'hold') return '';
-  const headline = advice.status === 'checkout' ? 'FINISH' : advice.status === 'setup' ? 'STELLEN' : 'NÄCHSTER WURF';
+  const headline = advice.status === 'checkout'
+    ? 'FINISH'
+    : advice.status === 'setup'
+      ? (language()==='en'?'SET UP':'STELLEN')
+      : (language()==='en'?'NEXT DART':'NÄCHSTER WURF');
   const sequence = (advice.sequence || []).map(dart => dart.label).join(' → ');
   return `<aside class="projector-advice ${escapeHtml(advice.status)}"><span>${headline}</span><b>${escapeHtml(advice.primary.label)}</b><small>${escapeHtml(sequence || advice.message || '')}</small></aside>`;
 }
@@ -926,9 +1172,11 @@ function projectorOverlayPrompt(game){
   const legend=modeBySlug(game.game_type)?.control_legend;
   if(legend?.length) return controlLegend(legend,'projector-live');
   const prompt=game.game_type==='simon_says' && appState.memoryHidden
-    ? 'Jetzt aus dem Kopf!'
-    : overlay.prompt;
-  const label=game.game_type==='simon_says' && !appState.memoryHidden ? '3 SEKUNDEN MERKEN' : 'ZIEL';
+    ? (language()==='en'?'Now from memory!':'Jetzt aus dem Kopf!')
+    : localText(overlay.prompt);
+  const label=game.game_type==='simon_says' && !appState.memoryHidden
+    ? (language()==='en'?'MEMORIZE FOR 3 SECONDS':'3 SEKUNDEN MERKEN')
+    : (language()==='en'?'TARGET':'ZIEL');
   const detail=overlay.combo?.count ? `Combo ×${overlay.combo.count}` : '';
   const visualLegend=visualLegendMarkup(overlay.visual_legend,'projector-visual-legend');
   return `<aside class="projector-advice arcade"><span>${label}</span><b>${promptMarkup(prompt)}</b>${detail?`<small>${escapeHtml(detail)}</small>`:''}${visualLegend}</aside>`;
@@ -938,19 +1186,19 @@ function projectorModePanel(game){
   if(overlay.panel) return genericPanel(overlay.panel,true);
   if(overlay.cricket?.remaining?.length){
     return `<aside class="projector-mode-panel cricket-panel">
-      <span>NOCH ZU SCHLIESSEN</span>
+      <span>${localText('NOCH ZU SCHLIESSEN')}</span>
       <div>${overlay.cricket.remaining.map(item=>`<b><i>${escapeHtml(item.label)}</i><em>${'●'.repeat(item.marks)}${'○'.repeat(item.needed)}</em><strong>×${item.needed}</strong></b>`).join('')}</div>
     </aside>`;
   }
   if(Array.isArray(overlay.card)){
-    return `<aside class="projector-mode-panel bingo-panel"><span>BINGO-KARTE</span><div>${overlay.card.map(cell=>`<b class="${cell.done?'done':''}">${escapeHtml(cell.label)}</b>`).join('')}</div></aside>`;
+    return `<aside class="projector-mode-panel bingo-panel"><span>${language()==='en'?'BINGO CARD':'BINGO-KARTE'}</span><div>${overlay.card.map(cell=>`<b class="${cell.done?'done':''}">${escapeHtml(localText(cell.label))}</b>`).join('')}</div></aside>`;
   }
   if(overlay.boss){
     const hp=Math.max(0,Number(overlay.boss.hp)||0), max=Math.max(1,Number(overlay.boss.max_hp)||1);
     return `<aside class="projector-mode-panel boss-panel"><span>BOSS</span><strong>${hp} HP</strong><i style="--progress:${Math.max(0,Math.min(100,hp/max*100))}%"></i></aside>`;
   }
   if(Number.isFinite(overlay.pot)){
-    return `<aside class="projector-mode-panel pot-panel"><span>DEIN POT</span><strong>${overlay.pot}</strong></aside>`;
+    return `<aside class="projector-mode-panel pot-panel"><span>${language()==='en'?'YOUR POT':'DEIN POT'}</span><strong>${overlay.pot}</strong></aside>`;
   }
   return '';
 }
@@ -999,8 +1247,8 @@ function candyOverheat(game,event){
   return `<div class="candy-overheat" aria-hidden="true">
     <i></i>
     <img src="${effectAsset('candy_overheat')}" alt="">
-    <b>ÜBERHITZT!</b>
-    <span>LADUNG VERLOREN</span>
+    <b>${t('overheat')}</b>
+    <span>${t('charge_lost')}</span>
   </div>`;
 }
 
@@ -1067,10 +1315,10 @@ function projectorPlaying(){
   return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''} ${dragonFireImpact?'dragon-fire-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')};--candy-art:url('${effectAsset('candy')}')">
     ${modeAmbience(mode,appState.projectedEvent)}
     <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}${candyOverheat(game,appState.projectedEvent)}${dragonReaction(game,appState.projectedEvent)}${cookieReaction(game,appState.projectedEvent)}</div>
-    <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong data-score-player="${escapeHtml(player.id || '')}">${player.score ?? 0}</strong></header>
+    <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · ${t('round')} ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong data-score-player="${escapeHtml(player.id || '')}">${player.score ?? 0}</strong></header>
     <footer class="projection-bottom">
-      <div class="throw-callout">${game.status==='hold'?'DARTS ZIEHEN':escapeHtml(appState.projectedEvent?.label || 'BEREIT')}</div>
-      <div>${game.darts_in_turn}/3 DARTS · ${game.turn_score} PTS</div>
+      <div class="throw-callout">${game.status==='hold'?t('pull_darts'):escapeHtml(appState.projectedEvent?.label || t('ready'))}</div>
+      <div>${game.darts_in_turn}/3 ${t('darts')} · ${game.turn_score} ${t('points_short')}</div>
     </footer>
     ${projectorAdvice(game)}
     ${projectorOverlayPrompt(game)}
@@ -1079,7 +1327,7 @@ function projectorPlaying(){
       const fireTarget=isCandyFireEvent({game},appState.projectedEvent) && appState.projectedEvent.target_player_id===item.id;
       return `<span class="${item.id===game.current_player_id?'active':''} ${fireTarget?'candy-fire-target':''}"><b>${escapeHtml(item.name)}</b><i data-score-player="${escapeHtml(item.id)}">${item.score}</i>${candyFireImpact(game,appState.projectedEvent,item.id)}</span>`;
     }).join('')}</aside>
-    ${testMode?'<div class="projector-test-tools"><b>TESTMODUS</b><span>Scheibensegment anklicken</span><button data-action="test-miss">MISS</button><button class="switch-player" data-action="next-player">SPIELER WECHSELN</button></div>':''}
+    ${testMode?`<div class="projector-test-tools"><b>${t('test_mode')}</b><span>${t('click_segment')}</span><button data-action="test-miss">MISS</button><button class="switch-player" data-action="next-player">${t('switch_player')}</button></div>`:''}
   </section>`;
 }
 function projectorResult(){
@@ -1092,14 +1340,14 @@ function projectorResult(){
     ${modeAmbience(mode,null,true)}
     <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}</div>
     <header class="projection-top result-board-heading">
-      <div><div class="kicker">${escapeHtml(mode?.title || '')} · ENDERGEBNIS</div><h1>Finaler Spielstand</h1></div>
+      <div><div class="kicker">${escapeHtml(mode?.title || '')} · ${t('result')}</div><h1>${t('final_score')}</h1></div>
     </header>
     ${projectorModePanel(game)}
     <aside class="projection-roster result-roster">${game.players.map(item=>`<span class="${(game.winner_ids||[]).includes(item.id)||item.id===game.winner_id?'winner':''}"><b>${escapeHtml(item.name)}</b><i>${item.score}</i></span>`).join('')}</aside>
     <div class="victory-overlay">
       <article class="victory-card ${champion?'':'no-winner'}">
         <div class="winner-crown">${result.icon}</div>
-        <div><span>${result.label}</span><h1>${escapeHtml(result.title)}</h1><p>${escapeHtml(game.message || 'Spiel beendet')}</p></div>
+        <div><span>${result.label}</span><h1>${escapeHtml(result.title)}</h1><p>${escapeHtml(localText(game.message || (language()==='en'?'Game complete':'Spiel beendet')))}</p></div>
         <footer>
           <b>${result.points}</b>
           ${lastThrow ? `<small>LETZTER DART · ${escapeHtml(lastThrow.label || 'MISS')}</small>` : ''}
@@ -1110,12 +1358,12 @@ function projectorResult(){
   </section>`;
 }
 function projectorSummary(){
-  return projectorBackdrop(null,`<div class="projector-summary"><div>${sceneHeader('SESSION COMPLETE','Was für eine Runde!','Eure Highlights')}</div><div class="projector-stats">${statCards()}</div></div>`);
+  return projectorBackdrop(null,`<div class="projector-summary"><div>${sceneHeader(t('session_complete'),language()==='en'?'What a session!':'Was für eine Runde!',t('highlights'))}</div><div class="projector-stats">${statCards()}</div></div>`);
 }
 function projectorCalibration(){
   return `<section class="projection-game calibration-projector">
     <div id="projectionPlane" class="projection-plane calibration-plane">${boardSvg()}<span class="calibration-cross">+</span></div>
-    <div class="calibration-caption"><b>KALIBRIERUNG</b><span>Äußeren Ring am Control-Screen deckungsgleich ausrichten</span></div>
+    <div class="calibration-caption"><b>${language()==='en'?'CALIBRATION':'KALIBRIERUNG'}</b><span>${t('calibration_projector')}</span></div>
   </section>`;
 }
 
@@ -1131,6 +1379,9 @@ function arcPath(cx,cy,r1,r2,a1,a2){
 function boardSegmentId(zone,field){ return `seg-${zone}-${field}`; }
 function buildBoard(){
   const svg = $('dartboardSvg');
+  buildBoardElement(svg);
+}
+function buildBoardElement(svg){
   if(!svg || svg.dataset.ready) return;
   svg.dataset.ready='1';
   const rings={double:[210,235],singleOuter:[142,210],triple:[116,142],singleInner:[38,116]};
@@ -1457,14 +1708,71 @@ document.addEventListener('click',async event=>{
   const target=event.target.closest('[data-action]');
   if(!target) return;
   const name=target.dataset.action;
+  if(name==='set-language'){
+    appState.selectedLanguage=target.dataset.language==='en'?'en':'de';
+    appState.languageTouched=true;
+    document.documentElement.lang=appState.selectedLanguage;
+    render();
+    return;
+  }
+  if(name==='open-history'){ await openHistory(); return; }
+  if(name==='close-history'){
+    appState.localView=null;
+    renderControl();
+    return;
+  }
+  if(name==='history-overview'){
+    appState.history.session=null;
+    appState.history.game=null;
+    appState.history.replay=null;
+    renderControl();
+    return;
+  }
+  if(name==='history-session'){
+    try{ await openHistorySession(target.dataset.id); }
+    catch(error){ showToast(error.message); }
+    return;
+  }
+  if(name==='history-game'){
+    try{ await openHistoryGame(target.dataset.id); }
+    catch(error){ showToast(error.message); }
+    return;
+  }
+  if(name==='history-session-back'){
+    appState.history.game=null;
+    appState.history.replay=null;
+    renderControl();
+    return;
+  }
+  if(name==='history-player'){
+    const h=appState.history;
+    h.playerId=target.dataset.player;
+    try{
+      [h.heatmap,h.recommendations]=await Promise.all([
+        getJson(`/api/statistics/heatmap?player_id=${encodeURIComponent(h.playerId)}${h.includeTest?'&include_test=true':''}`),
+        getJson(`/api/training/${encodeURIComponent(h.playerId)}/recommendations`),
+      ]);
+      renderControl();
+    }catch(error){ showToast(error.message); }
+    return;
+  }
+  if(name==='replay-prev' || name==='replay-next'){
+    const max=Math.max(0,(appState.history.replay?.events?.length || 1)-1);
+    appState.history.replayIndex=Math.max(0,Math.min(max,appState.history.replayIndex+(name==='replay-next'?1:-1)));
+    renderControl();
+    return;
+  }
   if(name==='choose-players'){ await action('/api/navigation/players'); return; }
-  if(name==='home'){ appState.selectedPlayers.clear(); await action('/api/session/close'); return; }
+  if(name==='home'){
+    if(appState.localView){ appState.localView=null; renderControl(); return; }
+    appState.selectedPlayers.clear(); await action('/api/session/close'); return;
+  }
   if(name==='calibrate'){ await action('/api/navigation',{screen:'calibration'}); return; }
   if(name==='toggle-player'){
     appState.selectedPlayers.has(target.dataset.id) ? appState.selectedPlayers.delete(target.dataset.id) : appState.selectedPlayers.add(target.dataset.id);
     renderControl(); return;
   }
-  if(name==='start-session'){ await action('/api/session/start',{player_ids:[...appState.selectedPlayers]}); return; }
+  if(name==='start-session'){ await action('/api/session/start',{player_ids:[...appState.selectedPlayers],language:appState.selectedLanguage}); return; }
   if(name==='select-mode'){ await action('/api/game/prepare',{game_type:target.dataset.mode,options:{}}); return; }
   if(name==='set-option'){
     const value=/^-?\d+(\.\d+)?$/.test(target.dataset.value)?Number(target.dataset.value):target.dataset.value;
@@ -1533,12 +1841,23 @@ document.addEventListener('submit',async event=>{
   renderControl();
 });
 document.addEventListener('input',event=>{
+  if(event.target.id==='replayRange'){
+    appState.history.replayIndex=Number(event.target.value);
+    renderControl();
+    return;
+  }
   if(!event.target.matches('[data-corner]')) return;
   const corner=Number(event.target.dataset.corner), axis=event.target.dataset.axis;
   appState.experience.calibration.corners[corner][axis]=Number(event.target.value);
   event.target.nextElementSibling.textContent=`${Math.round(Number(event.target.value)*100)}%`;
 });
 document.addEventListener('change',event=>{
+  if(event.target.matches('[data-action="history-test"]')){
+    appState.history.includeTest=event.target.checked;
+    appState.history.recommendations=null;
+    loadHistory();
+    return;
+  }
   if(!event.target.matches('[data-corner]')) return;
   action('/api/calibration',appState.experience.calibration);
 });
