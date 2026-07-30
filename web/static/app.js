@@ -205,6 +205,17 @@ function showToast(message){
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 2600);
 }
+function scheduleRematchExpiryCheck(){
+  const checkExpiry=()=>{
+    if(Date.now()<appState.rematchArmedUntil){
+      appState.rematchTimer=setTimeout(checkExpiry,100);
+      return;
+    }
+    appState.rematchArmedUntil=0;
+    render();
+  };
+  appState.rematchTimer=setTimeout(checkExpiry,100);
+}
 
 async function loadBootstrap(){
   const response = await fetch('/api/bootstrap');
@@ -245,10 +256,7 @@ function updateExperience(experience, event){
   clearTimeout(appState.rematchTimer);
   if(experience.rematch?.armed){
     appState.rematchArmedUntil=Date.now()+rematchDelay;
-    appState.rematchTimer=setTimeout(()=>{
-      appState.rematchArmedUntil=0;
-      render();
-    },rematchDelay+30);
+    scheduleRematchExpiryCheck();
     if(!rematchWasArmed) tone(440,.12,0,'triangle',.08);
   }else{
     appState.rematchArmedUntil=0;
