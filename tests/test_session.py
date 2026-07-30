@@ -399,7 +399,7 @@ class SessionControllerTests(unittest.TestCase):
         )
         previous = next(
             turn
-            for turn in self.controller.public_state()["editable_turns"]
+            for turn in self.controller.engine.editable_turns()
             if not turn["current"]
         )
 
@@ -452,7 +452,7 @@ class SessionControllerTests(unittest.TestCase):
         self.assertTrue(current["current"])
         self.assertEqual(1, current["darts"][0]["dart_in_turn"])
 
-    def test_undo_after_continue_restores_turn_without_deleting_dart(self):
+    def test_double_back_after_continue_restores_then_deletes_dart(self):
         self._start_game()
         for seq in range(1, 4):
             self.controller.process_event(
@@ -472,8 +472,21 @@ class SessionControllerTests(unittest.TestCase):
 
         self.assertEqual("hold", self.controller.engine.state.status)
         self.assertEqual("Ada", self.controller.engine.state.current_player().name)
+        visible = self.controller.public_state()["editable_turns"]
+        self.assertEqual(1, len(visible))
+        self.assertEqual("Ada", visible[0]["player_name"])
+        self.assertEqual(3, len(visible[0]["darts"]))
         detail = self.controller.store.game_detail(self.controller.game_id)
         self.assertEqual(3, len(detail["throws"]))
+
+        self.controller.undo()
+
+        self.assertEqual("running", self.controller.engine.state.status)
+        self.assertEqual("Ada", self.controller.engine.state.current_player().name)
+        visible = self.controller.public_state()["editable_turns"]
+        self.assertEqual(2, len(visible[0]["darts"]))
+        detail = self.controller.store.game_detail(self.controller.game_id)
+        self.assertEqual(2, len(detail["throws"]))
 
     def test_result_screen_throw_can_be_deleted_and_reentered(self):
         player = self.controller.create_player("Ada", "nova", "#ff00aa")

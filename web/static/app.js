@@ -604,7 +604,9 @@ function bingoCard(playerMarks){
   ).join('')}</div>`;
 }
 function editableTurnCards(){
-  const turns=appState.experience.editable_turns || [];
+  const turns=(appState.experience.editable_turns || [])
+    .filter(turn=>turn.current)
+    .slice(-1);
   if(!turns.length) return '';
   return `<section class="turn-editor">${turns.map(turn=>{
     const bySlot=new Map((turn.darts||[]).map(dart=>[Number(dart.dart_in_turn)-1,dart]));
@@ -625,8 +627,8 @@ function editableTurnCards(){
       }
       return `<div class="turn-dart empty"><span>${index+1}</span><b>—</b><small>${t('open_slot')}</small></div>`;
     }).join('');
-    return `<article class="editable-turn ${turn.current?'current':'previous'}">
-      <header><span>${turn.current?t('current_turn'):t('previous_turn')}</span><b>${escapeHtml(turn.player_name)}</b><small>${t('round')} ${turn.round_number}</small></header>
+    return `<article class="editable-turn current">
+      <header><span>${t('current_turn')}</span><b>${escapeHtml(turn.player_name)}</b><small>${t('round')} ${turn.round_number}</small></header>
       <div class="turn-darts">${slots}</div>
     </article>`;
   }).join('')}</section>`;
