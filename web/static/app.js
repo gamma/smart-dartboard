@@ -13,7 +13,7 @@ const appState = {
   memoryHidden: false,
   rematchTimer: null,
   rematchArmedUntil: 0,
-  selectedCorrectionIndex: null,
+  selectedCorrection: null,
   abortArmed: false,
   skipArmed: false,
   geometryTimer: null,
@@ -315,7 +315,7 @@ function updateExperience(experience, event){
   if(previousPlayer && currentPlayerId && previousPlayer!==currentPlayerId){
     clearTimeout(appState.boardResetTimer);
     appState.projectedEvent=null;
-    appState.selectedCorrectionIndex=null;
+    appState.selectedCorrection=null;
     appState.skipArmed=false;
   }
   const memoryKey=experience.game?.game_type==='simon_says' && experience.game?.status==='running'
@@ -363,7 +363,7 @@ function updateExperience(experience, event){
       }else if(isProjector()){
         clearScoreCountdown();
       }
-      appState.selectedCorrectionIndex=null;
+      appState.selectedCorrection=null;
       appState.abortArmed=false;
       appState.skipArmed=false;
       appState.projectedEvent=event;
@@ -374,7 +374,7 @@ function updateExperience(experience, event){
         if(isProjector() && appState.experience?.screen==='playing') renderProjector();
       },BOARD_EVENT_VISIBLE_MS);
     }
-    if(event.type==='throw_corrected') appState.selectedCorrectionIndex=null;
+    if(event.type==='throw_corrected' || event.type==='throw_deleted') appState.selectedCorrection=null;
   }
   if(previous?.screen !== experience.screen && experience.screen === 'countdown'){
     startCountdown();
@@ -441,7 +441,7 @@ function renderControl(){
     calibration: controlCalibration,
   };
   root.innerHTML = (renderers[screen] || controlAttract)();
-  if(screen==='playing' && $('dartboardSvg')) buildBoard();
+  if((screen==='playing' || screen==='game_result') && $('dartboardSvg')) buildBoard();
 }
 
 function controlAttract(){
@@ -603,24 +603,37 @@ function bingoCard(playerMarks){
     `<span class="${cell.done?'done':''}">${escapeHtml(cell.label)}</span>`
   ).join('')}</div>`;
 }
-function currentTurnThrows(game){
-  return game.darts_in_turn > 0 ? game.throws.slice(-game.darts_in_turn) : [];
-}
-function turnDartCards(game){
-  const throws=currentTurnThrows(game);
-  return [0,1,2].map(index=>{
-    const dart=throws[index];
-    if(!dart){
-      return `<div class="turn-dart empty"><span>${index+1}</span><b>—</b><small>${language()==='en'?'OPEN':'NOCH OFFEN'}</small></div>`;
-    }
-    return `<button class="turn-dart ${appState.selectedCorrectionIndex===index?'selected':''}" data-action="select-correction" data-index="${index}">
-      <span>${index+1}</span><b>${escapeHtml(dart.label || 'MISS')}</b><small>${dart.score} ${language()==='en'?'POINTS · TAP TO CORRECT':'PUNKTE · ANTIPPEN ZUM KORRIGIEREN'}</small>
-    </button>`;
-  }).join('');
+function editableTurnCards(){
+  const turns=appState.experience.editable_turns || [];
+  if(!turns.length) return '';
+  return `<section class="turn-editor">${turns.map(turn=>{
+    const bySlot=new Map((turn.darts||[]).map(dart=>[Number(dart.dart_in_turn)-1,dart]));
+    const nextSlot=(turn.darts||[]).length;
+    const slots=[0,1,2].map(index=>{
+      const dart=bySlot.get(index);
+      const selected=appState.selectedCorrection?.actionId===Number(dart?.action_id);
+      if(dart){
+        return `<button class="turn-dart ${selected?'selected':''}" data-action="select-correction" data-action-id="${dart.action_id}" data-slot="${index}" data-player="${escapeHtml(turn.player_name)}">
+          <span>${index+1}</span><b>${escapeHtml(dart.label || 'MISS')}</b><small>${dart.score} ${t('points_short')} · ${t('tap_to_edit')}</small>
+        </button>`;
+      }
+      if(turn.can_add && index===nextSlot){
+        const selectedAdd=appState.selectedCorrection?.add===true && appState.selectedCorrection?.slot===index;
+        return `<button class="turn-dart empty addable ${selectedAdd?'selected':''}" data-action="add-manual" data-slot="${index}" data-player="${escapeHtml(turn.player_name)}">
+          <span>${index+1}</span><b>+</b><small>${t('add_throw')}</small>
+        </button>`;
+      }
+      return `<div class="turn-dart empty"><span>${index+1}</span><b>—</b><small>${t('open_slot')}</small></div>`;
+    }).join('');
+    return `<article class="editable-turn ${turn.current?'current':'previous'}">
+      <header><span>${turn.current?t('current_turn'):t('previous_turn')}</span><b>${escapeHtml(turn.player_name)}</b><small>${t('round')} ${turn.round_number}</small></header>
+      <div class="turn-darts">${slots}</div>
+    </article>`;
+  }).join('')}</section>`;
 }
 function correctionPanel(){
-  const selected=appState.selectedCorrectionIndex;
-  if(selected===null){
+  const selected=appState.selectedCorrection;
+  if(!selected){
     return `<div class="correction-hint">${t('correction_hint')}</div>`;
   }
   return `<section class="correction-panel">
@@ -628,11 +641,13 @@ function correctionPanel(){
       <svg id="dartboardSvg" class="dartboard-svg correction-board" viewBox="0 0 500 500" aria-label="Korrektur-Dartboard"></svg>
     </div>
     <div class="correction-copy">
-      <div class="kicker">${t('correct_throw',{number:selected+1})}</div>
+      <div class="kicker">${selected.add?t('add_throw_number',{number:selected.slot+1}):t('correct_throw',{number:selected.slot+1})} · ${escapeHtml(selected.playerName||'')}</div>
       <h2>${t('tap_actual_segment')}</h2>
       <p>${t('correction_copy')}</p>
+      <small class="correction-lock-note">◉ ${t('board_input_paused')}</small>
       <div class="correction-actions">
         ${actionButton(t('count_as_miss'),'correct-miss','danger')}
+        ${selected.add?'':actionButton(t('delete_throw'),'delete-throw','danger')}
         ${actionButton(t('cancel'),'cancel-correction','ghost')}
       </div>
     </div>
@@ -726,7 +741,7 @@ function controlPlaying(){
     </div>
     ${x01AdvicePanel(game)}
     ${controlModePrompt(game)}
-    <div class="turn-darts">${turnDartCards(game)}</div>
+    ${editableTurnCards()}
     ${correctionPanel()}
     <div class="scoreboard">${scoreboard(game)}</div>
     ${genericPanel(game.overlay?.panel)}
@@ -809,6 +824,8 @@ function controlGameResult(){
         ? escapeHtml(language()==='en'?'wins the game and earns 3 session points.':'holt sich den Sieg und 3 Sessionpunkte.')
         : escapeHtml(localText(game.message || 'Keine Sessionpunkte in diesem Spiel.'))}</p>
     ${sessionScoreStrip()}
+    ${editableTurnCards()}
+    ${correctionPanel()}
     ${rematchPrompt()}
     <div class="result-actions">
       ${actionButton(t('back_to_games'),'next-game')}
@@ -1702,10 +1719,18 @@ document.addEventListener('click',async event=>{
       await action('/api/event',hitEvent);
       return;
     }
-    if(hitEvent && segment.closest('.correction-board') && appState.selectedCorrectionIndex!==null){
-      const turnIndex=appState.selectedCorrectionIndex;
-      appState.selectedCorrectionIndex=null;
-      await action('/api/throw/correct',{turn_index:turnIndex,event:hitEvent});
+    if(hitEvent && segment.closest('.correction-board') && appState.selectedCorrection){
+      const selected=appState.selectedCorrection;
+      appState.selectedCorrection=null;
+      try{
+        if(selected.add){
+          await action('/api/throw/manual',hitEvent);
+        }else{
+          await action('/api/throw/correct',{action_id:selected.actionId,event:hitEvent});
+        }
+      }finally{
+        await action('/api/correction/lock',{enabled:false});
+      }
       return;
     }
   }
@@ -1801,18 +1826,54 @@ document.addEventListener('click',async event=>{
     await action('/api/game/action',{action:target.dataset.gameAction,payload:{}}); return;
   }
   if(name==='select-correction'){
-    appState.selectedCorrectionIndex=Number(target.dataset.index);
+    await action('/api/correction/lock',{enabled:true});
+    appState.selectedCorrection={
+      actionId:Number(target.dataset.actionId),
+      slot:Number(target.dataset.slot),
+      playerName:target.dataset.player||'',
+      add:false,
+    };
+    renderControl(); return;
+  }
+  if(name==='add-manual'){
+    await action('/api/correction/lock',{enabled:true});
+    appState.selectedCorrection={
+      actionId:null,
+      slot:Number(target.dataset.slot),
+      playerName:target.dataset.player||'',
+      add:true,
+    };
     renderControl(); return;
   }
   if(name==='cancel-correction'){
-    appState.selectedCorrectionIndex=null;
+    appState.selectedCorrection=null;
+    await action('/api/correction/lock',{enabled:false});
     renderControl(); return;
   }
   if(name==='correct-miss'){
-    const turnIndex=appState.selectedCorrectionIndex;
-    if(turnIndex===null) return;
-    appState.selectedCorrectionIndex=null;
-    await action('/api/throw/correct',{turn_index:turnIndex,event:{type:'miss',label:'MISS',score:0,seq:Date.now()}});
+    const selected=appState.selectedCorrection;
+    if(!selected) return;
+    appState.selectedCorrection=null;
+    const event={type:'miss',label:'MISS',score:0,seq:Date.now()};
+    try{
+      await action(
+        selected.add?'/api/throw/manual':'/api/throw/correct',
+        selected.add?event:{action_id:selected.actionId,event},
+      );
+    }finally{
+      await action('/api/correction/lock',{enabled:false});
+    }
+    return;
+  }
+  if(name==='delete-throw'){
+    const selected=appState.selectedCorrection;
+    if(!selected || selected.add) return;
+    appState.selectedCorrection=null;
+    try{
+      await action('/api/throw/delete',{action_id:selected.actionId});
+    }finally{
+      await action('/api/correction/lock',{enabled:false});
+    }
     return;
   }
   if(name==='test-miss'){
