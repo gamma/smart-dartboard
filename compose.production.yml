@@ -1,0 +1,23 @@
+name: smart-dartboard
+
+services:
+  dartboard:
+    image: ${SDB_IMAGE:-ghcr.io/gamma/smart-dartboard}:${SDB_VERSION:?Set SDB_VERSION in .env}
+    container_name: sdb-dartboard
+    ports:
+      - "8000:8000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /var/run/dbus:/var/run/dbus:ro
+      - ./data:/app/data
+    environment:
+      PYTHONUNBUFFERED: "1"
+      SDB_ENABLE_BLE: "1"
+      SDB_DEVICE_NAME: ${SDB_DEVICE_NAME:-SDB-BT}
+      SDB_DEVICE_ADDRESS: ${SDB_DEVICE_ADDRESS:-}
+      SDB_DATA_DIR: /app/data
+      SDB_ALLOW_TEST_EVENTS: "0"
+    restart: unless-stopped

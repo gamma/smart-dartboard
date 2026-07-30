@@ -27,9 +27,19 @@ Vorschau keine fehlenden Bilder zeigt. Der Pages-Build übernimmt weiterhin die
 kanonischen Originale aus `web/static/assets/`.
 
 Der Workflow `.github/workflows/pages.yml` verwendet die offiziellen
-GitHub-Pages-Actions und wird bewusst nur manuell über `workflow_dispatch`
-ausgelöst. Vor dem ersten Lauf muss unter **Settings → Pages → Build and
-deployment** die Quelle **GitHub Actions** gewählt werden.
+GitHub-Pages-Actions. Er läuft automatisch bei relevanten Änderungen auf
+`main` und kann zusätzlich manuell über `workflow_dispatch` ausgelöst werden.
+Vor dem ersten Lauf muss unter **Settings → Pages → Build and deployment** die
+Quelle **GitHub Actions** gewählt werden. Zusätzlich sollte **Enforce HTTPS**
+aktiviert sein.
+
+Manueller Lauf:
+
+```bash
+gh workflow run pages.yml
+gh run list --workflow pages.yml --limit 1
+gh run watch <RUN_ID> --exit-status
+```
 
 ## Gameplay-Aufnahmen erneuern
 

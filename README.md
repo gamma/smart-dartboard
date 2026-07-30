@@ -108,15 +108,23 @@ Spiele bleiben deshalb auch nach einem Container-Neubau erhalten.
 ## Tests
 
 ```bash
-python3 -m unittest discover -v
+python3 -m unittest discover -s tests -v
 node --check web/static/app.js
+node --check website/app.js
 docker compose config --quiet
+bash website/build.sh
 ```
+
+GitHub Actions führt diese Prüfungen bei Pull Requests und Pushes auf `main`
+automatisch aus. Zusätzlich wird das Docker-Image gebaut und ohne BLE gegen
+Healthcheck, Controller und Projektor getestet. Veröffentlichte GitHub Releases
+erzeugen versionierte AMD64-/ARM64-Images in der GitHub Container Registry.
 
 ## Dokumentation
 
 - [Technische Architektur](docs/TECHNICAL.md)
 - [Betrieb und Kiosk-Setup](docs/OPERATIONS.md)
+- [CI, Releases und Deployment](docs/DEPLOYMENT.md)
 - [Neue Spielmodule entwickeln](docs/GAME_PLUGINS.md)
 - [Party-Modi & visuelle Incentives](docs/PARTY_MODES.md)
 - [Cartoon-, Challenge- und Minesweeper-Modi](docs/CARTOON_MODES.md)
