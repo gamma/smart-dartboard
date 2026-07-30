@@ -47,7 +47,10 @@ sdb_dartboard/ws.py            WebSocket Manager
 web/control.html               Steueroberfläche
 web/projector.html             Beameroberfläche
 web/static/app.js              Frontend-Logik
+web/static/i18n.js             zentrales DE/EN-Wörterbuch und Modus-Lokalisierung
 web/static/style.css           Styling
+web/static/analytics.css       History-, Heatmap- und Replay-UI
+sdb_dartboard/storage.py       SQLite-Schema, Telemetrie und Statistikabfragen
 ```
 
 ---
