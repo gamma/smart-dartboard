@@ -61,9 +61,9 @@ class StorageTests(unittest.TestCase):
     def test_database_health_probe(self):
         self.assertTrue(self.store.ping())
 
-    def test_language_telemetry_history_heatmap_and_replay(self):
+    def test_history_heatmap_and_replay(self):
         ada = self.store.create_player("Ada", "nova", "#ff00aa")
-        session = self.store.start_session([ada["id"]], language="en")
+        session = self.store.start_session([ada["id"]])
         game_id = self.store.start_game(
             session["id"],
             "target_rush",
@@ -122,7 +122,7 @@ class StorageTests(unittest.TestCase):
             final_scores={ada["id"]: 50},
         )
 
-        self.assertEqual("en", self.store.get_session(session["id"])["language"])
+        self.assertNotIn("language", self.store.get_session(session["id"]))
         detail = self.store.game_detail(game_id)
         self.assertEqual(50, detail["players"][0]["final_score"])
         self.assertEqual("triple", detail["throws"][0]["ring"])

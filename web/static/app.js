@@ -1,3 +1,11 @@
+const UI_LANGUAGE_KEY='sdb-ui-language';
+function storedUiLanguage(){
+  try{
+    return localStorage.getItem(UI_LANGUAGE_KEY)==='en'?'en':'de';
+  }catch(_){
+    return 'de';
+  }
+}
 const appState = {
   experience: null,
   wsOk: false,
@@ -21,8 +29,7 @@ const appState = {
   reportedAudioStatus: '',
   scoreCountdown: null,
   scoreCountdownFrame: null,
-  selectedLanguage: 'de',
-  languageTouched: false,
+  selectedLanguage: storedUiLanguage(),
   localView: null,
   history: {
     sessions: [], players: [], modes: [], heatmap: null,
@@ -88,10 +95,7 @@ const OVERLAY_ICON_ASSETS = {
 function $(id){ return document.getElementById(id); }
 function isProjector(){ return location.pathname.includes('projector'); }
 function language(){
-  return appState.experience?.session?.language
-    || appState.selectedLanguage
-    || appState.experience?.language
-    || 'de';
+  return appState.selectedLanguage || 'de';
 }
 function t(key, vars){
   return window.SDB_I18N?.t(key,language(),vars) || key;
@@ -295,9 +299,8 @@ function updateExperience(experience, event){
     Math.max(0,Number(experience.rematch?.expires_in_ms)||0),
   );
   appState.experience = experience;
-  if(experience.session?.language || !appState.languageTouched){
-    appState.selectedLanguage=experience.session?.language || experience.language || 'de';
-  }
+  appState.selectedLanguage=experience.ui_language==='en'?'en':'de';
+  try{ localStorage.setItem(UI_LANGUAGE_KEY,appState.selectedLanguage); }catch(_){}
   document.documentElement.lang=language();
   clearTimeout(appState.rematchTimer);
   if(experience.rematch?.armed){
@@ -389,6 +392,16 @@ function renderConnection(){
   if(subtitle) subtitle.textContent=t('session_control');
   const brand=document.querySelector('.brand-button');
   if(brand) brand.setAttribute('aria-label',t('home'));
+  document.querySelectorAll('.topbar-language button').forEach(button=>{
+    const selected=button.dataset.language===language();
+    button.classList.toggle('selected',selected);
+    button.setAttribute('aria-pressed',String(selected));
+    const label=button.dataset.language==='en'?t('english'):t('german');
+    button.setAttribute('aria-label',label);
+    button.setAttribute('title',label);
+  });
+  const projectorLink=document.querySelector('.icon-button[href="/projector"]');
+  if(projectorLink) projectorLink.setAttribute('title',t('open_projector'));
   const hardware=appState.experience?.hardware;
   const boardReady=!hardware?.enabled || hardware.status==='connected';
   const cssClass=!appState.wsOk?'':boardReady?'online':'searching';
@@ -472,13 +485,6 @@ function controlPlayers(){
   const cards = players.map(player => playerCard(player, appState.selectedPlayers.has(player.id))).join('');
   return `<section class="control-scene">
     ${sceneHeader(t('step_players'),t('who_plays'),t('choose_players'))}
-    <section class="language-picker" aria-label="${t('session_language')}">
-      <span>${t('session_language')}</span>
-      <div class="segmented language-flags">
-        <button class="${appState.selectedLanguage==='de'?'selected':''}" data-action="set-language" data-language="de" aria-label="${t('german')}" title="${t('german')}"><span aria-hidden="true">🇩🇪</span></button>
-        <button class="${appState.selectedLanguage==='en'?'selected':''}" data-action="set-language" data-language="en" aria-label="${t('english')}" title="${t('english')}"><span aria-hidden="true">🇬🇧</span></button>
-      </div>
-    </section>
     <div class="player-layout">
       <div class="selection-grid">${cards || `<div class="empty-state">${t('create_first_player')}</div>`}</div>
       <form id="newPlayerForm" class="new-player-card">
@@ -929,7 +935,7 @@ function modeOptionSummary(item){
 function historyOverview(){
   const h=appState.history;
   const sessions=h.sessions.map(session=>`<button class="history-session-row" data-action="history-session" data-id="${escapeHtml(session.id)}">
-    <span><b>${formatDate(session.started_at)}</b><small>${session.language.toUpperCase()} · ${session.player_count} ${t('players')}</small></span>
+    <span><b>${formatDate(session.started_at)}</b><small>${session.player_count} ${t('players')}</small></span>
     <span><b>${session.finished_games}</b><small>${t('completed_games')}</small></span><i>→</i>
   </button>`).join('');
   const modes=h.modes.map(item=>{
@@ -1739,11 +1745,12 @@ document.addEventListener('click',async event=>{
   const target=event.target.closest('[data-action]');
   if(!target) return;
   const name=target.dataset.action;
-  if(name==='set-language'){
+  if(name==='set-ui-language'){
     appState.selectedLanguage=target.dataset.language==='en'?'en':'de';
-    appState.languageTouched=true;
+    try{ localStorage.setItem(UI_LANGUAGE_KEY,appState.selectedLanguage); }catch(_){}
     document.documentElement.lang=appState.selectedLanguage;
     render();
+    await action('/api/ui/language',{language:appState.selectedLanguage});
     return;
   }
   if(name==='open-history'){ await openHistory(); return; }
@@ -1803,7 +1810,7 @@ document.addEventListener('click',async event=>{
     appState.selectedPlayers.has(target.dataset.id) ? appState.selectedPlayers.delete(target.dataset.id) : appState.selectedPlayers.add(target.dataset.id);
     renderControl(); return;
   }
-  if(name==='start-session'){ await action('/api/session/start',{player_ids:[...appState.selectedPlayers],language:appState.selectedLanguage}); return; }
+  if(name==='start-session'){ await action('/api/session/start',{player_ids:[...appState.selectedPlayers]}); return; }
   if(name==='select-mode'){ await action('/api/game/prepare',{game_type:target.dataset.mode,options:{}}); return; }
   if(name==='set-option'){
     const value=/^-?\d+(\.\d+)?$/.test(target.dataset.value)?Number(target.dataset.value):target.dataset.value;
@@ -1933,5 +1940,11 @@ window.addEventListener('resize',()=>{
   applyCalibration();
   clearTimeout(appState.geometryTimer);
   appState.geometryTimer=setTimeout(reportProjectorGeometry,250);
+});
+window.addEventListener('storage',event=>{
+  if(event.key!==UI_LANGUAGE_KEY) return;
+  appState.selectedLanguage=event.newValue==='en'?'en':'de';
+  document.documentElement.lang=appState.selectedLanguage;
+  render();
 });
 window.addEventListener('load',()=>{ loadBootstrap(); connectWs(); reportProjectorGeometry(); });

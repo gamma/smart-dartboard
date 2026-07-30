@@ -29,7 +29,8 @@ Zum Release:
 - dauerhafte Spielerprofile mit Farbe und Avatar
 - mehrere Spiele pro Session
 - Sessionwertung mit drei Punkten pro Sieg sowie dauerhafte Gesamtstatistiken
-- wählbare Session-Sprache (Deutsch/Englisch) auf Control und Projector
+- jederzeit umschaltbare, session-unabhängige UI-Sprache (Deutsch/Englisch)
+  im Controller-Header; der Projector wechselt automatisch mit
 - historische Sessions und Spiele mit segmentgenauen Heatmaps, Replay,
   Modus-Schwierigkeitswerten und persönlichen Trainingshinweisen
 - getrennte Produktions- und Klick-Testdaten sowie vollständiger JSON-Export

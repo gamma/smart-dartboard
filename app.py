@@ -143,7 +143,10 @@ class PlayerRequest(BaseModel):
 
 class SessionStartRequest(BaseModel):
     player_ids: List[str] = Field(min_length=1, max_length=8)
-    language: Literal["de", "en"] = "de"
+
+
+class UiLanguageRequest(BaseModel):
+    language: Literal["de", "en"]
 
 
 class GamePrepareRequest(BaseModel):
@@ -272,8 +275,15 @@ async def create_player(req: PlayerRequest):
 
 @app.post("/api/session/start")
 async def start_session(req: SessionStartRequest):
-    session = controller.start_session(req.player_ids, req.language)
+    session = controller.start_session(req.player_ids)
     await publish_state({"type": "session_started", "session_id": session["id"]})
+    return controller.public_state()
+
+
+@app.post("/api/ui/language")
+async def ui_language(req: UiLanguageRequest):
+    controller.set_ui_language(req.language)
+    await publish_state({"type": "ui_language", "language": req.language})
     return controller.public_state()
 
 
