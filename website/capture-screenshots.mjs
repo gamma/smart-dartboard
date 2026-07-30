@@ -35,13 +35,39 @@ async function openPage(browser, path, viewport) {
   return { context, page };
 }
 
-async function capture(page, filename) {
+async function capture(page, filename, animations = "disabled") {
   await page.screenshot({
     path: resolve(output, filename),
     type: "jpeg",
     quality: 88,
-    animations: "disabled",
+    animations,
   });
+}
+
+function throwEvent(target, seq) {
+  return {
+    type: "hit",
+    seq,
+    field: target.field,
+    ring: target.ring,
+    score: target.score,
+    multiplier: target.multiplier,
+    label: target.label,
+  };
+}
+
+async function playTurn(darts, seqStart) {
+  let state;
+  for (let index = 0; index < darts.length; index += 1) {
+    state = await post("/api/throw/manual", {
+      type: "hit",
+      seq: seqStart + index,
+      ...darts[index],
+    });
+  }
+  if (state.status !== "finished") {
+    await post("/api/continue");
+  }
 }
 
 const ada = await post("/api/players", {
@@ -174,6 +200,111 @@ try {
       content: ".projector-test-tools{display:none!important}",
     });
     await capture(page, "projector-avoid-bomb.jpg");
+    await context.close();
+  }
+
+  await post("/api/event", { type: "miss", seq: 20 });
+  await post("/api/game/abort");
+  await post("/api/game/prepare", {
+    game_type: "dragon_eggs",
+    options: { rounds: 5, eggs: 4 },
+  });
+  await post("/api/game/start");
+  const dragonState = await post("/api/game/live");
+  const dragonScale = dragonState.game.overlay.danger[0];
+  await post("/api/event", throwEvent(dragonScale, 21));
+  await post("/api/event", throwEvent(dragonScale, 22));
+
+  {
+    const { context, page } = await openPage(
+      browser,
+      "/projector",
+      { width: 1600, height: 900 },
+    );
+    await page.addStyleTag({
+      content: ".projector-test-tools{display:none!important}",
+    });
+    await post("/api/event", throwEvent(dragonScale, 23));
+    await page.waitForTimeout(250);
+    await capture(page, "projector-dragon-eggs.jpg", "allow");
+    await context.close();
+  }
+
+  await post("/api/game/abort");
+  await post("/api/game/prepare", {
+    game_type: "countup",
+    options: { rounds: 5 },
+  });
+  await post("/api/game/start");
+  await post("/api/game/live");
+
+  const countupTurns = [
+    [
+      { field: 20, ring: "triple", score: 60, multiplier: 3, label: "T20" },
+      { field: 20, ring: "single_outer", score: 20, multiplier: 1, label: "S20" },
+      { field: 19, ring: "triple", score: 57, multiplier: 3, label: "T19" },
+    ],
+    [
+      { field: 18, ring: "triple", score: 54, multiplier: 3, label: "T18" },
+      { field: 20, ring: "single_inner", score: 20, multiplier: 1, label: "S20" },
+      { field: 5, ring: "single_outer", score: 5, multiplier: 1, label: "S5" },
+    ],
+    [
+      { field: 17, ring: "double", score: 34, multiplier: 2, label: "D17" },
+      { field: 19, ring: "single_inner", score: 19, multiplier: 1, label: "S19" },
+      { field: 25, ring: "single_bull", score: 25, multiplier: 1, label: "SBull" },
+    ],
+  ];
+  let countupSeq = 100;
+  for (let round = 0; round < 5; round += 1) {
+    for (const turn of countupTurns) {
+      await playTurn(turn, countupSeq);
+      countupSeq += 3;
+    }
+  }
+  await post("/api/game/next");
+
+  {
+    const { context, page } = await openPage(
+      browser,
+      "/control",
+      { width: 1440, height: 1000 },
+    );
+    await page.locator('[data-action="open-history"]').click();
+    await page.locator(".history-dashboard").waitFor();
+    await capture(page, "control-statistics.jpg");
+
+    const sessions = await (await api.get("/api/history/sessions?limit=10")).json();
+    const sessionId = sessions.sessions[0].id;
+    const session = await (
+      await api.get(`/api/history/sessions/${encodeURIComponent(sessionId)}`)
+    ).json();
+    const finishedGame = session.games.find(
+      game => game.game_type === "countup" && game.status === "finished",
+    );
+    await page.locator(
+      `[data-action="history-session"][data-id="${sessionId}"]`,
+    ).click();
+    await page.locator(
+      `[data-action="history-game"][data-id="${finishedGame.id}"]`,
+    ).click();
+    await page.locator(".replay-view").waitFor();
+    await page.evaluate(() => window.scrollTo(0, 0));
+
+    const replay = await (
+      await api.get(`/api/history/games/${encodeURIComponent(finishedGame.id)}/replay`)
+    ).json();
+    const replayIndex = replay.events.findIndex(
+      event => event.event_type === "throw" && event.payload?.label === "T20",
+    );
+    if (replayIndex >= 0) {
+      await page.locator("#replayRange").evaluate((element, value) => {
+        element.value = String(value);
+        element.dispatchEvent(new Event("input", { bubbles: true }));
+      }, replayIndex);
+    }
+    await page.waitForTimeout(100);
+    await capture(page, "control-replay.jpg");
     await context.close();
   }
 } finally {
