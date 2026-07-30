@@ -352,9 +352,10 @@ Dartboard → BLE → Pi/Mini-PC → HDMI → /projector
                        └─────→ WLAN → /control
 ```
 
-Docker verwendet Host-Netzwerk, System-DBus und aktuell `privileged: true`, um
-BlueZ zuverlässig zu erreichen. `./data` wird persistent nach `/app/data`
-eingebunden. Details stehen in `docs/OPERATIONS.md`.
+Der Produktionscontainer läuft ohne Host-Netzwerk, ohne `privileged` und ohne
+zusätzliche Linux-Capabilities. Für BlueZ wird ausschließlich
+`/var/run/dbus` read-only eingebunden. `./data` wird persistent nach
+`/app/data` eingebunden. Details stehen in `docs/OPERATIONS.md`.
 
 ---
 

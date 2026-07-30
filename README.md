@@ -128,6 +128,17 @@ docker compose -f compose.production.yml pull
 docker compose -f compose.production.yml up -d
 ```
 
+Für einen UI-Test ohne Linux-BlueZ, beispielsweise mit Docker Desktop:
+
+```bash
+SDB_ENABLE_BLE=0 SDB_ALLOW_TEST_EVENTS=1 \
+  docker compose -f compose.production.yml up -d
+```
+
+Echte BLE-Hardware im Container benötigt einen Linux-Host mit laufendem BlueZ
+und erreichbarem `/var/run/dbus`. Details und Fehlerdiagnose stehen unter
+[Betrieb und Sicherheit](docs/OPERATIONS.md).
+
 Für einen lokalen Build aus dem Quellcode:
 
 ```bash

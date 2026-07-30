@@ -13,10 +13,10 @@ services:
       - ./data:/app/data
     environment:
       - PYTHONUNBUFFERED=1
-      - SDB_ENABLE_BLE=1
+      - SDB_ENABLE_BLE=${SDB_ENABLE_BLE:-1}
       - SDB_DEVICE_NAME=SDB-BT
       - SDB_DEVICE_ADDRESS=${SDB_DEVICE_ADDRESS:-}
       - SDB_DATA_DIR=/app/data
-      - SDB_ALLOW_TEST_EVENTS=0
+      - SDB_ALLOW_TEST_EVENTS=${SDB_ALLOW_TEST_EVENTS:-0}
     command: ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "8000"]
     restart: unless-stopped

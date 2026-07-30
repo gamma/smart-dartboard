@@ -328,7 +328,7 @@
         <ol class="quickstart-steps reveal">
           <li><span>01</span><div><b>Repository holen</b><small>Enthält Compose-Datei und sichere Standardwerte.</small></div></li>
           <li><span>02</span><div><b>Release laden</b><small>Version 0.0.1 wird reproduzierbar aus GHCR geladen.</small></div></li>
-          <li><span>03</span><div><b>Container starten</b><small>Spieldaten bleiben dauerhaft im lokalen <code>data</code>-Ordner.</small></div></li>
+          <li><span>03</span><div><b>Container starten</b><small>Der erste Start läuft ohne BLE und erlaubt Testtreffer.</small></div></li>
           <li><span>04</span><div><b>Healthcheck prüfen</b><small>Danach Controller und Projektor im Browser öffnen.</small></div></li>
         </ol>
 
@@ -346,7 +346,8 @@
 <span>mkdir</span> -p data
 
 <span>docker compose</span> -f compose.production.yml pull
-<span>docker compose</span> -f compose.production.yml up -d
+<span>SDB_ENABLE_BLE=0 SDB_ALLOW_TEST_EVENTS=1</span> \
+  docker compose -f compose.production.yml up -d
 
 <span>curl</span> http://localhost:8000/api/health</code></pre>
           <div class="quickstart-open">
@@ -359,7 +360,7 @@
         </div>
       </div>
 
-      <p class="quickstart-note reveal"><i></i><span><b>Für den festen Spielhallenbetrieb:</b> Nach dem ersten Start die BLE-Adresse des Boards als <code>SDB_DEVICE_ADDRESS</code> in <code>.env</code> eintragen.</span></p>
+      <p class="quickstart-note reveal"><i></i><span><b>Für den festen Spielhallenbetrieb auf Linux:</b> In <code>.env</code> die BLE-Adresse eintragen, <code>SDB_ENABLE_BLE=1</code> und <code>SDB_ALLOW_TEST_EVENTS=0</code> setzen. Der Host benötigt BlueZ und einen erreichbaren <code>/var/run/dbus</code>-Socket.</span></p>
     </section>
 
     <section class="final-cta">

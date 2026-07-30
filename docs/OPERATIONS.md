@@ -39,18 +39,35 @@ BlueZ-Konfiguration den Zugriff darüber verweigert, sollte gezielt die
 D-Bus-/BlueZ-Berechtigung angepasst werden; `privileged: true` ist nicht der
 empfohlene Rückweg.
 
+Docker Desktop auf macOS und Windows stellt dem Linux-Container den Bluetooth-
+Stack des Hosts nicht als BlueZ-D-Bus zur Verfügung. Dort muss BLE für einen
+reinen UI-Test deaktiviert werden:
+
+```bash
+SDB_ENABLE_BLE=0 SDB_ALLOW_TEST_EVENTS=1 \
+  docker compose -f compose.production.yml up -d
+```
+
+Die Meldung `BLE connection loop error: [Errno 2] No such file or directory`
+bedeutet, dass der BlueZ-D-Bus-Socket im Container nicht erreichbar ist. Der
+HTTP-Dienst und der Healthcheck können dabei trotzdem laufen. Echte
+BLE-Hardware im Container wird auf einem Linux-Host mit laufendem BlueZ und
+eingebundenem `/var/run/dbus` unterstützt.
+
 ## Erstinstallation
 
 1. Linux und BlueZ installieren und Bluetooth aktivieren.
 2. Andere Apps wie SDBplay oder LightBlue vom Dartboard trennen.
 3. Repository auschecken.
-4. `docker compose up --build -d` starten.
-5. `http://<host>:8000/control` auf dem Tablet öffnen.
-6. `http://localhost:8000/projector` auf dem Projektorrechner öffnen.
-7. Über **Projektor kalibrieren** das Board-Setup öffnen, die Scheibe
+4. `.env.example` nach `.env` kopieren und mindestens Version sowie optionale
+   feste Board-Adresse prüfen.
+5. `docker compose -f compose.production.yml up -d` starten.
+6. `http://<host>:8000/control` auf dem Tablet öffnen.
+7. `http://localhost:8000/projector` auf dem Projektorrechner öffnen.
+8. Über **Projektor kalibrieren** das Board-Setup öffnen, die Scheibe
    deckungsgleich ausrichten, das gewünschte Artwork-Theme auswählen und dort
    **Projektor-Sound einschalten**.
-8. Den **Testton** im Board-Setup auslösen und den Status `BEREIT` prüfen.
+9. Den **Testton** im Board-Setup auslösen und den Status `BEREIT` prüfen.
 
 Ohne verbundenes BLE-Board läuft die Projektoransicht im Testmodus. In diesem
 Modus erzeugt ein Klick auf ein Scheibensegment den entsprechenden Treffer;
