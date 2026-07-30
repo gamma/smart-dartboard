@@ -25,6 +25,7 @@ const appState = {
 
 const BOARD_ORDER = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
 const BOARD_EVENT_VISIBLE_MS = 4000;
+const MAX_REMATCH_CONFIRM_MS = 5000;
 const AVATARS = [
   {id:'comet', emoji:'☄️', label:'Komet'},
   {id:'nova', emoji:'🌟', label:'Stern'},
@@ -204,6 +205,17 @@ function showToast(message){
   toast.classList.add('show');
   setTimeout(() => toast.classList.remove('show'), 2600);
 }
+function scheduleRematchExpiryCheck(){
+  const checkExpiry=()=>{
+    if(Date.now()<appState.rematchArmedUntil){
+      appState.rematchTimer=setTimeout(checkExpiry,100);
+      return;
+    }
+    appState.rematchArmedUntil=0;
+    render();
+  };
+  appState.rematchTimer=setTimeout(checkExpiry,100);
+}
 
 async function loadBootstrap(){
   const response = await fetch('/api/bootstrap');
@@ -236,14 +248,15 @@ function connectWs(){
 function updateExperience(experience, event){
   const previous = appState.experience;
   const rematchWasArmed=Date.now()<appState.rematchArmedUntil;
+  const rematchDelay=Math.min(
+    MAX_REMATCH_CONFIRM_MS,
+    Math.max(0,Number(experience.rematch?.expires_in_ms)||0),
+  );
   appState.experience = experience;
   clearTimeout(appState.rematchTimer);
   if(experience.rematch?.armed){
-    appState.rematchArmedUntil=Date.now()+Math.max(0,Number(experience.rematch.expires_in_ms)||0);
-    appState.rematchTimer=setTimeout(()=>{
-      appState.rematchArmedUntil=0;
-      render();
-    },Math.max(0,Number(experience.rematch.expires_in_ms)||0)+30);
+    appState.rematchArmedUntil=Date.now()+rematchDelay;
+    scheduleRematchExpiryCheck();
     if(!rematchWasArmed) tone(440,.12,0,'triangle',.08);
   }else{
     appState.rematchArmedUntil=0;
