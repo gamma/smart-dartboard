@@ -29,6 +29,10 @@ Zum Release:
 - dauerhafte Spielerprofile mit Farbe und Avatar
 - mehrere Spiele pro Session
 - Sessionwertung mit drei Punkten pro Sieg sowie dauerhafte Gesamtstatistiken
+- wählbare Session-Sprache (Deutsch/Englisch) auf Control und Projector
+- historische Sessions und Spiele mit segmentgenauen Heatmaps, Replay,
+  Modus-Schwierigkeitswerten und persönlichen Trainingshinweisen
+- getrennte Produktions- und Klick-Testdaten sowie vollständiger JSON-Export
 - schnelle Revanche nach Spielende per doppeltem Spielerwechsel-Tastendruck
 - wertungsfreier Spielabbruch zurück zur Spielauswahl
 - grafische Spielauswahl mit umschaltbarem Playful-Cartoon- und
@@ -172,6 +176,7 @@ Spiele bleiben deshalb auch nach einem Container-Neubau erhalten.
 ```bash
 python3 -m unittest discover -s tests -v
 node --check web/static/app.js
+node --check web/static/i18n.js
 node --check website/app.js
 docker compose config --quiet
 bash website/build.sh
@@ -191,6 +196,7 @@ erzeugen versionierte AMD64-/ARM64-Images in der GitHub Container Registry.
 - [Party-Modi & visuelle Incentives](docs/PARTY_MODES.md)
 - [Cartoon-, Challenge- und Minesweeper-Modi](docs/CARTOON_MODES.md)
 - [X01 Checkout- und Setup-Advisor](docs/X01_ADVISOR.md)
+- [Statistik, Telemetrie, Replay und Datenschutz](docs/STATISTICS.md)
 - [Reproduzierbare Artwork-Prompts](docs/ARTWORK_PROMPTS.md)
 - [Website und Publishing](docs/PUBLISHING.md)
 
