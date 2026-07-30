@@ -247,20 +247,13 @@ class DartboardStore:
             ).fetchall()
         return [dict(row) for row in rows]
 
-    def start_session(
-        self,
-        player_ids: Iterable[str],
-        language: str = "de",
-    ) -> Dict[str, Any]:
+    def start_session(self, player_ids: Iterable[str]) -> Dict[str, Any]:
         ids = list(dict.fromkeys(player_ids))
         if not ids:
             raise ValueError("A session needs at least one player")
-        if language not in {"de", "en"}:
-            raise ValueError("Session language must be de or en")
         session = {
             "id": str(uuid4()),
             "status": "active",
-            "language": language,
             "started_at": utc_now(),
         }
         with self._lock, self._connection:
@@ -277,8 +270,8 @@ class DartboardStore:
                 raise ValueError(f"Unknown player ids: {', '.join(missing)}")
             self._connection.execute(
                 """
-                INSERT INTO sessions(id, status, language, started_at)
-                VALUES(:id, :status, :language, :started_at)
+                INSERT INTO sessions(id, status, started_at)
+                VALUES(:id, :status, :started_at)
                 """,
                 session,
             )
@@ -290,7 +283,13 @@ class DartboardStore:
 
     def get_session(self, session_id: str) -> Optional[Dict[str, Any]]:
         with self._lock:
-            row = self._connection.execute("SELECT * FROM sessions WHERE id=?", (session_id,)).fetchone()
+            row = self._connection.execute(
+                """
+                SELECT id, status, started_at, ended_at
+                FROM sessions WHERE id=?
+                """,
+                (session_id,),
+            ).fetchone()
             if row is None:
                 return None
             players = self._connection.execute(
@@ -310,7 +309,7 @@ class DartboardStore:
         with self._lock:
             rows = self._connection.execute(
                 """
-                SELECT s.*,
+                SELECT s.id, s.status, s.started_at, s.ended_at,
                        COUNT(DISTINCT g.id) AS games,
                        COUNT(DISTINCT CASE WHEN g.status='finished' THEN g.id END)
                            AS finished_games,

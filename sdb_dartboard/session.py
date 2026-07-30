@@ -45,7 +45,6 @@ class SessionController:
         self.game_id: Optional[str] = None
         self.selected_mode: Optional[str] = None
         self.selected_options: Dict[str, Any] = {}
-        self.selected_language = "de"
         self.calibration = {
             "corners": [
                 {"x": 0.247, "y": 0.05},
@@ -60,6 +59,7 @@ class SessionController:
         self.projector_geometry = {"width": 1600, "height": 900}
         self.sound = {"enabled": False, "status": "disabled"}
         self.art_theme = "cartoon"
+        self.ui_language = "de"
         self.hardware: Dict[str, Any] = {"enabled": False, "status": "disabled"}
         self._restore()
 
@@ -75,8 +75,6 @@ class SessionController:
             self.game_id = runtime.get("game_id")
             self.selected_mode = runtime.get("selected_mode")
             self.selected_options = dict(runtime.get("selected_options", {}))
-            stored_language = runtime.get("selected_language", "de")
-            self.selected_language = stored_language if stored_language in {"de", "en"} else "de"
         if checkpoint:
             self.engine.import_state(checkpoint)
         self.calibration = self.store.get_runtime_value("calibration", self.calibration)
@@ -88,6 +86,8 @@ class SessionController:
         }
         stored_theme = self.store.get_runtime_value("art_theme", "cartoon")
         self.art_theme = stored_theme if stored_theme in {"cartoon", "neon"} else "cartoon"
+        stored_language = self.store.get_runtime_value("ui_language", "de")
+        self.ui_language = stored_language if stored_language in {"de", "en"} else "de"
         self.store.reconcile_running_games(self.game_id)
 
     def _persist(self) -> None:
@@ -99,13 +99,16 @@ class SessionController:
                 "game_id": self.game_id,
                 "selected_mode": self.selected_mode,
                 "selected_options": self.selected_options,
-                "selected_language": self.selected_language,
             },
         )
         self.store.set_runtime_value("engine", self.engine.export_state())
 
     def public_state(self) -> Dict[str, Any]:
-        session = self.store.get_session(self.session_id) if self.session_id else None
+        session = (
+            self.store.get_session(self.session_id)
+            if self.session_id
+            else None
+        )
         player_ids = [player["id"] for player in session["players"]] if session else []
         rematch_remaining = max(0.0, self._rematch_armed_until - self._clock())
         rematch_armed = (
@@ -119,11 +122,7 @@ class SessionController:
             "game_id": self.game_id,
             "selected_mode": self.selected_mode,
             "selected_options": self.selected_options,
-            "language": (
-                session.get("language", self.selected_language)
-                if session
-                else self.selected_language
-            ),
+            "ui_language": self.ui_language,
             "game": self.engine.state.as_dict(),
             "editable_turns": self.engine.editable_turns(limit=1),
             "modes": registry.as_dicts(),
@@ -170,17 +169,15 @@ class SessionController:
     def start_session(
         self,
         player_ids: Iterable[str],
-        language: str = "de",
     ) -> Dict[str, Any]:
         active = self.store.active_session()
         if active:
             self.store.end_session(active["id"])
-        session = self.store.start_session(player_ids, language)
+        session = self.store.start_session(player_ids)
         self.session_id = session["id"]
         self.game_id = None
         self.selected_mode = None
         self.selected_options = {}
-        self.selected_language = language
         self.screen = "game_select"
         self._persist()
         return session
@@ -697,6 +694,12 @@ class SessionController:
             raise ValueError(f"Unknown artwork theme: {theme}")
         self.art_theme = theme
         self.store.set_runtime_value("art_theme", theme)
+
+    def set_ui_language(self, language: str) -> None:
+        if language not in {"de", "en"}:
+            raise ValueError(f"Unknown UI language: {language}")
+        self.ui_language = language
+        self.store.set_runtime_value("ui_language", language)
 
 
 class EventPipeline:

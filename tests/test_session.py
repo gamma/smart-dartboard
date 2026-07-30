@@ -70,14 +70,23 @@ class SessionControllerTests(unittest.TestCase):
         stats = {item["id"]: item for item in state["statistics"]}
         self.assertEqual(1, stats[ada["id"]]["darts"])
 
-    def test_session_language_is_persisted_and_restored(self):
+    def test_ui_language_is_not_stored_in_session_state(self):
         player = self.controller.create_player("Ada", "nova", "#ff00aa")
-        session = self.controller.start_session([player["id"]], language="en")
-        self.assertEqual("en", session["language"])
-        self.assertEqual("en", self.controller.public_state()["language"])
+        self.controller.set_ui_language("en")
+        session = self.controller.start_session([player["id"]])
+        self.assertNotIn("language", session)
+        self.assertEqual("en", self.controller.public_state()["ui_language"])
+        self.assertNotIn(
+            "language",
+            self.controller.public_state()["session"],
+        )
         self.controller.close()
         self.controller = SessionController(self.database)
-        self.assertEqual("en", self.controller.public_state()["language"])
+        self.assertEqual("en", self.controller.public_state()["ui_language"])
+        self.assertNotIn(
+            "language",
+            self.controller.public_state()["session"],
+        )
 
     def test_runtime_checkpoint_survives_restart_with_undo(self):
         self._start_game()
