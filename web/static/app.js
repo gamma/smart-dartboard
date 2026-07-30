@@ -100,6 +100,16 @@ function language(){
 function t(key, vars){
   return window.SDB_I18N?.t(key,language(),vars) || key;
 }
+function codeLabel(group,value){
+  const code=String(value || '').trim().toLowerCase();
+  if(!code) return '—';
+  const key=`${group}_${code.replace(/[^a-z0-9]+/g,'_')}`;
+  const translated=t(key);
+  if(translated!==key) return translated;
+  return code
+    .replace(/[_-]+/g,' ')
+    .replace(/\b\w/g,letter=>letter.toUpperCase());
+}
 function localText(value){
   return window.SDB_I18N?.text(value,language()) ?? value;
 }
@@ -948,7 +958,7 @@ function historyOverview(){
       <div class="history-heatmap-layout">
         <div class="history-board"><svg id="historyHeatmapBoard" class="dartboard-svg" viewBox="0 0 500 500" aria-label="${t('heatmap')}"></svg></div>
         <div class="heatmap-copy"><strong>${h.heatmap?.board_hits || 0}</strong><span>${t('hits')}</span><p>${h.heatmap?.misses || 0} Miss · ${h.heatmap?.total_darts || 0} ${t('throws')}<br>${h.playerId ? escapeHtml(h.players.find(item=>item.id===h.playerId)?.name || '') : t('production_only')}</p>
-          ${h.recommendations ? `<h3>${t('recommendation')}</h3><div class="training-recommendations">${h.recommendations.recommendations.map(item=>`<b>${escapeHtml(item.ring)} ${item.field}<small>${item.attempts ? `${item.success_rate}% · ${item.attempts} ${t('throws')}` : t('insufficient_data')}</small></b>`).join('')}</div>` : ''}
+          ${h.recommendations ? `<h3>${t('recommendation')}</h3><div class="training-recommendations">${h.recommendations.recommendations.map(item=>`<b>${escapeHtml(codeLabel('ring',item.ring))} ${item.field}<small>${item.attempts ? `${item.success_rate}% · ${item.attempts} ${t('throws')}` : t('insufficient_data')}</small></b>`).join('')}</div>` : ''}
         </div>
       </div>
     </section>
@@ -960,7 +970,7 @@ function historySessionDetail(session){
   const games=(session.games || []).map(game=>{
     const mode=modeBySlug(game.game_type);
     return `<button class="history-game-row" data-action="history-game" data-id="${escapeHtml(game.id)}">
-      <img src="${modeAsset(game.game_type)}" alt=""><span><b>${escapeHtml(mode?.title || game.game_type)}</b><small>${formatDate(game.started_at)} · ${escapeHtml(game.status)} · ${game.darts} ${t('throws')}</small></span><i>→</i>
+      <img src="${modeAsset(game.game_type)}" alt=""><span><b>${escapeHtml(mode?.title || game.game_type)}</b><small>${formatDate(game.started_at)} · ${escapeHtml(codeLabel('status',game.status))} · ${game.darts} ${t('throws')}</small></span><i>→</i>
     </button>`;
   }).join('');
   return `<section class="history-detail">
@@ -978,19 +988,19 @@ function historyReplay(game,replay){
   const player=frame.players?.find(entry=>entry.id===item.player_id);
   return `<section class="history-detail replay-view">
     <button class="history-back" data-action="history-session-back">← ${t('sessions')}</button>
-    ${sceneHeader(t('replay'),modeBySlug(game.game_type)?.title || game.game_type,`${formatDate(game.started_at)} · ${game.environment.toUpperCase()} · Ruleset v${game.ruleset_version}`)}
+    ${sceneHeader(t('replay'),modeBySlug(game.game_type)?.title || game.game_type,`${formatDate(game.started_at)} · ${codeLabel('environment',game.environment)} · ${t('ruleset_version',{version:game.ruleset_version})}`)}
     <div class="replay-layout">
       <div class="history-board"><svg id="replayBoard" class="dartboard-svg" viewBox="0 0 500 500" aria-label="${t('replay')}"></svg></div>
       <div class="replay-state">
         <span>${t('event')} ${events.length ? index+1 : 0}/${events.length}</span>
-        <h2>${escapeHtml(item.payload?.label || item.event_type || '—')}</h2>
+        <h2>${escapeHtml(item.payload?.label || codeLabel('event_type',item.event_type))}</h2>
         <p>${escapeHtml(player?.name || '')} · ${t('round')} ${frame.round_number || 1}</p>
         <div class="replay-scores">${(frame.players || []).map(entry=>`<b style="--player:${escapeHtml(entry.color)}">${escapeHtml(entry.name)}<strong>${entry.score}</strong></b>`).join('')}</div>
         <input id="replayRange" type="range" min="0" max="${Math.max(0,events.length-1)}" value="${index}" ${events.length?'':'disabled'}>
         <div class="button-row">${actionButton(t('previous'),'replay-prev','ghost',index<=0?'disabled':'')}${actionButton(t('next'),'replay-next','secondary',index>=events.length-1?'disabled':'')}</div>
       </div>
     </div>
-    <div class="throw-ledger">${game.throws.map(item=>`<span class="${item.outcome}"><b>${escapeHtml(item.event.label || 'MISS')}</b><small>${escapeHtml(item.outcome)} · ${item.mode_points >= 0 ? '+' : ''}${item.mode_points}</small></span>`).join('')}</div>
+    <div class="throw-ledger">${game.throws.map(item=>`<span class="${item.outcome}"><b>${escapeHtml(item.event.label || 'MISS')}</b><small>${escapeHtml(codeLabel('outcome',item.outcome))} · ${item.mode_points >= 0 ? '+' : ''}${item.mode_points}</small></span>`).join('')}</div>
   </section>`;
 }
 function controlHistory(){
