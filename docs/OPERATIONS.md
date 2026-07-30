@@ -54,6 +54,26 @@ HTTP-Dienst und der Healthcheck können dabei trotzdem laufen. Echte
 BLE-Hardware im Container wird auf einem Linux-Host mit laufendem BlueZ und
 eingebundenem `/var/run/dbus` unterstützt.
 
+### Native Entwicklung auf macOS
+
+Bleak verwendet nativ unter macOS CoreBluetooth. Die echte Scheibe kann deshalb
+außerhalb von Docker direkt aus der Python-Entwicklungsumgebung angesprochen
+werden:
+
+```bash
+./scripts/dev.sh --ble
+```
+
+Beim ersten Scan fragt macOS nach der Bluetoothberechtigung für das Terminal
+oder den Python-Prozess. Falls die Berechtigung abgelehnt wurde, muss sie unter
+**Systemeinstellungen → Datenschutz & Sicherheit → Bluetooth** aktiviert
+werden. Andere Apps wie SDBplay müssen vom Board getrennt sein.
+
+Eine feste `SDB_DEVICE_ADDRESS` ist unter macOS keine Bluetooth-MAC-Adresse,
+sondern eine von CoreBluetooth vergebene und an diesen Mac gebundene UUID. Für
+den ersten Start sollte die Adresse leer bleiben, damit das Board über
+`SDB_DEVICE_NAME=SDB-BT` gefunden wird.
+
 ## Erstinstallation
 
 1. Linux und BlueZ installieren und Bluetooth aktivieren.

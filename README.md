@@ -79,6 +79,24 @@ CSS, JavaScript sowie lokale Artwork-Dateien. Nach einer Änderung startet
 Uvicorn automatisch neu; bereits geöffnete Controller- und Projektor-Seiten
 laden sich danach ebenfalls automatisch neu.
 
+Für einen nativen Test mit echter BLE-Hardware auf macOS oder Linux:
+
+```bash
+./scripts/dev.sh --ble
+```
+
+Beim ersten Start muss macOS den Bluetoothzugriff für das verwendete Terminal
+beziehungsweise Python erlauben. `SDB_DEVICE_ADDRESS` sollte zunächst leer
+bleiben, weil macOS eine rechnerbezogene CoreBluetooth-UUID statt der
+Bluetooth-MAC-Adresse verwendet. Die Suche über `SDB-BT` funktioniert ohne
+feste Adresse.
+
+Falls parallel zur echten Scheibe weiterhin Klick-Testtreffer benötigt werden:
+
+```bash
+SDB_ALLOW_TEST_EVENTS=1 ./scripts/dev.sh --ble
+```
+
 Host und Port können bei Bedarf überschrieben werden:
 
 ```bash
