@@ -3,11 +3,26 @@
 Lokale, touch-optimierte Spielhallen-Anwendung für ein Bluetooth-Dartboard vom
 Typ `SDB-BT` / SDBplay-kompatibel.
 
+[![Release](https://img.shields.io/github/v/release/gamma/smart-dartboard)](https://github.com/gamma/smart-dartboard/releases/latest)
+[![CI](https://github.com/gamma/smart-dartboard/actions/workflows/ci.yml/badge.svg)](https://github.com/gamma/smart-dartboard/actions/workflows/ci.yml)
+[![Security](https://github.com/gamma/smart-dartboard/actions/workflows/security.yml/badge.svg)](https://github.com/gamma/smart-dartboard/actions/workflows/security.yml)
+
 Das System liest Treffer per Bluetooth Low Energy, speichert Spieler, Sessions,
 Spiele und Würfe dauerhaft und synchronisiert zwei spezialisierte Oberflächen:
 
 - `/control` – Point-and-click-Steuerung für Tablet, Handy oder Touchscreen
 - `/projector` – kalibrierbare Projektion, Spielanleitungen, Effekte und Sound
+
+## Projektstatus
+
+`v0.0.1` ist das erste öffentlich installierbare Release. Anwendung,
+Multi-Arch-Container und Deployment-Anleitung sind für lokale Test- und
+Arcade-Installationen verfügbar. Die reale Hardwareintegration wird derzeit mit
+einem King-Darts-SDB-BT-Board geprüft; weitere elektronisch auslesbare Boards
+benötigen gegebenenfalls einen eigenen Decoder oder Adapter.
+
+Zum Release:
+[Smart Dartboard 0.0.1](https://github.com/gamma/smart-dartboard/releases/tag/v0.0.1)
 
 ## Funktionen
 
@@ -96,6 +111,24 @@ und WebSocket akzeptieren nur denselben Origin; native Wartungsskripte ohne
 [Betrieb und Sicherheit](docs/OPERATIONS.md).
 
 ## Docker
+
+Ein veröffentlichtes Image steht für AMD64 und ARM64 bereit:
+
+```bash
+docker pull ghcr.io/gamma/smart-dartboard:0.0.1
+```
+
+Für eine persistente Installation:
+
+```bash
+cp .env.example .env
+# In .env: SDB_VERSION=0.0.1
+mkdir -p data
+docker compose -f compose.production.yml pull
+docker compose -f compose.production.yml up -d
+```
+
+Für einen lokalen Build aus dem Quellcode:
 
 ```bash
 docker compose up --build -d
