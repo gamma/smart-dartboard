@@ -928,10 +928,11 @@ async function openHistoryGame(id){
   renderControl();
 }
 function historyStatCard(player){
-  return `<article class="history-player" style="--player:${escapeHtml(player.color)}">
+  const selected=appState.history.playerId===player.id;
+  return `<article class="history-player ${selected?'selected':''}" style="--player:${escapeHtml(player.color)}">
     <header><span>${avatarEmoji(player.avatar)}</span><div><b>${escapeHtml(player.name)}</b><small>${player.games} ${t('games')}</small></div></header>
     <div><b>${player.wins}<small>${t('wins')}</small></b><b>${player.win_rate}%<small>${t('win_rate')}</small></b><b>${player.three_dart_average}<small>${t('three_dart_average')}</small></b><b>${player.darts}<small>${t('throws')}</small></b></div>
-    <button data-action="history-player" data-player="${escapeHtml(player.id)}">${t('heatmap')} · ${t('training')}</button>
+    <button type="button" data-action="history-player" data-player="${escapeHtml(player.id)}" aria-pressed="${selected}">${selected?`✓ ${t('analysis_active')}`:t('show_analysis')}</button>
   </article>`;
 }
 function modeOptionSummary(item){
@@ -944,6 +945,9 @@ function modeOptionSummary(item){
 }
 function historyOverview(){
   const h=appState.history;
+  const selectedPlayer=h.playerId
+    ? h.players.find(item=>item.id===h.playerId)
+    : null;
   const sessions=h.sessions.map(session=>`<button class="history-session-row" data-action="history-session" data-id="${escapeHtml(session.id)}">
     <span><b>${formatDate(session.started_at)}</b><small>${session.player_count} ${t('players')}</small></span>
     <span><b>${session.finished_games}</b><small>${t('completed_games')}</small></span><i>→</i>
@@ -954,7 +958,11 @@ function historyOverview(){
   }).join('');
   return `<div class="history-dashboard">
     <section><h2>${t('players')}</h2><div class="history-player-grid">${h.players.map(historyStatCard).join('') || `<div class="empty-state">${t('no_data')}</div>`}</div></section>
-    <section><h2>${t('heatmap')}</h2>
+    <section id="historyHeatmapSection" class="history-heatmap-section">
+      <div class="history-section-heading">
+        <h2>${t('heatmap_training')}</h2>
+        ${selectedPlayer?`<button type="button" data-action="history-all-players">← ${t('all_players')}</button>`:''}
+      </div>
       <div class="history-heatmap-layout">
         <div class="history-board"><svg id="historyHeatmapBoard" class="dartboard-svg" viewBox="0 0 500 500" aria-label="${t('heatmap')}"></svg></div>
         <div class="heatmap-copy"><strong>${h.heatmap?.board_hits || 0}</strong><span>${t('hits')}</span><p>${h.heatmap?.misses || 0} Miss · ${h.heatmap?.total_darts || 0} ${t('throws')}<br>${h.playerId ? escapeHtml(h.players.find(item=>item.id===h.playerId)?.name || '') : t('production_only')}</p>
@@ -1794,14 +1802,39 @@ document.addEventListener('click',async event=>{
   }
   if(name==='history-player'){
     const h=appState.history;
+    const previousPlayerId=h.playerId;
     h.playerId=target.dataset.player;
+    target.setAttribute('aria-busy','true');
     try{
       [h.heatmap,h.recommendations]=await Promise.all([
         getJson(`/api/statistics/heatmap?player_id=${encodeURIComponent(h.playerId)}${h.includeTest?'&include_test=true':''}`),
         getJson(`/api/training/${encodeURIComponent(h.playerId)}/recommendations`),
       ]);
+      h.session=null;
+      h.game=null;
+      h.replay=null;
       renderControl();
-    }catch(error){ showToast(error.message); }
+      requestAnimationFrame(()=>$('historyHeatmapSection')?.scrollIntoView({behavior:'smooth',block:'start'}));
+    }catch(error){
+      h.playerId=previousPlayerId;
+      target.removeAttribute('aria-busy');
+      showToast(error.message);
+    }
+    return;
+  }
+  if(name==='history-all-players'){
+    const h=appState.history;
+    const previousPlayerId=h.playerId;
+    h.playerId='';
+    h.recommendations=null;
+    try{
+      await loadHistoryHeatmap();
+      renderControl();
+      requestAnimationFrame(()=>$('historyHeatmapSection')?.scrollIntoView({behavior:'smooth',block:'start'}));
+    }catch(error){
+      h.playerId=previousPlayerId;
+      showToast(error.message);
+    }
     return;
   }
   if(name==='replay-prev' || name==='replay-next'){
