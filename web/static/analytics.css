@@ -31,6 +31,7 @@
 .history-game-row img{width:64px;height:50px;border-radius:9px;object-fit:cover}
 .history-mode-row>b{text-align:right;font-size:18px}
 .history-heatmap-layout,.replay-layout{display:grid;grid-template-columns:minmax(220px,1fr) minmax(170px,.6fr);gap:20px;align-items:center}
+.replay-layout>*{min-width:0}
 .history-board{width:100%;max-width:520px;aspect-ratio:1;padding:12px;border-radius:50%;background:radial-gradient(circle,rgba(40,231,255,.06),transparent 68%)}
 .history-board .dartboard-svg{width:100%;height:100%}
 .heatmap-copy>strong{display:block;font-size:64px;color:var(--cyan);line-height:.9}
@@ -45,7 +46,8 @@
 .history-detail .scene-header h1{font-size:clamp(34px,5vw,66px)}
 .history-session-players{margin-bottom:20px}
 .replay-state>span{color:var(--cyan);font-size:11px;letter-spacing:.14em;font-weight:950}
-.replay-state h2{font-size:clamp(42px,6vw,82px);margin:8px 0}
+.replay-state{min-width:0}
+.replay-state h2{max-width:100%;font-size:clamp(36px,5vw,72px);line-height:.95;margin:8px 0;overflow-wrap:anywhere;word-break:break-word}
 .replay-state p{color:var(--muted)}
 .replay-state input{width:100%;accent-color:var(--cyan);margin-top:22px}
 .replay-scores{display:grid;gap:6px}
