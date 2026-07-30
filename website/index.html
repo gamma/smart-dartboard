@@ -347,7 +347,7 @@
 
 <span>docker compose</span> -f compose.production.yml pull
 <span>SDB_ENABLE_BLE=0 SDB_ALLOW_TEST_EVENTS=1</span> \
-  docker compose -f compose.production.yml up -d
+  docker compose -f compose.production.yml up -d --wait --wait-timeout 60
 
 <span>curl</span> http://localhost:8000/api/health</code></pre>
           <div class="quickstart-open">

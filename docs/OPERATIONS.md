@@ -45,7 +45,7 @@ reinen UI-Test deaktiviert werden:
 
 ```bash
 SDB_ENABLE_BLE=0 SDB_ALLOW_TEST_EVENTS=1 \
-  docker compose -f compose.production.yml up -d
+  docker compose -f compose.production.yml up -d --wait --wait-timeout 60
 ```
 
 Die Meldung `BLE connection loop error: [Errno 2] No such file or directory`
@@ -61,7 +61,8 @@ eingebundenem `/var/run/dbus` unterstützt.
 3. Repository auschecken.
 4. `.env.example` nach `.env` kopieren und mindestens Version sowie optionale
    feste Board-Adresse prüfen.
-5. `docker compose -f compose.production.yml up -d` starten.
+5. `docker compose -f compose.production.yml up -d --wait --wait-timeout 60`
+   starten und den erfolgreichen Healthcheck abwarten.
 6. `http://<host>:8000/control` auf dem Tablet öffnen.
 7. `http://localhost:8000/projector` auf dem Projektorrechner öffnen.
 8. Über **Projektor kalibrieren** das Board-Setup öffnen, die Scheibe

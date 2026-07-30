@@ -125,14 +125,14 @@ cp .env.example .env
 # In .env: SDB_VERSION=0.0.1
 mkdir -p data
 docker compose -f compose.production.yml pull
-docker compose -f compose.production.yml up -d
+docker compose -f compose.production.yml up -d --wait --wait-timeout 60
 ```
 
 Für einen UI-Test ohne Linux-BlueZ, beispielsweise mit Docker Desktop:
 
 ```bash
 SDB_ENABLE_BLE=0 SDB_ALLOW_TEST_EVENTS=1 \
-  docker compose -f compose.production.yml up -d
+  docker compose -f compose.production.yml up -d --wait --wait-timeout 60
 ```
 
 Echte BLE-Hardware im Container benötigt einen Linux-Host mit laufendem BlueZ
