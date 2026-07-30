@@ -113,7 +113,28 @@ class CartoonModeTests(unittest.TestCase):
         })
         self.assertEqual(0, engine.state.mode_state["heat"][player.id])
         self.assertEqual(0, player.score)
-        self.assertIn("DRAGON AWAKES", engine.state.message)
+        self.assertEqual("dragon_fire", engine.state.last_event["effect"])
+        self.assertIn("DRACHENFEUER", engine.state.message)
+
+    def test_dragon_eggs_are_personal_collectibles_and_scales_are_visible(self):
+        engine = GameEngine()
+        engine.reset("dragon_eggs", ["Ada", "Bob"])
+        player = engine.state.players[0]
+        egg = engine.state.mode_state["eggs"][0]
+
+        self.assertEqual(8, len(engine.state.mode_state["scales"]))
+        overlay = engine.state.overlay()
+        self.assertEqual("egg", overlay["bonus"][0]["icon"])
+        self.assertEqual("dragon_scale", overlay["danger"][0]["icon"])
+
+        engine.handle_event({"type": "hit", "seq": 1, **egg})
+        self.assertEqual(30, player.score)
+        self.assertEqual("dragon_egg", engine.state.last_event["effect"])
+        self.assertNotIn(egg["label"], {item["id"] for item in engine.state.overlay()["bonus"]})
+
+        engine.handle_event({"type": "hit", "seq": 2, **egg})
+        self.assertEqual(30, player.score)
+        self.assertIn("schon leer", engine.state.message)
 
     def test_dragon_layout_is_identical_for_every_player_in_a_round(self):
         engine = GameEngine()

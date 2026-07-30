@@ -10,8 +10,8 @@ class DragonEggsMode:
     metadata = GameMetadata(
         slug="dragon_eggs",
         title="Dragon Eggs",
-        tagline="Sammle Eier, meide Schuppen",
-        description="Goldene Dracheneier geben Punkte. Rote Schuppen heizen den persönlichen Heat-Meter auf.",
+        tagline="Eier bergen, Drachenfeuer vermeiden",
+        description="Sammle goldene Eier. Jede rote Schuppe heizt den Drachen auf – die dritte entfacht sein Feuer.",
         accent="#f4a261",
         accent_secondary="#6ab04c",
         visual="dragon-eggs",
@@ -28,9 +28,9 @@ class DragonEggsMode:
             ]),
         ],
         instructions=[
-            InstructionStep("Eier sammeln", "Jedes sichtbare goldene Ei gibt 30 Punkte.", "egg"),
-            InstructionStep("Schuppen meiden", "Rote Schuppen kosten 15 Punkte und erhöhen dein Heat.", "danger"),
-            InstructionStep("Drache erwacht", "Bei Heat 3 verlierst du die Hälfte deiner positiven Turn-Punkte.", "dragon"),
+            InstructionStep("Goldenes Ei", "Ein sichtbares Ei bringt einmal pro Runde +30 Punkte.", "egg"),
+            InstructionStep("Rote Schuppe", "Eine Schuppe kostet 15 Punkte und füllt eine Flamme.", "danger"),
+            InstructionStep("Drachenfeuer", "Die dritte Flamme verbrennt zusätzlich die Hälfte deiner positiven Punkte dieses Zugs.", "dragon"),
         ],
         sound_theme="arcade",
     )
@@ -43,16 +43,18 @@ class DragonEggsMode:
         state.mode_state = {
             "heat": {player.id: 0 for player in state.players},
             "turn_positive": {player.id: 0 for player in state.players},
+            "collected": {player.id: [] for player in state.players},
             "layout_round": state.round_number,
         }
         self._shuffle(state)
 
     def _shuffle(self, state: Any) -> None:
         eggs = choose_targets(int(state.options.get("eggs", 4)), "normal")
-        scales = choose_targets(4, "normal", exclude=[zone_id(item) for item in eggs])
+        scales = choose_targets(8, "normal", exclude=[zone_id(item) for item in eggs])
         state.mode_state["eggs"] = eggs
         state.mode_state["scales"] = scales
-        state.message = "Sammelt die goldenen Eier!"
+        state.mode_state["collected"] = {player.id: [] for player in state.players}
+        state.message = "Goldene Eier sammeln · rote Schuppen meiden!"
 
     def on_turn_start(self, state: Any, player: Any) -> None:
         state.mode_state["turn_positive"][player.id] = 0
@@ -63,20 +65,34 @@ class DragonEggsMode:
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         eggs = state.mode_state.get("eggs", [])
         scales = state.mode_state.get("scales", [])
-        if event.get("type") == "hit" and any(same_target(event, item) for item in eggs):
+        egg = next(
+            (item for item in eggs if event.get("type") == "hit" and same_target(event, item)),
+            None,
+        )
+        collected = state.mode_state.setdefault("collected", {}).setdefault(player.id, [])
+        if egg and zone_id(egg) not in collected:
             points = 30
+            collected.append(zone_id(egg))
             player.score += points
             state.mode_state["turn_positive"][player.id] += points
-            outcome = ThrowOutcome(points, "Ei eingesammelt! +30")
+            event["effect"] = "dragon_egg"
+            outcome = ThrowOutcome(points, "Ei geknackt! +30")
+        elif egg:
+            outcome = ThrowOutcome(0, "Dieses Ei ist schon leer")
         elif event.get("type") == "hit" and any(same_target(event, item) for item in scales):
             heat = int(state.mode_state["heat"].get(player.id, 0)) + 1
             points = -15
-            message = "Drachenschuppe! -15"
+            event["effect"] = "dragon_scale"
+            event["dragon_heat"] = heat
+            message = f"Schuppe! -15 · Hitze {heat}/3"
             if heat >= 3:
                 penalty = int(state.mode_state["turn_positive"].get(player.id, 0)) // 2
                 points -= penalty
                 heat = 0
-                message = f"DRAGON AWAKES! -{15 + penalty}"
+                event["effect"] = "dragon_fire"
+                event["dragon_fire_penalty"] = 15 + penalty
+                event["dragon_heat"] = 0
+                message = f"DRACHENFEUER! -{15 + penalty}"
             state.mode_state["heat"][player.id] = heat
             player.score += points
             outcome = ThrowOutcome(points, message)
@@ -86,15 +102,36 @@ class DragonEggsMode:
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         current = state.current_player()
-        heat = int(state.mode_state.get("heat", {}).get(current.id if current else "", 0))
+        player_id = current.id if current else ""
+        heat = int(state.mode_state.get("heat", {}).get(player_id, 0))
+        collected = set(state.mode_state.get("collected", {}).get(player_id, []))
+        eggs = [
+            item
+            for item in state.mode_state.get("eggs", [])
+            if zone_id(item) not in collected
+        ]
         return {
-            "prompt": "Gold sammeln · Rot meiden",
-            "bonus": [overlay_item(item, "gold", "+30", False) for item in state.mode_state.get("eggs", [])],
-            "danger": [overlay_item(item, "red", "-15", True) for item in state.mode_state.get("scales", [])],
+            "prompt": "GOLDENE EIER SAMMELN · ROTE SCHUPPEN MEIDEN",
+            "bonus": [
+                overlay_item(item, "gold", "+30", False)
+                | {"icon": "egg", "variant": "dragon-egg"}
+                for item in eggs
+            ],
+            "danger": [
+                overlay_item(item, "red", "HITZE", True)
+                | {"icon": "dragon_scale", "variant": "dragon-scale"}
+                for item in state.mode_state.get("scales", [])
+            ],
+            "visual_legend": [
+                {"icon": "egg", "label": "GOLDENES EI", "value": "+30", "color": "#f4c95d"},
+                {"icon": "dragon_scale", "label": "ROTE SCHUPPE", "value": "-15 · +1 HITZE", "color": "#f05d5e"},
+            ],
             "panel": {
+                "kind": "dragon_heat",
                 "title": "DRACHEN-HITZE",
-                "headline": "🔥" * heat + "○" * (3 - heat),
-                "subline": "Bei drei Schuppen erwacht der Drache",
+                "heat": heat,
+                "headline": f"{heat}/3 FLAMMEN",
+                "subline": "Noch eine Schuppe: Feuer!" if heat == 2 else "Die dritte Schuppe entfacht das Feuer",
                 "progress": {"value": heat, "max": 3},
             },
         }
