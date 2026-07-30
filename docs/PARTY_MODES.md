@@ -598,8 +598,11 @@ Spieler erobern Felder. Das Board färbt sich in Spielerfarben.
 ### Regeln
 
 - Treffer auf Feld übernimmt dieses Feld.
-- Singles übernehmen eine Zone oder das ganze Zahlenfeld, je nach Einstellung.
-- Double/Triple können stärkere Eroberungen sein.
+- Klassisch übernimmt jeder Treffer nur das genaue Segment.
+- In der leichten Ring-Power-Variante übernimmt Double die ganze getroffene
+  Zahl. Triple übernimmt die ganze Zahl und ihre beiden direkten Nachbarn auf
+  der physischen Scheibe.
+- In der sehr leichten Variante übernimmt jeder Treffer die ganze Zahl.
 - Nach fester Rundenzahl gewinnt der Spieler mit größter Kontrolle oder den meisten Gebietspunkten.
 
 ### Scoring / Ownership
@@ -611,12 +614,18 @@ Jedes Segment einzeln besitzt Owner.
 S20, D20, T20 getrennt.
 ```
 
-Option B, einfacher:
+Option B, Ring-Power:
 
 ```text
-Jede Zahl 1–20 besitzt Owner.
-Treffer auf beliebigen Ring übernimmt die Zahl.
-Triple schützt für 2 gegnerische Treffer.
+Single: genaues Segment
+Double: alle vier Ringe der Zahl
+Triple: alle vier Ringe der Zahl plus beide Nachbarzahlen
+```
+
+Option C, sehr leicht:
+
+```text
+Jeder Treffer übernimmt alle vier Ringe seiner Zahl.
 ```
 
 ### Visual Incentives

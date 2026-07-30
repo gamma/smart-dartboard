@@ -161,6 +161,11 @@ function isDragonEvent(experience,event,effect){
     && event?.type==='hit'
     && event?.effect===effect;
 }
+function isCookieEvent(experience,event,effect){
+  return experience?.game?.game_type==='cookie_monster'
+    && event?.type==='hit'
+    && event?.effect===effect;
+}
 function clearScoreCountdown(){
   cancelAnimationFrame(appState.scoreCountdownFrame);
   appState.scoreCountdownFrame=null;
@@ -1032,6 +1037,25 @@ function dragonReaction(game,event){
   </div>`;
 }
 
+function cookieReaction(game,event){
+  if(game?.game_type!=='cookie_monster' || !['cookie_eaten','cookie_board_clear'].includes(event?.effect)) return '';
+  const index=BOARD_ORDER.indexOf(Number(event.field));
+  const radii={
+    double:222, triple:129, single_inner:78, single_outer:176,
+    single_bull:0, double_bull:0,
+  };
+  const radius=radii[event.ring];
+  const centered=event.effect==='cookie_board_clear';
+  if(!centered && (radius===undefined || index<0)) return '';
+  const [x,y]=centered ? [250,250] : polar(250,250,radius,index*18);
+  const points=Math.max(0,Number(event.cookie_points)||0);
+  const label=centered ? 'BOARD GEPUTZT!' : `+${points} · MAMPF!`;
+  return `<div class="cookie-reaction ${escapeHtml(event.effect)}" style="--cookie-x:${x*2}px;--cookie-y:${y*2}px" aria-hidden="true">
+    <i></i><img src="${effectAsset('cookie')}" alt=""><b>${escapeHtml(label)}</b>
+    ${centered?'<span>NEUE COOKIES!</span>':''}
+  </div>`;
+}
+
 function projectorPlaying(){
   const game = appState.experience.game;
   const mode = modeBySlug(game.game_type);
@@ -1042,7 +1066,7 @@ function projectorPlaying(){
   const dragonFireImpact=isDragonEvent({game},appState.projectedEvent,'dragon_fire');
   return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''} ${dragonFireImpact?'dragon-fire-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')};--candy-art:url('${effectAsset('candy')}')">
     ${modeAmbience(mode,appState.projectedEvent)}
-    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}${candyOverheat(game,appState.projectedEvent)}${dragonReaction(game,appState.projectedEvent)}</div>
+    <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}${candyOverheat(game,appState.projectedEvent)}${dragonReaction(game,appState.projectedEvent)}${cookieReaction(game,appState.projectedEvent)}</div>
     <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · RUNDE ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong data-score-player="${escapeHtml(player.id || '')}">${player.score ?? 0}</strong></header>
     <footer class="projection-bottom">
       <div class="throw-callout">${game.status==='hold'?'DARTS ZIEHEN':escapeHtml(appState.projectedEvent?.label || 'BEREIT')}</div>
@@ -1157,6 +1181,7 @@ function renderBoardEvent(event){
     const propHit=fieldHit && (
       item.icon==='milk'
       || item.icon==='mine'
+      || item.match_field
       || String(event.ring)===String(item.ring)
     );
     const variant=/^[a-z_-]+$/.test(String(item.variant || '')) ? item.variant : 'default';
@@ -1376,6 +1401,14 @@ function playEventCue(event,experience){
     tone(680,.12,0,'triangle',.13);
     tone(920,.18,.08,'sine',.1);
     tone(1180,.12,.17,'triangle',.06);
+  } else if(event.type==='hit' && isCookieEvent(experience,event,'cookie_board_clear')){
+    [520,680,860,1080].forEach((frequency,index)=>tone(frequency,.2,index*.08,'triangle',.1));
+  } else if(event.type==='hit' && isCookieEvent(experience,event,'cookie_eaten')){
+    tone(460,.09,0,'triangle',.11);
+    tone(720,.13,.07,'square',.055);
+  } else if(event.type==='hit' && isCookieEvent(experience,event,'cookie_moldy')){
+    tone(170,.2,0,'sawtooth',.1);
+    tone(105,.28,.1,'triangle',.07);
   } else if(event.type==='hit'){
     const base=event.multiplier===3?themeBase*1.45:event.multiplier===2?themeBase*1.22:event.field===25?themeBase*1.7:themeBase;
     tone(base,.16,0,'triangle',.16); tone(base*1.5,.2,.08,'sine',.1);

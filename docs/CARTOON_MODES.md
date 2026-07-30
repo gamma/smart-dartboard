@@ -22,7 +22,7 @@ dieselben zufällig erzeugten Bedingungen.
 | `robin_hood` | Drei zufällige Sheriff-Ziele starten das Spiel. Jedes Ziel ist ein eigener Pfeil und kann genau einmal gesplittet werden; Duplikate bleiben getrennt. Standard trifft das exakte Segment, Easy dieselbe Zahl. Fünf Runden, höchste Punktzahl gewinnt. Authentic Robin Hood bleibt zurückgestellt. |
 | `dragon_eggs` | Pro Runde spielen alle dasselbe Layout. Sichtbare Eier geben +30, sichtbare Schuppen −15 und ein persönliches Heat. Beim dritten Heat wird zusätzlich die Hälfte der positiven Punkte des aktuellen Turns abgezogen, danach Heat auf null. 5/8 Runden, höchste Punktzahl. |
 | `ghost_chase` | Alle spielen pro Runde denselben Geisterpfad. Treffer 1/2/3 eines Turns geben 40/50/60. Persönliche Fehlschläge laden Escape; nach drei Fehlschlägen zieht der eigene Geist weiter, wird aber nicht schwerer. Easy/Normal/Hard, 5/8 Runden. |
-| `cookie_monster` | Pro Runde spielen alle dasselbe Layout: 2 goldene Cookies +50, 3 blaue +25, 4 grüne +10, 3 schimmelige −30. Cookie- und Milch-Props liegen direkt auf den Zielsegmenten; dieselbe grafische Legende erscheint auf Controller und Projektor. Bull-Milch verdoppelt einen positiven Turn oder neutralisiert einen negativen. Drei gute Cookies laden Sugar Rush; der nächste gute Cookie zählt doppelt. 5/8 Runden. |
+| `cookie_monster` | Jeder Spieler räumt sein persönliches Cookie-Board ab; neue Cookies erscheinen erst nach dem letzten guten Cookie. Alle erhalten dieselbe deterministische Boardfolge. Easy: 12 große Cookie-Zahlenfelder +20, 3 Schimmelfelder −20, Bull-Milch +30. Mittel: Gold +50, Blau +20, Schimmel −25 und kontextabhängige Milch. Schwer: Gold/Blau/Grün, Schimmel −30, Milch und Sugar Rush. 5/8 Runden. |
 | `space_defender` | Koop: exakte Schiffe, Ringmultiplikator entspricht Schaden, Bull trifft alle. Bei zehn aktiven Schiffen verliert das Team. Nach der letzten Welle gibt es genau eine Aufräumrunde. Erfolgreiches Team: +3 für alle. |
 | `candy_cannon` | Persönliche Ladung bleibt über Turns: Single +1, Double +2, Triple +3, Bull +4. Bei 8–10 wird Bull zum Abzug: Der nächste SBull- oder DBull-Treffer feuert automatisch, gibt +50 und zieht dem führenden Gegner 25 ab (Minimum null; Gleichstand nach Turn-Reihenfolge). Andere Treffer können weiter überladen; über 10 setzt die Ladung auf null. Kein Control-Button. 5/8 Runden, mindestens zwei Spieler. |
 | `mini_golf` | Alle spielen dasselbe Loch. Easy: Zahl genügt; Normal: exaktes Single/Double; Hard: exaktes Double/Triple/Bull. Treffer mit Dart 1/2/3 zählt 1/2/3 Schläge, kompletter Fehlschlag 4. 6/9 Löcher, niedrigster Score. |
@@ -369,25 +369,46 @@ Hard: Double/Triple/Bull
 
 ### Pitch
 
-Das Board ist eine Keksdose. Gute Cookies geben Punkte, verdorbene Cookies kosten Punkte, Milch-Bull rettet den Turn.
+Das Board ist eine Keksdose. Jeder Spieler isst sein persönliches Board leer.
+Erst nach dem letzten guten Cookie erscheint das nächste Board. Schimmel muss
+nicht abgeräumt werden.
 
-### Regeln
+### Gemeinsame Regeln
+
+- Getroffene gute Cookies verschwinden nur für den aktiven Spieler.
+- Ein bereits gegessenes Feld gibt keine weiteren Punkte.
+- Alle Spieler erhalten dieselbe deterministische Abfolge von Cookie-Boards,
+  können darin aber unterschiedlich weit fortgeschritten sein.
+- Sobald alle guten Cookies gegessen sind, erscheint sofort das nächste Board.
+- Schimmel kostet Punkte, blockiert den Boardwechsel aber nicht.
+
+### Stufen
 
 ```text
-Gold Cookie: +50
-Blue Cookie: +25
-Green Cookie: +10
-Moldy Cookie: -30
-Milk / Bull: verdoppelt aktuellen Turn Score
-```
+Easy / Snack Time
+12 blaue Cookie-Zahlenfelder: +20
+3 Schimmel-Zahlenfelder: -20
+die ganze Zahl zählt, unabhängig vom Ring
+Bull-Milch: +30
 
-- Cookie-Felder werden erst nach einer vollständigen Runde neu gemischt; alle
-  Spieler sehen innerhalb der Runde dasselbe Layout.
-- Bei drei guten Cookies in Folge: `SUGAR RUSH`, nächster guter Cookie zählt doppelt.
+Mittel / Cookie Hunt
+2 Gold-Cookies: +50
+7 blaue Cookies: +20
+3 Schimmel-Cookies: -25
+exaktes Segment
+Bull-Milch verdoppelt einen positiven Turn oder rettet einen negativen
+
+Schwer / Sugar Rush
+Gold: +50 · Blau: +25 · Grün: +10 · Schimmel: -30
+exaktes Segment und kontextabhängige Bull-Milch
+drei gute Cookies laden den nächsten doppelten Cookie
+```
 
 ### Warum sinnvoll
 
-Dies ist eine kindlichere, humorvolle Variante von Color Clash mit klarerem Thema und einer Bull-Sondermechanik.
+Das sichtbare Abräumen gibt jedem Treffer eine klare Konsequenz. Easy beginnt
+mit 15 belegten Zahlen und vermeidet dadurch die hohe neutrale Miss-Quote des
+früheren exakten 12-Segment-Layouts.
 
 ---
 
