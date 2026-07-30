@@ -104,6 +104,12 @@ class RobinHoodMode:
             "{winner} ist der beste Pfeilspalter!",
         )
 
+    def on_turn_skipped(self, state: Any, player: Any) -> None:
+        del player
+        state.mode_state["sheriff_targets"] = list(
+            state.mode_state.get("current_arrows", [])
+        )
+
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         targets = state.mode_state.get("remaining_targets", [])
         next_targets = state.mode_state.get("sheriff_targets", [])

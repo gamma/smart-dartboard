@@ -73,6 +73,17 @@ class LightningRoundMode:
             darts_per_turn=1,
         )
 
+    def on_turn_skipped(self, state: Any, player: Any) -> None:
+        del player
+        is_last_player = (
+            state.current_player_index == len(state.players) - 1
+        )
+        final_round = state.round_number >= int(
+            state.options.get("rounds", 8)
+        )
+        if is_last_player and not final_round:
+            self._next_task(state)
+
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         task = self._task(state)
         return {"prompt": task["prompt"], "targets": [overlay_item(d, "cyan", "OK", False) for d in task["zones"][:40]]}

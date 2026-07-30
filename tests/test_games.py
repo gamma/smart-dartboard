@@ -90,6 +90,86 @@ class GameEngineTests(unittest.TestCase):
         self.assertIsNone(engine.state.winner_id)
         self.assertIn("Unentschieden", engine.state.message)
 
+    def test_skipping_every_player_finishes_all_fixed_round_games(self):
+        round_modes = [
+            mode
+            for mode in registry.all()
+            if any(option.key == "rounds" for option in mode.metadata.options)
+        ]
+        for mode in round_modes:
+            with self.subTest(slug=mode.metadata.slug):
+                player_count = max(2, mode.metadata.min_players)
+                engine = GameEngine()
+                engine.reset(
+                    mode.metadata.slug,
+                    [f"Player {index + 1}" for index in range(player_count)],
+                )
+                engine.state.round_number = int(engine.state.options["rounds"])
+                for index in range(player_count):
+                    engine.next_player()
+                    expected = (
+                        "finished"
+                        if index == player_count - 1
+                        else "running"
+                    )
+                    self.assertEqual(expected, engine.state.status)
+
+    def test_king_of_board_counts_fully_skipped_rounds(self):
+        engine = GameEngine()
+        engine.reset(
+            "king_of_board",
+            ["Ada", "Bob"],
+            options={"rounds": 3, "ownership": "segment"},
+        )
+        for expected_round in (2, 3):
+            engine.next_player()
+            engine.next_player()
+            self.assertEqual("running", engine.state.status)
+            self.assertEqual(expected_round, engine.state.round_number)
+        engine.next_player()
+        engine.next_player()
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual(3, engine.state.round_number)
+        self.assertEqual([], engine.state.throws)
+
+    def test_skipping_mini_golf_counts_as_four_strokes(self):
+        engine = GameEngine()
+        engine.reset(
+            "mini_golf",
+            ["Ada", "Bob"],
+            options={"holes": 6, "difficulty": "easy"},
+        )
+        engine.state.round_number = 6
+        engine.state.players[0].score = 1
+        engine.next_player()
+        self.assertEqual(5, engine.state.players[0].score)
+        engine.next_player()
+        self.assertEqual(4, engine.state.players[1].score)
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual(engine.state.players[1].id, engine.state.winner_id)
+
+    def test_skipping_final_boss_turn_is_a_challenge_loss(self):
+        engine = GameEngine()
+        engine.reset(
+            "boss_fight",
+            ["Ada", "Bob"],
+            options={"boss_hp": 600, "weak_points": 3, "rounds": 5},
+        )
+        engine.state.round_number = 5
+        engine.next_player()
+        engine.next_player()
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual("challenge_loss", engine.state.result_type)
+        self.assertIn("Boss gewinnt", engine.state.message)
+
+    def test_skipping_risk_it_discards_the_open_pot(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada", "Bob"], options={"rounds": 3})
+        player = engine.state.current_player()
+        engine.state.mode_state["pot"][player.id] = 40
+        engine.next_player()
+        self.assertEqual(0, engine.state.mode_state["pot"][player.id])
+
     def test_x01_bust_restores_complete_turn_and_holds(self):
         engine = GameEngine()
         engine.reset("x01", ["Ada", "Bob"], options={"start_score": 301})
