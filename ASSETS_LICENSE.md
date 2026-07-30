@@ -38,6 +38,7 @@ This prevents the repository from offering rights it may not own.
 | `web/static/assets/effects/mine.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; `heart_chase.webp` and the previous project-owned mine as internal references; provenance commit `fc87adc` | 2026-07-30 |
 | `web/static/assets/effects/mine_explosion.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; `heart_chase.webp` and the project-owned mine as internal references; provenance commit `fc87adc` | 2026-07-30 |
 | `web/static/assets/themes/neon/modes/{block_drop,candy_cannon,cookie_monster,dart_sweeper,dragon_eggs,eight_ball,ghost_chase,heart_chase,mini_golf,robin_hood,space_defender}.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; only project-owned Classic-Neon covers as references; exact prompts in `docs/NEON_ARTWORK_2026-07-30.md`; provenance commit `8e2ee93` | 2026-07-30 |
+| `web/static/assets/themes/neon/effects/*.webp` | Gerry Weißbach (gamma / gamma production) | OpenAI `gpt-image` 2.0; only project-owned Classic-Neon covers and effect sprites as references; exact prompts and processing in `docs/NEON_EFFECTS_2026-07-30.md`; provenance commit `74865e6` | 2026-07-30 |
 | `website/assets/modes/*.webp` | Gerry Weißbach (gamma / gamma production) | Copies of the cleared Cartoon covers | 2026-07-30 |
 | `website/assets/neon/*.webp` | Gerry Weißbach (gamma / gamma production) | Copies of the cleared Classic-Neon covers | 2026-07-30 |
 | `website/assets/screenshots/*.jpg` | Gerry Weißbach (gamma / gamma production) | Local Playwright/WebKit captures of the cleared project UI and artworks | 2026-07-30 |
@@ -51,7 +52,8 @@ treated as cleared.
 The cleared graphics were generated locally with OpenAI ImageGen, with the
 workflow orchestrated by GPT-5.6-sol. The local generation records and
 surviving source PNGs identify the generator as OpenAI `gpt-image` version 2.0.
-The repository contains 64 selected ImageGen assets: 48 covers and 16 effects.
+The repository contains 80 selected ImageGen assets: 48 covers and 32
+theme-specific effects.
 All supplied image references point to assets created earlier within this
 project; no external image reference appears in the recorded calls. The
 Website screenshots were captured locally with Playwright and WebKit. Detailed
