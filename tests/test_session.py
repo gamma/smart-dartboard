@@ -70,6 +70,15 @@ class SessionControllerTests(unittest.TestCase):
         stats = {item["id"]: item for item in state["statistics"]}
         self.assertEqual(1, stats[ada["id"]]["darts"])
 
+    def test_session_language_is_persisted_and_restored(self):
+        player = self.controller.create_player("Ada", "nova", "#ff00aa")
+        session = self.controller.start_session([player["id"]], language="en")
+        self.assertEqual("en", session["language"])
+        self.assertEqual("en", self.controller.public_state()["language"])
+        self.controller.close()
+        self.controller = SessionController(self.database)
+        self.assertEqual("en", self.controller.public_state()["language"])
+
     def test_runtime_checkpoint_survives_restart_with_undo(self):
         self._start_game()
         self.controller.process_event(
@@ -456,6 +465,15 @@ class EventPipelineTests(unittest.IsolatedAsyncioTestCase):
         await self.pipeline.process(event, source="test")
         await self.pipeline.process(event, source="test")
         self.assertEqual(2, self.controller.engine.state.darts_in_turn)
+        game = self.controller.store.get_game(self.controller.game_id)
+        self.assertEqual("test", game["environment"])
+        replay = self.controller.store.game_replay(self.controller.game_id)
+        throw_events = [
+            item for item in replay["events"] if item["event_type"] == "throw"
+        ]
+        self.assertEqual(2, len(throw_events))
+        self.assertTrue(all(item["source"] == "test" for item in throw_events))
+        self.assertTrue(all(item["frame"] for item in throw_events))
 
 
 if __name__ == "__main__":
