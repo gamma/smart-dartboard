@@ -567,6 +567,9 @@ function starterPlayer(){
   const starterId=appState.experience?.starter?.player_id;
   return appState.experience?.session?.players?.find(player=>player.id===starterId);
 }
+function hasStarterChoice(){
+  return (appState.experience?.session?.players?.length || 0)>1;
+}
 function starterSourceLabel(selection){
   if(selection==='random') return t('starter_random');
   if(selection==='manual') return t('starter_manual');
@@ -574,6 +577,7 @@ function starterSourceLabel(selection){
 }
 function starterSelector(){
   const players=appState.experience.session?.players || [];
+  if(players.length<=1) return '';
   const starter=appState.experience.starter || {};
   const selected=starterPlayer();
   return `<section class="starter-selector">
@@ -1229,7 +1233,7 @@ function projectorInstructions(){
     ? controlLegend(mode.control_legend,'projector-guide')
     : `<div class="projector-step-list">${instructionSteps(mode)}</div>`;
   return projectorBackdrop(mode,`<div class="projector-instructions">
-    <div><div class="kicker">${escapeHtml(mode.tagline)}</div><h1>${escapeHtml(mode.title)}</h1><p>${escapeHtml(mode.description)}</p>${starter?`<div class="projector-starter"><span>${t('starter')}</span><b>${avatarEmoji(starter.avatar)} ${escapeHtml(starter.name)}</b><small>${starterSourceLabel(appState.experience.starter?.selection)}</small></div>`:''}</div>
+    <div><div class="kicker">${escapeHtml(mode.tagline)}</div><h1>${escapeHtml(mode.title)}</h1><p>${escapeHtml(mode.description)}</p>${starter&&hasStarterChoice()?`<div class="projector-starter"><span>${t('starter')}</span><b>${avatarEmoji(starter.avatar)} ${escapeHtml(starter.name)}</b><small>${starterSourceLabel(appState.experience.starter?.selection)}</small></div>`:''}</div>
     ${instructions}
   </div>`,'mode-projector');
 }
