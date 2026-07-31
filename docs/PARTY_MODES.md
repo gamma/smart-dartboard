@@ -325,8 +325,9 @@ Muss pro Spielmodus definiert werden.
 
 ### Kurzbeschreibung
 
-Triff das aktuell leuchtende Ziel. Pro Runde spielen alle dieselbe vorbereitete
-Folge aus drei Zielen.
+Triff das aktuell leuchtende Ziel. Easy beleuchtet eine komplette Zahl und lässt
+sie für die gesamte Runde stehen. Normal und Hard spielen pro Runde mit einer
+gemeinsamen Folge aus drei exakten Zielen.
 
 ### Zielgruppe
 
@@ -335,12 +336,15 @@ Alle Spieler, auch Anfänger. Perfekter erster Party-Modus.
 ### Regeln
 
 - Pro Spieler 3 Darts pro Turn.
-- Das Spiel zeigt ein aktives Zielsegment.
-- Treffer auf exakt dieses Segment gibt volle Punkte.
-- Treffer auf das richtige Zahlenfeld, aber falschen Ring, gibt kleine „Almost“-Punkte.
+- Easy zeigt eine Zielzahl. Inner Single, Triple, Outer Single und Double dieser
+  Zahl geben volle Punkte; das Ziel wechselt erst mit der nächsten Runde.
+- Normal und Hard zeigen ein exaktes Zielsegment und wechseln nach jedem Dart.
+- In Normal und Hard gibt die richtige Zahl im falschen Ring kleine
+  „Almost“-Punkte.
 - Miss gibt 0 und bricht Combo.
-- Nach jedem Dart erscheint das nächste Ziel der gemeinsamen Dreierfolge.
-- Beim nächsten Spieler beginnt dieselbe Folge wieder bei Ziel 1.
+- Easy gibt allen Spielern einer Runde dieselbe Zielzahl.
+- In Normal und Hard beginnt beim nächsten Spieler dieselbe Dreierfolge wieder
+  bei Ziel 1.
 
 ### Scoring
 
@@ -956,7 +960,13 @@ if miss:
 if exact target:
   score += exact_points + combo * combo_bonus
   combo += 1
-  generate new target
+  if difficulty != easy:
+    select next target in round sequence
+
+if difficulty == easy and same field:
+  score += exact_points + combo * combo_bonus
+  combo += 1
+  keep target until next round
 
 if same field wrong ring:
   score += almost_points

@@ -791,7 +791,7 @@ class GameEngineTests(unittest.TestCase):
         engine.handle_event({"type": "miss", "score": 0, "seq": 5})
         self.assertEqual(layouts[2], engine.state.mode_state["colors"])
 
-    def test_target_rush_sequence_repeats_for_every_player(self):
+    def test_easy_target_rush_keeps_one_number_for_the_whole_round(self):
         engine = GameEngine()
         engine.reset(
             "target_rush",
@@ -799,12 +799,58 @@ class GameEngineTests(unittest.TestCase):
             options={"rounds": 3, "difficulty": "easy"},
         )
         targets = list(engine.state.mode_state["round_targets"])
+        self.assertEqual(1, len(targets))
+        target = targets[0]
 
         for seq in range(3):
             self.assertEqual(
-                targets[seq]["label"],
+                target["label"],
                 engine.state.mode_state["target"]["label"],
             )
+            engine.handle_event({"type": "miss", "score": 0, "seq": seq})
+        engine.continue_turn()
+
+        self.assertEqual(targets, engine.state.mode_state["round_targets"])
+        self.assertEqual(target, engine.state.mode_state["target"])
+
+    def test_easy_target_rush_accepts_every_ring_of_the_target_number(self):
+        engine = GameEngine()
+        engine.reset(
+            "target_rush",
+            ["Ada"],
+            options={"rounds": 3, "difficulty": "easy"},
+        )
+        target = engine.state.mode_state["target"]
+
+        engine.handle_event({
+            "type": "hit",
+            "seq": 240,
+            "field": target["field"],
+            "ring": "triple",
+            "multiplier": 3,
+            "score": target["field"] * 3,
+            "label": f"T{target['field']}",
+        })
+
+        self.assertEqual(50, engine.state.players[0].score)
+        self.assertEqual(target, engine.state.mode_state["target"])
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertEqual(
+            {"single_inner", "triple", "single_outer", "double"},
+            {item["ring"] for item in overlay["targets"]},
+        )
+
+    def test_normal_target_rush_sequence_repeats_for_every_player(self):
+        engine = GameEngine()
+        engine.reset(
+            "target_rush",
+            ["Ada", "Bob"],
+            options={"rounds": 3, "difficulty": "normal"},
+        )
+        targets = list(engine.state.mode_state["round_targets"])
+
+        for seq in range(3):
+            self.assertEqual(targets[seq], engine.state.mode_state["target"])
             engine.handle_event({"type": "miss", "score": 0, "seq": seq})
         engine.continue_turn()
 

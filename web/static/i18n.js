@@ -422,7 +422,7 @@
     robin_hood: ['Robin Hood Hunt','Split the Sheriff’s arrows','Chase the previous player’s three targets. Your valid hits become targets for the next player.'],
     simon_says: ['Simon Says','Remember, hit, extend','The projector shows a sequence. Hit its targets in the correct order.'],
     space_defender: ['Space Defender','Stop the waves together','A co-op space adventure: destroy the ships before the invasion reaches ten enemies.'],
-    target_rush: ['Target Rush','Hit the glowing target','Hit the exact lit segment for full points; the same number in another ring scores Almost points.'],
+    target_rush: ['Target Rush','Hit the glowing target','Easy accepts the whole number all round; Normal and Hard require the exact segment.'],
     treasure_hunt: ['Treasure Hunt','Find treasure, avoid traps','The board is a treasure map. Hits reveal hidden coins, gold, and traps.'],
     x01: ['X01','Reach exactly zero','The tournament classic: check out precisely from 301, 501, or 701.'],
   };
@@ -543,10 +543,10 @@
       ['Save Earth','After the final wave, clear all remaining ships together.'],
     ],
     target_rush:[
-      ['Target lights up','Hit the cyan segment.'],
-      ['Almost scores','The right number in the wrong ring scores a few points.'],
+      ['Easy: whole number','All four rings of the target number score full points. The target stays for the entire round.'],
+      ['Normal and Hard','Hit the exact segment. The right number in the wrong ring scores Almost points.'],
       ['Build a combo','Consecutive exact hits earn a bonus.'],
-      ['Equal chances','Everyone gets the same sequence of three targets per round.'],
+      ['Equal chances','Easy gives everyone the same round target. Normal and Hard give the same sequence of three targets.'],
     ],
     treasure_hunt:[
       ['Hidden treasure','Hits reveal hidden contents.'],
@@ -584,6 +584,8 @@
     'Schwer · Sugar Rush':'Hard · Sugar Rush','Gleiches Spiel · Startspieler wechselt':'Same game · starting player rotates',
     'Sehr leicht · 4 Zonen':'Very easy · 4 zones','Leicht · 5 Zonen':'Easy · 5 zones',
     'Mittel · 10 Zonen':'Medium · 10 zones','Schwer · 20 Zahlen':'Hard · 20 numbers',
+    'Easy · ganze Zahl':'Easy · whole number','Normal · exaktes Segment':'Normal · exact segment',
+    'Hard · Double/Triple':'Hard · Double/Triple',
     'Nach links':'Move left','Links drehen':'Rotate left','Rechts drehen':'Rotate right',
     'Nach rechts':'Move right','Stein droppen':'Drop block','STEUERUNG':'CONTROLS',
     'AKTUELLE AUFGABE':'CURRENT TARGET','SPIELSTATUS':'GAME STATUS',
@@ -745,6 +747,7 @@
       .replace(/^Runde ([0-9]+):/, 'Round $1:')
       .replace(/^Welle ([0-9]+)/, 'Wave $1')
       .replace(/^Loch ([0-9]+)/, 'Hole $1')
+      .replace(/^Triff die ([0-9]+)!$/, 'Hit any $1!')
       .replace(/^Triff (.+)!$/, 'Hit $1!')
       .replace(/^Fang (.+)!$/, 'Catch $1!')
       .replace(/^Schlag ([0-9]+)!$/, 'Beat $1!')
