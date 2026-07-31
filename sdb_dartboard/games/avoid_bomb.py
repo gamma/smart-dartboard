@@ -5,6 +5,9 @@ from typing import Any, Dict
 from .arcade import choose_targets, finish_round_game, overlay_item, same_target
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
+BOARD_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5]
+NUMBER_RINGS = ["double", "single_outer", "triple", "single_inner"]
+
 
 class AvoidBombMode:
     metadata = GameMetadata(
@@ -26,9 +29,14 @@ class AvoidBombMode:
             InstructionStep("Rot ist gefährlich", "Rote Felder sind Bomben und kosten Punkte.", "danger"),
             InstructionStep("Alles andere zählt", "Normale Treffer geben ihren Dartwert.", "score"),
             InstructionStep("Jede Runde schwerer", "Nachdem alle gespielt haben, wachsen die Bomben – gleichmäßig oder um die neue Rundennummer.", "growth"),
-            InstructionStep("Schadenfreude", "Bombentreffer explodieren und zählen die Strafpunkte sichtbar herunter.", "boom"),
+            InstructionStep(
+                "Boom oder knapp",
+                "Bombentreffer explodieren groß. Direkt angrenzende Felder zeigen ‚Das war knapp‘, punkten aber normal.",
+                "boom",
+            ),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -76,23 +84,75 @@ class AvoidBombMode:
         bombs = state.mode_state.get("bombs", [])
         if event.get("type") == "miss":
             outcome = ThrowOutcome(turn_value=0, message="Miss")
-        elif any(same_target(event, bomb) for bomb in bombs):
+        elif bomb := next((bomb for bomb in bombs if same_target(event, bomb)), None):
             penalty = int(state.options.get("penalty", -50))
             player.score += penalty
+            event.update({"effect": "bomb_explosion", "bomb": dict(bomb)})
             outcome = ThrowOutcome(turn_value=penalty, message=f"BOMB! {penalty}")
         else:
             score = int(event.get("score", 0))
             player.score += score
-            outcome = ThrowOutcome(turn_value=score, message=f"Safe {event.get('label', '')} +{score}")
+            near_bomb = next(
+                (bomb for bomb in bombs if self._is_adjacent(event, bomb)),
+                None,
+            )
+            if near_bomb:
+                event.update({
+                    "effect": "bomb_near_miss",
+                    "near_bomb": dict(near_bomb),
+                })
+                message = f"DAS WAR KNAPP! {event.get('label', '')} +{score}"
+            else:
+                message = f"Safe {event.get('label', '')} +{score}"
+            outcome = ThrowOutcome(turn_value=score, message=message)
         return finish_round_game(
             state, outcome, "{winner} überlebt Avoid the Bomb!"
         )
 
+    @staticmethod
+    def _is_adjacent(event: Dict[str, Any], bomb: Dict[str, Any]) -> bool:
+        event_field = int(event.get("field", 0) or 0)
+        bomb_field = int(bomb.get("field", 0) or 0)
+        event_ring = str(event.get("ring", ""))
+        bomb_ring = str(bomb.get("ring", ""))
+
+        if event_field == bomb_field == 25:
+            return {event_ring, bomb_ring} == {"single_bull", "double_bull"}
+        if event_field == 25 and event_ring == "single_bull":
+            return bomb_ring == "single_inner" and bomb_field in BOARD_ORDER
+        if bomb_field == 25 and bomb_ring == "single_bull":
+            return event_ring == "single_inner" and event_field in BOARD_ORDER
+        if event_field not in BOARD_ORDER or bomb_field not in BOARD_ORDER:
+            return False
+        if event_ring == bomb_ring:
+            index = BOARD_ORDER.index(event_field)
+            return bomb_field in {
+                BOARD_ORDER[(index - 1) % len(BOARD_ORDER)],
+                BOARD_ORDER[(index + 1) % len(BOARD_ORDER)],
+            }
+        if event_field != bomb_field:
+            return False
+        if event_ring not in NUMBER_RINGS or bomb_ring not in NUMBER_RINGS:
+            return False
+        return abs(NUMBER_RINGS.index(event_ring) - NUMBER_RINGS.index(bomb_ring)) == 1
+
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         bombs = state.mode_state.get("bombs", [])
+        penalty = int(state.options.get("penalty", -50))
+        danger = []
+        for bomb in bombs:
+            item = overlay_item(bomb, "#e76f51", "", True)
+            item.update({"icon": "mine", "variant": "mine"})
+            danger.append(item)
         return {
             "prompt": f"Runde {state.round_number}: {len(bombs)} Bomben – meide Rot!",
-            "danger": [overlay_item(bomb, "red", "BOMB", True) for bomb in bombs],
+            "danger": danger,
+            "visual_legend": [{
+                "icon": "mine",
+                "color": "#e76f51",
+                "label": "Bombe",
+                "value": str(penalty),
+            }],
         }
 
 

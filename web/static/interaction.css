@@ -825,6 +825,39 @@
   animation: bomb-word .9s .08s cubic-bezier(.18, .78, .2, 1) forwards;
 }
 
+.bomb-explosion.near-miss::before {
+  width: 150px;
+  height: 150px;
+  opacity: .72;
+  filter: drop-shadow(0 0 22px rgba(255, 166, 45, .62));
+}
+
+.bomb-explosion.near-miss::after {
+  width: 74px;
+  height: 74px;
+  border-width: 8px;
+}
+
+.bomb-explosion.near-miss img {
+  width: 330px;
+  height: 330px;
+  filter:
+    drop-shadow(0 0 15px rgba(255, 213, 88, .72))
+    drop-shadow(0 0 38px rgba(231, 87, 52, .42));
+}
+
+.bomb-explosion.near-miss i {
+  display: none;
+}
+
+.bomb-explosion.near-miss b {
+  width: max-content;
+  font-size: 31px;
+  letter-spacing: -.035em;
+  white-space: nowrap;
+  text-shadow: 0 3px 0 #8f2918, 0 0 20px #ffca38;
+}
+
 .bomb-impact::after {
   content: "";
   position: absolute;

@@ -371,6 +371,82 @@ class GameEngineTests(unittest.TestCase):
         engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
         overlay = engine.state.as_dict()["overlay"]
         self.assertEqual(2, len(overlay["danger"]))
+        self.assertTrue(all(item["icon"] == "mine" for item in overlay["danger"]))
+        self.assertEqual("mine", overlay["visual_legend"][0]["icon"])
+
+    def test_avoid_bomb_marks_exact_hit_for_full_explosion(self):
+        engine = GameEngine()
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.state.mode_state["bombs"] = [{
+            "label": "T20",
+            "field": 20,
+            "ring": "triple",
+            "multiplier": 3,
+            "score": 60,
+        }]
+
+        event = hit(60, 1, field=20, multiplier=3, label="T20")
+        event["ring"] = "triple"
+        engine.handle_event(event)
+
+        self.assertEqual("bomb_explosion", engine.state.last_event["effect"])
+        self.assertEqual(-50, engine.state.players[0].score)
+
+    def test_avoid_bomb_neighbor_hit_triggers_close_call_without_penalty(self):
+        engine = GameEngine()
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.state.mode_state["bombs"] = [{
+            "label": "T20",
+            "field": 20,
+            "ring": "triple",
+            "multiplier": 3,
+            "score": 60,
+        }]
+
+        event = hit(3, 1, field=1, multiplier=3, label="T1")
+        event["ring"] = "triple"
+        engine.handle_event(event)
+
+        self.assertEqual("bomb_near_miss", engine.state.last_event["effect"])
+        self.assertEqual(20, engine.state.last_event["near_bomb"]["field"])
+        self.assertEqual(3, engine.state.players[0].score)
+        self.assertIn("DAS WAR KNAPP", engine.state.message)
+
+    def test_avoid_bomb_radial_neighbor_also_triggers_close_call(self):
+        engine = GameEngine()
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.state.mode_state["bombs"] = [{
+            "label": "T20",
+            "field": 20,
+            "ring": "triple",
+            "multiplier": 3,
+            "score": 60,
+        }]
+
+        event = hit(20, 1, field=20, label="S20")
+        event["ring"] = "single_outer"
+        engine.handle_event(event)
+
+        self.assertEqual("bomb_near_miss", engine.state.last_event["effect"])
+        self.assertEqual(20, engine.state.players[0].score)
+
+    def test_avoid_bomb_bull_neighbor_triggers_close_call(self):
+        engine = GameEngine()
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.state.mode_state["bombs"] = [{
+            "label": "DBull",
+            "field": 25,
+            "ring": "double_bull",
+            "multiplier": 2,
+            "score": 50,
+        }]
+
+        event = hit(25, 1, field=25, label="SBull")
+        event["ring"] = "single_bull"
+        engine.handle_event(event)
+
+        self.assertEqual("bomb_near_miss", engine.state.last_event["effect"])
+        self.assertEqual(25, engine.state.players[0].score)
 
     def test_avoid_bomb_adds_one_bomb_after_every_full_player_round(self):
         engine = GameEngine()

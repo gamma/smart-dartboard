@@ -512,6 +512,36 @@ class SessionControllerTests(unittest.TestCase):
         self.assertTrue(current["current"])
         self.assertEqual(1, current["darts"][0]["dart_in_turn"])
 
+    def test_manual_throw_returns_mode_effect_for_projector_event(self):
+        ada = self.controller.create_player("Ada", "nova", "#ff00aa")
+        self.controller.start_session([ada["id"]])
+        self.controller.prepare_game("avoid_bomb", {"bomb_count": 2})
+        self.controller.start_game()
+        self.controller.set_screen("playing")
+        self.controller.engine.state.mode_state["bombs"] = [{
+            "label": "T20",
+            "field": 20,
+            "ring": "triple",
+            "multiplier": 3,
+            "score": 60,
+        }]
+        event = {
+            "type": "hit",
+            "label": "S20",
+            "score": 20,
+            "seq": 901,
+            "field": 20,
+            "ring": "single_outer",
+            "multiplier": 1,
+        }
+
+        self.controller.manual_throw(event)
+
+        self.assertEqual("bomb_near_miss", event["effect"])
+        self.assertEqual(20, event["near_bomb"]["field"])
+        self.assertNotIn("_source", event)
+        self.assertNotIn("_action_id", event)
+
     def test_double_back_after_continue_restores_then_deletes_dart(self):
         self._start_game()
         for seq in range(1, 4):

@@ -170,9 +170,16 @@ function currentPlayer(game){
 }
 function isBombEvent(experience,event){
   if(experience?.game?.game_type!=='avoid_bomb' || event?.type!=='hit') return false;
+  if(event?.effect==='bomb_explosion') return true;
   return Boolean(experience.game.overlay?.danger?.some(item=>
     Number(item.field)===Number(event.field) && String(item.ring)===String(event.ring)
   ));
+}
+function isBombNearMissEvent(experience,event){
+  return experience?.game?.game_type==='avoid_bomb'
+    && event?.type==='hit'
+    && event?.effect==='bomb_near_miss'
+    && Boolean(event?.near_bomb);
 }
 function isMineExplosionEvent(experience,event){
   return experience?.game?.game_type==='dart_sweeper'
@@ -1297,8 +1304,10 @@ function modeAmbience(mode, event, frozen=false){
 }
 
 function bombExplosion(game,event){
-  if(!isExplosionEvent({game},event)) return '';
-  const index=BOARD_ORDER.indexOf(Number(event.field));
+  const nearMiss=isBombNearMissEvent({game},event);
+  if(!nearMiss && !isExplosionEvent({game},event)) return '';
+  const source=nearMiss ? event.near_bomb : event;
+  const index=BOARD_ORDER.indexOf(Number(source.field));
   const radii={
     double:222,
     triple:129,
@@ -1307,18 +1316,18 @@ function bombExplosion(game,event){
     single_bull:0,
     double_bull:0,
   };
-  const radius=radii[event.ring];
-  if(radius===undefined || (Number(event.field)!==25 && index<0)) return '';
-  const [x,y]=Number(event.field)===25
+  const radius=radii[source.ring];
+  if(radius===undefined || (Number(source.field)!==25 && index<0)) return '';
+  const [x,y]=Number(source.field)===25
     ? [250,250]
     : polar(250,250,radius,index*18);
   const vectors=[
     [-118,-94],[-42,-142],[45,-132],[124,-78],[148,4],[112,96],
     [35,142],[-50,136],[-126,82],[-151,-6],[-82,-48],[74,58],
   ];
-  return `<div class="bomb-explosion" style="--blast-x:${x*2}px;--blast-y:${y*2}px" aria-hidden="true">
+  return `<div class="bomb-explosion ${nearMiss?'near-miss':''}" style="--blast-x:${x*2}px;--blast-y:${y*2}px" aria-hidden="true">
     <img src="${effectAsset('mine_explosion')}" alt="">
-    <b>BOOM!</b>
+    <b>${nearMiss?t('that_was_close'):'BOOM!'}</b>
     ${vectors.map(([dx,dy],index)=>`<i style="--dx:${dx}px;--dy:${dy}px;--delay:${index%3*25}ms"></i>`).join('')}
   </div>`;
 }
@@ -1391,9 +1400,10 @@ function projectorPlaying(){
   const player = currentPlayer(game) || {};
   const testMode=testModeEnabled();
   const bombImpact=isExplosionEvent({game},appState.projectedEvent);
+  const bombNearImpact=isBombNearMissEvent({game},appState.projectedEvent);
   const candyOverheatImpact=isCandyOverheatEvent({game},appState.projectedEvent);
   const dragonFireImpact=isDragonEvent({game},appState.projectedEvent,'dragon_fire');
-  return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''} ${dragonFireImpact?'dragon-fire-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')};--candy-art:url('${effectAsset('candy')}')">
+  return `<section class="projection-game themed-game ${testMode?'test-mode':''} ${bombImpact?'bomb-impact':''} ${bombNearImpact?'bomb-near-impact':''} ${candyOverheatImpact?'candy-overheat-impact':''} ${dragonFireImpact?'dragon-fire-impact':''}" style="--accent:${escapeHtml(mode?.accent || '#28e7ff')};--candy-art:url('${effectAsset('candy')}')">
     ${modeAmbience(mode,appState.projectedEvent)}
     <div id="projectionPlane" class="projection-plane"><div class="board-stage-shield"></div>${boardSvg()}<div id="boardPulse" class="board-pulse"></div>${bombExplosion(game,appState.projectedEvent)}${candyOverheat(game,appState.projectedEvent)}${dragonReaction(game,appState.projectedEvent)}${cookieReaction(game,appState.projectedEvent)}</div>
     <header class="projection-top"><div><div class="kicker">${escapeHtml(mode?.title || '')} · ${t('round')} ${game.round_number}</div><h1>${escapeHtml(player.name || '')}</h1></div><strong data-score-player="${escapeHtml(player.id || '')}">${player.score ?? 0}</strong></header>
@@ -1709,7 +1719,10 @@ function playEventCue(event,experience){
   }
   const theme=modeBySlug(experience.game?.game_type)?.sound_theme || 'arena';
   const themeBase={arcade:500,club:390,championship:450,arena:420}[theme] || 420;
-  if(event.type==='hit' && isExplosionEvent(experience,event)){
+  if(event.type==='hit' && isBombNearMissEvent(experience,event)){
+    tone(210,.15,0,'triangle',.09);
+    tone(330,.2,.1,'sine',.08);
+  } else if(event.type==='hit' && isExplosionEvent(experience,event)){
     tone(92,.38,0,'sawtooth',.18);
     tone(54,.52,.04,'sawtooth',.16);
     tone(680,.09,0,'square',.07);

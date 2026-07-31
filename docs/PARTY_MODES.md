@@ -403,9 +403,14 @@ Sammle Punkte, aber vermeide rote Bombenfelder.
 ### Regeln
 
 - Normale Treffer geben ihren Dartwert.
-- Mehrere Bombensegmente sind rot markiert.
+- Mehrere Bombensegmente tragen gut erkennbare grafische Bomben-Props.
 - Treffer auf Bombe löst Strafe aus.
-- Bomben können pro Turn oder pro Dart wechseln.
+- Direkt angrenzende Segmente lösen eine kleinere Meldung `Das war knapp!`
+  an der Position der Bombe aus, behalten aber ihren normalen Dartwert.
+- Angrenzend bedeutet: seitlicher Nachbar im selben Ring oder radialer Nachbar
+  im selben Zahlenbereich. Bull-Nachbarschaften folgen der echten Geometrie.
+- Nachdem alle Spieler geworfen haben, kommen neue Bomben hinzu. Bestehende
+  Bomben bleiben liegen.
 
 ### Scoring
 
@@ -433,26 +438,26 @@ Party Bomb: alle anderen bekommen +20
 {
   "prompt": "Sammle Punkte – meide Rot!",
   "danger": [
-    {"id": "D1", "color": "red", "label": "BOMB", "pulse": true},
-    {"id": "T5", "color": "red", "label": "BOMB", "pulse": true}
+    {"id": "D1", "color": "#e76f51", "icon": "mine", "pulse": true},
+    {"id": "T5", "color": "#e76f51", "icon": "mine", "pulse": true}
   ]
 }
 ```
 
 ### Visual Incentives
 
-- Bomben flackern rot.
+- Bomben werden als theme-spezifische 3D-Spielzeugminen dargestellt.
 - Bombentreffer: Explosion, Screen Shake, roter Flash.
-- Knapp vorbei: kleine Fun-Meldung `Lucky!`.
+- Knapp vorbei: kleinere Explosion `Das war knapp!`, keine Strafe.
 - Hohe Punkte ohne Bombe: `Clean Run`.
 
 ### Difficulty Settings
 
 ```text
-Easy: 2 Bomben, wechseln pro Turn
-Normal: 4 Bomben, wechseln pro Turn
-Hard: 6 Bomben, wechseln nach jedem Dart
-Hidden: Bomben werden nur 3 Sekunden gezeigt
+Start: 2, 4 oder 6 Bomben
+Konstant: nach jeder vollen Spielerrunde +1 Bombe
+Eskalierend: nach jeder vollen Spielerrunde +Rundennummer Bomben
+Strafe: -25, -50 oder -100
 ```
 
 ---

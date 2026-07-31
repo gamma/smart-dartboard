@@ -639,7 +639,13 @@ class SessionController:
         self._persist()
 
     def manual_throw(self, event: Dict[str, Any]) -> None:
-        self.process_event({**event, "_source": "manual"})
+        enriched = {**event, "_source": "manual"}
+        self.process_event(enriched)
+        event.update({
+            key: value
+            for key, value in enriched.items()
+            if not key.startswith("_")
+        })
 
     def _last_action_payload(self) -> Dict[str, Any]:
         action = self.engine.last_action or {}
