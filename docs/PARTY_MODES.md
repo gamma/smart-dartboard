@@ -474,7 +474,8 @@ Das Board ist farbig. Farben bestimmen Punkte, nicht klassische Dartwerte.
 
 ### Regeln
 
-- Segmente werden zufällig eingefärbt.
+- Alle 82 physischen Treffersegmente einschließlich beider Single-Flächen und
+  Bulls werden zufällig eingefärbt; es gibt keine unerklärten Neutralfelder.
 - Jede Farbe hat Punktewert oder Strafe.
 - Alle Spieler erhalten innerhalb einer Runde dieselben Farbchancen.
 - Im Rundenmodus bleibt ein gemeinsames Layout für alle Aufnahmen bestehen.
@@ -488,7 +489,6 @@ Gold: +50
 Cyan: +25
 Green: +10
 Red: -25
-Gray: 0 / blockiert
 ```
 
 ### Overlay
@@ -498,8 +498,7 @@ Gray: 0 / blockiert
   "prompt": "Gold zählt am meisten!",
   "bonus": [{"id": "T20", "color": "gold", "label": "+50"}],
   "targets": [{"id": "S5", "color": "green", "label": "+10"}],
-  "danger": [{"id": "D1", "color": "red", "label": "-25"}],
-  "disabled": [{"id": "T19", "color": "gray", "label": "0"}]
+  "danger": [{"id": "D1", "color": "red", "label": "-25"}]
 }
 ```
 

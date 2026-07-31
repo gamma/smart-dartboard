@@ -3,7 +3,12 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, List
 
-from .arcade import TARGET_POOL_NORMAL, finish_round_game, overlay_item, zone_id
+from .arcade import (
+    PHYSICAL_TARGET_POOL,
+    finish_round_game,
+    overlay_item,
+    physical_zone_id,
+)
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 COLOR_SCORES = {"gold": 50, "cyan": 25, "green": 10, "red": -25}
@@ -32,6 +37,7 @@ class ColorClashMode:
             InstructionStep("Gleiche Chancen", "Alle spielen pro Runde dieselben Farben – fest oder als gleiche Drei-Dart-Folge.", "shuffle"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -44,15 +50,18 @@ class ColorClashMode:
         state.message = "Gold zählt am meisten!"
 
     def _generate_colors(self) -> Dict[str, str]:
-        # Gameplay variety only; not used for a security decision.
-        pool = random.sample(  # nosec B311
-            TARGET_POOL_NORMAL, min(21, len(TARGET_POOL_NORMAL))
-        )
+        pool = list(PHYSICAL_TARGET_POOL)
         colors: Dict[str, str] = {}
-        distribution = ["gold"] * 3 + ["cyan"] * 6 + ["green"] * 8 + ["red"] * 4
+        distribution = (
+            ["gold"] * 8
+            + ["cyan"] * 22
+            + ["green"] * 36
+            + ["red"] * 16
+        )
+        # Gameplay variety only; not used for a security decision.
         random.shuffle(distribution)
         for dart, color in zip(pool, distribution):
-            colors[zone_id(dart)] = color
+            colors[physical_zone_id(dart)] = color
         return colors
 
     def _generate_round_layouts(self, state: Any) -> None:
@@ -93,7 +102,7 @@ class ColorClashMode:
             outcome = ThrowOutcome(turn_value=0, message="Miss")
         else:
             colors = state.mode_state.get("colors", {})
-            hit_id = zone_id({"label": event.get("label", ""), "field": event.get("field", 0), "ring": event.get("ring", "")})
+            hit_id = physical_zone_id(event)
             color = colors.get(hit_id)
             points = int(COLOR_SCORES.get(color or "", 0))
             player.score += points
@@ -114,8 +123,8 @@ class ColorClashMode:
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         colors = state.mode_state.get("colors", {})
         by_color: Dict[str, List[Dict[str, Any]]] = {"gold": [], "cyan": [], "green": [], "red": []}
-        for dart in TARGET_POOL_NORMAL:
-            color = colors.get(zone_id(dart))
+        for dart in PHYSICAL_TARGET_POOL:
+            color = colors.get(physical_zone_id(dart))
             if color in by_color:
                 by_color[color].append(dart)
         return {
@@ -124,6 +133,5 @@ class ColorClashMode:
             "targets": [overlay_item(d, "cyan", "+25", False) for d in by_color["cyan"]] + [overlay_item(d, "green", "+10", False) for d in by_color["green"]],
             "danger": [overlay_item(d, "red", "-25", True) for d in by_color["red"]],
         }
-
 
 GAME_MODE = ColorClashMode()

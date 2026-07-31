@@ -37,6 +37,7 @@ class SpaceDefenderMode:
             InstructionStep("Erde retten", "Nach der letzten Welle räumt ihr gemeinsam die restlichen Schiffe ab.", "earth"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -99,6 +100,50 @@ class SpaceDefenderMode:
             result_type="team_win" if won else "challenge_loss",
         )
 
+    def _finish_team_round(
+        self,
+        state: Any,
+        points: int = 0,
+    ) -> ThrowOutcome | None:
+        wave = int(state.mode_state.get("wave", 1))
+        maximum = int(state.options.get("waves", 4))
+        if wave >= maximum:
+            if not state.mode_state["ships"]:
+                return self._team_result(
+                    state,
+                    True,
+                    "ERDE GERETTET! Das Team gewinnt!",
+                    points,
+                )
+            if state.mode_state.get("cleanup"):
+                return self._team_result(
+                    state,
+                    False,
+                    "Die Flotte entkommt · Team-Niederlage",
+                    points,
+                )
+            state.mode_state["cleanup"] = True
+            state.message = "LETZTE AUFRÄUMRUNDE!"
+            return None
+
+        self._spawn_wave(state, wave + 1)
+        if len(state.mode_state["ships"]) >= 10:
+            return self._team_result(
+                state,
+                False,
+                "INVASION! Zehn Schiffe haben die Erde erreicht",
+                points,
+            )
+        return None
+
+    @staticmethod
+    def _apply_terminal_outcome(state: Any, outcome: ThrowOutcome) -> None:
+        state.status = "finished"
+        state.winner_id = outcome.winner_id
+        state.winner_ids = list(outcome.winner_ids)
+        state.result_type = outcome.result_type
+        state.message = outcome.message
+
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         ships = state.mode_state.get("ships", [])
         destroyed_points = 0
@@ -124,36 +169,20 @@ class SpaceDefenderMode:
             and state.current_player_index == len(state.players) - 1
         )
         if end_of_team_round:
-            wave = int(state.mode_state.get("wave", 1))
-            maximum = int(state.options.get("waves", 4))
-            if wave >= maximum:
-                if not state.mode_state["ships"]:
-                    return self._team_result(
-                        state,
-                        True,
-                        "ERDE GERETTET! Das Team gewinnt!",
-                        destroyed_points,
-                    )
-                if state.mode_state.get("cleanup"):
-                    return self._team_result(
-                        state,
-                        False,
-                        "Die Flotte entkommt · Team-Niederlage",
-                        destroyed_points,
-                    )
-                state.mode_state["cleanup"] = True
-                message = "LETZTE AUFRÄUMRUNDE!"
-            else:
-                self._spawn_wave(state, wave + 1)
-                if len(state.mode_state["ships"]) >= 10:
-                    return self._team_result(
-                        state,
-                        False,
-                        "INVASION! Zehn Schiffe haben die Erde erreicht",
-                        destroyed_points,
-                    )
+            terminal = self._finish_team_round(state, destroyed_points)
+            if terminal:
+                return terminal
+            message = state.message
 
         return ThrowOutcome(destroyed_points, message)
+
+    def on_turn_skipped(self, state: Any, player: Any) -> None:
+        del player
+        if state.current_player_index != len(state.players) - 1:
+            return
+        terminal = self._finish_team_round(state)
+        if terminal:
+            self._apply_terminal_outcome(state, terminal)
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         ships = state.mode_state.get("ships", [])

@@ -354,6 +354,35 @@ class CartoonModeTests(unittest.TestCase):
             set(engine.state.winner_ids),
         )
 
+    def test_space_defender_skipped_team_rounds_still_advance_and_finish(self):
+        engine = GameEngine()
+        engine.reset("space_defender", ["Ada", "Bob"], options={"waves": 4})
+        for expected_wave in (2, 3):
+            engine.next_player()
+            engine.next_player()
+            self.assertEqual(expected_wave, engine.state.mode_state["wave"])
+        engine.next_player()
+        engine.next_player()
+        self.assertEqual(4, engine.state.mode_state["wave"])
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual("challenge_loss", engine.state.result_type)
+
+        engine = GameEngine()
+        engine.reset("space_defender", ["Ada", "Bob"], options={"waves": 4})
+        engine.state.mode_state.update({
+            "wave": 4,
+            "ships": engine.state.mode_state["ships"][:1],
+            "cleanup": False,
+        })
+        engine.next_player()
+        engine.next_player()
+        self.assertTrue(engine.state.mode_state["cleanup"])
+        self.assertEqual("running", engine.state.status)
+        engine.next_player()
+        engine.next_player()
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual("challenge_loss", engine.state.result_type)
+
     def test_candy_cannon_fire_and_overheat(self):
         engine = GameEngine()
         engine.reset("candy_cannon", ["Ada", "Bob"])

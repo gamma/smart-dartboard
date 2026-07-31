@@ -12,6 +12,37 @@ TARGET_POOL_HARD = [d for d in DARTS if d["ring"] in {"triple", "double", "doubl
 NUMBER_RINGS = ("single_inner", "triple", "single_outer", "double")
 
 
+def physical_zone_id(dart: Dict[str, Any]) -> str:
+    """Identify a physical board segment, including both separate Single areas."""
+    return f"{dart.get('ring', '')}:{int(dart.get('field', 0) or 0)}"
+
+
+def physical_target(field: int, ring: str) -> Dict[str, Any]:
+    multiplier = 3 if ring == "triple" else 2 if ring in {"double", "double_bull"} else 1
+    if field == 25:
+        label = "DBull" if ring == "double_bull" else "SBull"
+    else:
+        prefix = {"single_inner": "S", "single_outer": "S", "double": "D", "triple": "T"}[ring]
+        label = f"{prefix}{field}"
+    return {
+        "label": label,
+        "field": field,
+        "ring": ring,
+        "multiplier": multiplier,
+        "score": field * multiplier,
+    }
+
+
+PHYSICAL_TARGET_POOL = [
+    physical_target(field, ring)
+    for field in range(1, 21)
+    for ring in NUMBER_RINGS
+] + [
+    physical_target(25, "single_bull"),
+    physical_target(25, "double_bull"),
+]
+
+
 def zone_id(dart: Dict[str, Any]) -> str:
     label = str(dart["label"])
     if label == "SBull":

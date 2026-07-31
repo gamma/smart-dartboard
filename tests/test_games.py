@@ -578,18 +578,19 @@ class GameEngineTests(unittest.TestCase):
         engine = GameEngine()
         engine.reset("color_clash", ["Ada"], options={"shuffle": "turn"})
         colors = engine.state.mode_state["colors"]
+        self.assertEqual(82, len(colors))
+        self.assertIn("single_inner:20", colors)
+        self.assertIn("single_outer:20", colors)
         first_id, color = next(iter(colors.items()))
-        label = "DBull" if first_id == "DBULL" else "SBull" if first_id == "SBULL" else first_id
-        if label.startswith("T"):
-            field, multiplier, score, ring = int(label[1:]), 3, int(label[1:]) * 3, "triple"
-        elif label.startswith("D") and label != "DBull":
-            field, multiplier, score, ring = int(label[1:]), 2, int(label[1:]) * 2, "double"
-        elif label == "DBull":
-            field, multiplier, score, ring = 25, 2, 50, "double_bull"
-        elif label == "SBull":
-            field, multiplier, score, ring = 25, 1, 25, "single_bull"
-        else:
-            field, multiplier, score, ring = int(label[1:]), 1, int(label[1:]), "single_outer"
+        ring, raw_field = first_id.split(":")
+        field = int(raw_field)
+        multiplier = 3 if ring == "triple" else 2 if ring in {"double", "double_bull"} else 1
+        score = field * multiplier
+        label = (
+            "DBull" if ring == "double_bull"
+            else "SBull" if ring == "single_bull"
+            else f"{'T' if ring == 'triple' else 'D' if ring == 'double' else 'S'}{field}"
+        )
         event = hit(score, 99, field=field, multiplier=multiplier, label=label)
         event["ring"] = ring
         engine.handle_event(event)

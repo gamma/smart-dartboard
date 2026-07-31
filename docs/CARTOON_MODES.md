@@ -621,7 +621,8 @@ Boss-UFO: 5 HP
 Single: 1 Schaden
 Double: 2 Schaden
 Triple: 3 Schaden
-Bull: 4 Schaden / Flächenlaser
+Single Bull: 1 Schaden an allen Schiffen
+Double Bull: 2 Schaden an allen Schiffen
 ```
 
 - Zerstörte Schiffe geben Punkte:
@@ -635,6 +636,8 @@ Boss-UFO: +100
 
 - Nicht zerstörte Schiffe bleiben auf dem Board.
 - Nach jeder vollständigen Spielerrunde erscheint eine neue Welle.
+- Auch eine vollständig übersprungene Teamrunde lässt die nächste Welle
+  erscheinen; Überspringen kann die Invasion daher nicht anhalten.
 - Wenn zu viele Schiffe aktiv sind, verliert die Gruppe oder erhält eine Strafwelle.
 
 ### Coop-Variante
