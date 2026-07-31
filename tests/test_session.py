@@ -705,6 +705,87 @@ class EventPipelineTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(60, self.controller.engine.state.players[0].score)
         self.assertEqual(1, len(self.controller.engine.state.throws))
 
+    async def test_ble_miss_immediately_after_hit_is_debounced(self):
+        now = [100.0]
+        pipeline = EventPipeline(self.controller, clock=lambda: now[0])
+        hit_event = {
+            "type": "hit",
+            "label": "S20",
+            "score": 20,
+            "seq": 50,
+            "raw": "3200000005000c020014",
+            "field": 20,
+            "ring": "single_outer",
+            "multiplier": 1,
+        }
+        trailing_miss = {
+            "type": "miss",
+            "label": "MISS",
+            "score": 0,
+            "seq": 51,
+            "raw": "330000000500000000ee",
+        }
+
+        self.assertTrue(await pipeline.process(hit_event, source="ble"))
+        now[0] += 0.4
+        self.assertFalse(await pipeline.process(trailing_miss, source="ble"))
+        self.assertEqual(1, len(self.controller.engine.state.throws))
+        self.assertEqual(20, self.controller.engine.state.players[0].score)
+
+    async def test_ble_miss_after_debounce_window_is_accepted(self):
+        now = [100.0]
+        pipeline = EventPipeline(self.controller, clock=lambda: now[0])
+        hit_event = {
+            "type": "hit",
+            "label": "S20",
+            "score": 20,
+            "seq": 60,
+            "raw": "3c00000005000c020014",
+            "field": 20,
+            "ring": "single_outer",
+            "multiplier": 1,
+        }
+        miss_event = {
+            "type": "miss",
+            "label": "MISS",
+            "score": 0,
+            "seq": 61,
+            "raw": "3d0000000500000000ee",
+        }
+
+        self.assertTrue(await pipeline.process(hit_event, source="ble"))
+        now[0] += 1.1
+        self.assertTrue(await pipeline.process(miss_event, source="ble"))
+        self.assertEqual(2, len(self.controller.engine.state.throws))
+
+    async def test_ble_hit_after_hit_is_not_debounced(self):
+        now = [100.0]
+        pipeline = EventPipeline(self.controller, clock=lambda: now[0])
+        first = {
+            "type": "hit",
+            "label": "S20",
+            "score": 20,
+            "seq": 70,
+            "raw": "4600000005000c020014",
+            "field": 20,
+            "ring": "single_outer",
+            "multiplier": 1,
+        }
+        second = {
+            **first,
+            "label": "S19",
+            "score": 19,
+            "seq": 71,
+            "raw": "4700000005000c090113",
+            "field": 19,
+        }
+
+        self.assertTrue(await pipeline.process(first, source="ble"))
+        now[0] += 0.2
+        self.assertTrue(await pipeline.process(second, source="ble"))
+        self.assertEqual(2, len(self.controller.engine.state.throws))
+        self.assertEqual(39, self.controller.engine.state.players[0].score)
+
     async def test_test_events_are_not_deduplicated(self):
         event = {"type": "miss", "label": "MISS", "score": 0, "seq": 1}
         await self.pipeline.process(event, source="test")

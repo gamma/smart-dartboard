@@ -25,6 +25,7 @@ SCREENS = {
 }
 REMATCH_CONFIRM_SECONDS = 3.0
 CORRECTION_LOCK_SECONDS = 60.0
+HIT_MISS_DEBOUNCE_SECONDS = 1.0
 
 
 class SessionController:
@@ -826,11 +827,20 @@ class SessionController:
 class EventPipeline:
     """Serializes events and drops repeated BLE notifications."""
 
-    def __init__(self, controller: SessionController, history_size: int = 256) -> None:
+    def __init__(
+        self,
+        controller: SessionController,
+        history_size: int = 256,
+        clock: Callable[[], float] = monotonic,
+        hit_miss_debounce_seconds: float = HIT_MISS_DEBOUNCE_SECONDS,
+    ) -> None:
         self.controller = controller
         self._lock = asyncio.Lock()
         self._recent: Deque[Tuple[int, str]] = deque(maxlen=history_size)
         self._recent_set: set[Tuple[int, str]] = set()
+        self._clock = clock
+        self._hit_miss_debounce_seconds = hit_miss_debounce_seconds
+        self._last_ble_throw: Optional[Tuple[str, float]] = None
 
     async def process(self, event: Dict[str, Any], source: str = "ble") -> bool:
         async with self._lock:
@@ -849,13 +859,29 @@ class EventPipeline:
                     self._recent_set.discard(oldest)
                 self._recent.append(identity)
                 self._recent_set.add(identity)
+            now = self._clock()
+            if source == "ble" and event.get("type") == "miss":
+                if self._last_ble_throw is not None:
+                    last_type, last_time = self._last_ble_throw
+                    if (
+                        last_type == "hit"
+                        and now - last_time <= self._hit_miss_debounce_seconds
+                    ):
+                        return False
             enriched = {**event, "_source": source}
             if source == "test" and self.controller.game_id:
                 self.controller.store.set_game_environment(
                     self.controller.game_id,
                     "test",
                 )
+            throw_count = len(self.controller.engine.state.throws)
             self.controller.process_event(enriched)
+            if (
+                source == "ble"
+                and event.get("type") in {"hit", "miss"}
+                and len(self.controller.engine.state.throws) > throw_count
+            ):
+                self._last_ble_throw = (str(event["type"]), now)
             event.update(
                 {
                     key: value
