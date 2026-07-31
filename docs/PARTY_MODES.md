@@ -980,14 +980,20 @@ else:
 
 ```json
 {
-  "difficulty": "normal",
-  "bomb_count": 4,
+  "bomb_count": 6,
   "bomb_growth": "escalating",
   "penalty": -50,
-  "turn_ends_on_bomb": false,
-  "hidden_bombs": false
+  "hidden_bombs": "memory"
 }
 ```
+
+- `bomb_count`: 4, 6 oder 8 Startbomben.
+- Alle vier Zahlenringe (`single_inner`, `triple`, `single_outer`, `double`)
+  liegen gleich oft im Zufallspool; Double Bull bleibt ebenfalls möglich.
+- `hidden_bombs = memory`: Runde 1 zeigt alle Bomben. Ab Runde 2 taucht
+  jeweils die Hälfte für zwei Runden ab, erscheint eine Runde lang wieder und
+  kann danach erneut abtauchen. Treffer auf eine versteckte Bombe decken sie
+  sofort auf. `visible` lässt alle Bomben dauerhaft sichtbar.
 
 ### State
 
@@ -995,6 +1001,8 @@ else:
 {
   "bombs": ["D1", "T5", "S20", "DBULL"],
   "bomb_round": 1,
+  "hidden_bomb_ids": [],
+  "hidden_until_round": 0,
   "message": "Meide Rot!"
 }
 ```
@@ -1023,7 +1031,7 @@ after every player has completed the round:
 
 ```json
 {
-  "prompt": "Runde 2: 5 Bomben – meide Rot!",
+  "prompt": "Runde 2: 3 sichtbar · 2 versteckt – meide alle Bomben!",
   "danger": [
     {"id": "D1", "color": "red", "label": "BOMB", "pulse": true},
     {"id": "T5", "color": "red", "label": "BOMB", "pulse": true}

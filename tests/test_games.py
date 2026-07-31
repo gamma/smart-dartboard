@@ -5,6 +5,7 @@ import unittest
 
 from sdb_dartboard.game import GameEngine
 from sdb_dartboard.games import registry
+from sdb_dartboard.games.avoid_bomb import BOMB_POOL
 
 
 def hit(score: int, seq: int = 1, field: int = 20, multiplier: int = 1, label: str = "S20"):
@@ -368,15 +369,30 @@ class GameEngineTests(unittest.TestCase):
 
     def test_avoid_bomb_exposes_danger_overlay(self):
         engine = GameEngine()
-        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 4})
         overlay = engine.state.as_dict()["overlay"]
-        self.assertEqual(2, len(overlay["danger"]))
+        self.assertEqual(4, len(overlay["danger"]))
         self.assertTrue(all(item["icon"] == "mine" for item in overlay["danger"]))
         self.assertEqual("mine", overlay["visual_legend"][0]["icon"])
 
+    def test_avoid_bomb_pool_contains_both_single_rings(self):
+        ring_counts = {
+            ring: sum(1 for bomb in BOMB_POOL if bomb["ring"] == ring)
+            for ring in ("single_inner", "single_outer", "triple", "double")
+        }
+        self.assertEqual(
+            {
+                "single_inner": 20,
+                "single_outer": 20,
+                "triple": 20,
+                "double": 20,
+            },
+            ring_counts,
+        )
+
     def test_avoid_bomb_marks_exact_hit_for_full_explosion(self):
         engine = GameEngine()
-        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 4})
         engine.state.mode_state["bombs"] = [{
             "label": "T20",
             "field": 20,
@@ -394,7 +410,7 @@ class GameEngineTests(unittest.TestCase):
 
     def test_avoid_bomb_neighbor_hit_triggers_close_call_without_penalty(self):
         engine = GameEngine()
-        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 4})
         engine.state.mode_state["bombs"] = [{
             "label": "T20",
             "field": 20,
@@ -414,7 +430,7 @@ class GameEngineTests(unittest.TestCase):
 
     def test_avoid_bomb_radial_neighbor_also_triggers_close_call(self):
         engine = GameEngine()
-        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 4})
         engine.state.mode_state["bombs"] = [{
             "label": "T20",
             "field": 20,
@@ -432,7 +448,7 @@ class GameEngineTests(unittest.TestCase):
 
     def test_avoid_bomb_bull_neighbor_triggers_close_call(self):
         engine = GameEngine()
-        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 4})
         engine.state.mode_state["bombs"] = [{
             "label": "DBull",
             "field": 25,
@@ -453,7 +469,7 @@ class GameEngineTests(unittest.TestCase):
         engine.reset(
             "avoid_bomb",
             ["Ada", "Bob"],
-            options={"bomb_count": 2, "bomb_growth": "steady"},
+            options={"bomb_count": 4, "bomb_growth": "steady", "hidden_bombs": "visible"},
         )
         initial_bombs = list(engine.state.mode_state["bombs"])
 
@@ -466,8 +482,8 @@ class GameEngineTests(unittest.TestCase):
             engine.handle_event({"type": "miss", "score": 0, "seq": seq})
         engine.continue_turn()
         self.assertEqual(2, engine.state.round_number)
-        self.assertEqual(3, len(engine.state.mode_state["bombs"]))
-        self.assertEqual(initial_bombs, engine.state.mode_state["bombs"][:2])
+        self.assertEqual(5, len(engine.state.mode_state["bombs"]))
+        self.assertEqual(initial_bombs, engine.state.mode_state["bombs"][:4])
         self.assertIn("neue Bombe", engine.state.message)
 
     def test_avoid_bomb_escalating_growth_adds_the_new_round_number(self):
@@ -475,18 +491,18 @@ class GameEngineTests(unittest.TestCase):
         engine.reset(
             "avoid_bomb",
             ["Ada"],
-            options={"bomb_count": 2, "bomb_growth": "escalating"},
+            options={"bomb_count": 4, "bomb_growth": "escalating", "hidden_bombs": "visible"},
         )
         for seq in range(3):
             engine.handle_event({"type": "miss", "score": 0, "seq": seq})
         engine.continue_turn()
         self.assertEqual(2, engine.state.round_number)
-        self.assertEqual(4, len(engine.state.mode_state["bombs"]))
+        self.assertEqual(6, len(engine.state.mode_state["bombs"]))
         self.assertIn("2 neue Bomben", engine.state.message)
 
     def test_avoid_bomb_hit_does_not_shuffle_existing_bombs(self):
         engine = GameEngine()
-        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 2})
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 4})
         bombs = list(engine.state.mode_state["bombs"])
         bomb = bombs[0]
         engine.handle_event({
@@ -498,6 +514,56 @@ class GameEngineTests(unittest.TestCase):
             "label": bomb["label"],
         })
         self.assertEqual(bombs, engine.state.mode_state["bombs"])
+
+    def test_avoid_bomb_memory_hides_then_reveals_bombs(self):
+        engine = GameEngine()
+        engine.reset(
+            "avoid_bomb",
+            ["Ada"],
+            options={
+                "bomb_count": 4,
+                "bomb_growth": "steady",
+                "hidden_bombs": "memory",
+            },
+        )
+        mode = registry.get("avoid_bomb")
+
+        for round_number in (2, 3):
+            engine.state.round_number = round_number
+            mode.on_turn_start(engine.state, engine.state.current_player())
+
+        hidden_ids = engine.state.mode_state["hidden_bomb_ids"]
+        self.assertTrue(hidden_ids)
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertEqual(len(engine.state.mode_state["bombs"]) - len(hidden_ids), len(overlay["danger"]))
+        self.assertIn("versteckt", overlay["prompt"])
+
+        engine.state.round_number = 4
+        mode.on_turn_start(engine.state, engine.state.current_player())
+        self.assertEqual([], engine.state.mode_state["hidden_bomb_ids"])
+        self.assertEqual(
+            len(engine.state.mode_state["bombs"]),
+            len(engine.state.as_dict()["overlay"]["danger"]),
+        )
+
+    def test_hitting_hidden_bomb_reveals_it(self):
+        engine = GameEngine()
+        engine.reset("avoid_bomb", ["Ada"], options={"bomb_count": 4})
+        bomb = engine.state.mode_state["bombs"][0]
+        bomb_id = f"{bomb['ring']}:{bomb['field']}"
+        engine.state.mode_state["hidden_bomb_ids"] = [bomb_id]
+
+        event = hit(
+            bomb["score"],
+            field=bomb["field"],
+            multiplier=bomb["multiplier"],
+            label=bomb["label"],
+        )
+        event["ring"] = bomb["ring"]
+        engine.handle_event(event)
+
+        self.assertEqual("bomb_explosion", engine.state.last_event["effect"])
+        self.assertNotIn(bomb_id, engine.state.mode_state["hidden_bomb_ids"])
 
     def test_color_clash_scores_colored_segments(self):
         engine = GameEngine()

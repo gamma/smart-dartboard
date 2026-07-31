@@ -515,7 +515,7 @@ class SessionControllerTests(unittest.TestCase):
     def test_manual_throw_returns_mode_effect_for_projector_event(self):
         ada = self.controller.create_player("Ada", "nova", "#ff00aa")
         self.controller.start_session([ada["id"]])
-        self.controller.prepare_game("avoid_bomb", {"bomb_count": 2})
+        self.controller.prepare_game("avoid_bomb", {"bomb_count": 4})
         self.controller.start_game()
         self.controller.set_screen("playing")
         self.controller.engine.state.mode_state["bombs"] = [{

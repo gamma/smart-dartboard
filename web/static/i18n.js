@@ -431,6 +431,7 @@
       ['Red is dangerous','Red segments are bombs and cost points.'],
       ['Everything else scores','Regular hits score their dart value.'],
       ['Harder each round','After everyone has played, bombs grow evenly or by the new round number.'],
+      ['Memory bombs','In Memory mode, half the bombs disappear for two rounds after one visible round, then return.'],
       ['Boom or close call','Bomb hits explode loudly. Directly adjacent segments show “That was close” but score normally.'],
     ],
     block_drop:[
@@ -559,7 +560,7 @@
   };
 
   const exactEn = {
-    'Runden':'Rounds','Startbomben':'Starting bombs','Bombenzuwachs':'Bomb growth',
+    'Runden':'Rounds','Startbomben':'Starting bombs','Bombenzuwachs':'Bomb growth','Bombensicht':'Bomb visibility',
     'Strafe':'Penalty','Drop-Ziel':'Drop target','Spieltempo':'Pace','Nach Drop':'After drop',
     'Boss HP':'Boss HP','Schwachpunkte':'Weak spots','Rundenlimit':'Round limit',
     'Farbwechsel':'Color change','Spielstufe':'Difficulty','Schwierigkeit':'Difficulty',
@@ -584,7 +585,8 @@
     'Nach rechts':'Move right','Stein droppen':'Drop block','STEUERUNG':'CONTROLS',
     'AKTUELLE AUFGABE':'CURRENT TARGET','SPIELSTATUS':'GAME STATUS',
     'Meide Rot!':'Avoid red!','Gold zählt am meisten!':'Gold scores the most!',
-    'Bombe':'Bomb','DAS WAR KNAPP!':'THAT WAS CLOSE!',
+    'Bombe':'Bomb','Versteckt':'Hidden','Immer sichtbar':'Always visible',
+    'Memory · zeitweise versteckt':'Memory · temporarily hidden','DAS WAR KNAPP!':'THAT WAS CLOSE!',
     'Der erste Treffer ist garantiert sicher!':'The first hit is guaranteed safe!',
     'ALLE COOKIES ESSEN · SCHIMMEL MEIDEN · BULL = MILCH':'EAT ALL COOKIES · AVOID MOLD · BULL = MILK',
     'MILCH':'MILK','MILCH! +30':'MILK! +30','Schimmel':'Mold',
@@ -743,6 +745,13 @@
       .replace(/^Fang (.+)!$/, 'Catch $1!')
       .replace(/^Schlag ([0-9]+)!$/, 'Beat $1!')
       .replace(/^([A-Za-zÀ-ž0-9 _-]+) gewinnt!$/, '$1 wins!')
+      .replace(/Eine neue Bombe ist aktiv/g, 'One new bomb is active')
+      .replace(/([0-9]+) neue Bomben sind aktiv/g, '$1 new bombs are active')
+      .replace(/Die versteckten Bomben sind wieder sichtbar/g, 'The hidden bombs are visible again')
+      .replace(/([0-9]+) Bomben sind für zwei Runden versteckt/g, '$1 bombs are hidden for two rounds')
+      .replace(/([0-9]+) sichtbar/g, '$1 visible')
+      .replace(/([0-9]+) versteckt/g, '$1 hidden')
+      .replace(/meide alle Bomben/gi, 'avoid every bomb')
       .replace(/([0-9]+) Bomben/g, '$1 bombs')
       .replace(/([0-9]+) sichere Felder übrig/g, '$1 safe fields left')
       .replace(/([0-9]+) Cookies übrig/g, '$1 cookies left')
