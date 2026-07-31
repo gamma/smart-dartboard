@@ -1272,6 +1272,137 @@
   width: min(520px, 100%);
 }
 
+.selected-rules {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 36%, rgba(255, 255, 255, .12));
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--accent) 7%, rgba(0, 0, 0, .68));
+  backdrop-filter: blur(16px);
+}
+
+.selected-rules > header {
+  margin: 0 0 9px 3px;
+  color: var(--accent);
+  font-size: 10px;
+  font-weight: 1000;
+  letter-spacing: .17em;
+}
+
+.selected-rules > div {
+  display: grid;
+  gap: 7px;
+}
+
+.selected-rule {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(90px, .7fr) minmax(0, 1.3fr);
+  gap: 3px 12px;
+  align-items: baseline;
+  padding: 9px 11px;
+  border: 1px solid rgba(255, 255, 255, .09);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .05);
+}
+
+.selected-rule span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.selected-rule b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+  line-height: 1.15;
+}
+
+.selected-rule small {
+  grid-column: 1 / -1;
+  color: #c6d3dc;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.control-selected-rules {
+  margin-bottom: 4px;
+}
+
+.projector-instruction-content {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(12px, 1.3vw, 24px);
+  align-items: center;
+}
+
+.projector-instruction-content > :only-child {
+  grid-column: 1 / -1;
+}
+
+.projector-selected-rules,
+.projector-instruction-content .projector-step-list,
+.projector-instruction-content .projector-guide {
+  min-width: 0;
+  width: 100%;
+}
+
+.projector-selected-rules .selected-rule {
+  grid-template-columns: minmax(72px, .65fr) minmax(0, 1.35fr);
+  padding: clamp(6px, .55vw, 10px);
+}
+
+.projector-selected-rules .selected-rule span {
+  font-size: clamp(8px, .55vw, 11px);
+}
+
+.projector-selected-rules .selected-rule b {
+  font-size: clamp(12px, .9vw, 17px);
+}
+
+.projector-selected-rules .selected-rule small {
+  font-size: clamp(9px, .68vw, 13px);
+}
+
+.mode-projector .projector-instructions {
+  grid-template-columns: minmax(0, .72fr) minmax(0, 1.28fr);
+  gap: clamp(30px, 4vw, 76px);
+  padding: clamp(44px, 4vw, 78px);
+}
+
+.mode-projector .projector-instructions h1 {
+  font-size: clamp(58px, 6.8vw, 130px);
+  overflow-wrap: anywhere;
+}
+
+.mode-projector .projector-instructions > div:first-child > p {
+  margin-left: 0;
+  font-size: clamp(17px, 1.45vw, 28px);
+  line-height: 1.35;
+}
+
+.mode-projector .projector-step-list {
+  gap: clamp(7px, .7vw, 13px);
+}
+
+.mode-projector .projector-step-list .instruction-step {
+  gap: clamp(9px, .8vw, 15px);
+  padding: clamp(9px, .75vw, 15px);
+  font-size: clamp(13px, .92vw, 18px);
+}
+
+.mode-projector .projector-step-list .instruction-step > span {
+  width: clamp(28px, 2vw, 38px);
+  height: clamp(28px, 2vw, 38px);
+}
+
+.mode-projector .projector-step-list .instruction-step p {
+  font-size: clamp(11px, .75vw, 15px);
+}
+
 .projection-top,
 .projection-bottom,
 .projection-roster {

@@ -21,7 +21,10 @@ class ColorClashMode:
         icon="palette",
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
-            GameOption("shuffle", "Farbwechsel", "choice", "turn", [{"value":"turn","label":"Nach jeder Runde"},{"value":"dart","label":"Nach jedem Dart · gleich für alle"}]),
+            GameOption("shuffle", "Farbwechsel", "choice", "turn", [
+                {"value":"turn","label":"Nach jeder Runde","description":"Die Farbverteilung bleibt für alle Spieler der Runde identisch.","description_en":"The color layout stays identical for every player in the round."},
+                {"value":"dart","label":"Nach jedem Dart · gleich für alle","description":"Alle erhalten dieselbe vorbereitete Folge aus drei Farbverteilungen.","description_en":"Everyone receives the same prepared sequence of three color layouts."},
+            ]),
         ],
         instructions=[
             InstructionStep("Farben zählen", "Gold +50, Cyan +25, Grün +10, Rot -25.", "palette"),

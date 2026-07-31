@@ -54,6 +54,15 @@ class GameRegistryTests(unittest.TestCase):
             self.assertTrue(mode.metadata.instructions)
             self.assertTrue(mode.metadata.visual)
 
+    def test_option_help_is_bilingual_when_present(self):
+        for mode in registry.all():
+            for option in mode.metadata.options:
+                for choice in option.choices:
+                    with self.subTest(mode=mode.metadata.slug, option=option.key):
+                        self.assertTrue(choice.get("label"))
+                        if choice.get("description"):
+                            self.assertTrue(choice.get("description_en"))
+
 
 class GameEngineTests(unittest.TestCase):
     def test_countup_holds_after_three_darts(self):
@@ -839,6 +848,86 @@ class GameEngineTests(unittest.TestCase):
             {"single_inner", "triple", "single_outer", "double"},
             {item["ring"] for item in overlay["targets"]},
         )
+
+    def test_easy_mini_golf_accepts_and_lights_the_whole_number(self):
+        engine = GameEngine()
+        engine.reset(
+            "mini_golf",
+            ["Ada"],
+            options={"holes": 6, "difficulty": "easy"},
+        )
+        target = engine.state.mode_state["target"]
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertEqual(
+            {"single_inner", "triple", "single_outer", "double"},
+            {item["ring"] for item in overlay["targets"]},
+        )
+
+        engine.handle_event({
+            "type": "hit",
+            "seq": 241,
+            "field": target["field"],
+            "ring": "single_inner",
+            "multiplier": 1,
+            "score": target["field"],
+            "label": f"S{target['field']}",
+        })
+        self.assertEqual(1, engine.state.players[0].score)
+
+    def test_easy_ghost_chase_accepts_both_single_areas(self):
+        engine = GameEngine()
+        engine.reset(
+            "ghost_chase",
+            ["Ada"],
+            options={"rounds": 5, "difficulty": "easy"},
+        )
+        target = engine.state.mode_state["path"][0]
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertEqual(
+            {"single_inner", "single_outer"},
+            {item["ring"] for item in overlay["targets"]},
+        )
+
+        engine.handle_event({
+            "type": "hit",
+            "seq": 242,
+            "field": target["field"],
+            "ring": "single_inner",
+            "multiplier": 1,
+            "score": target["field"],
+            "label": f"S{target['field']}",
+        })
+        self.assertEqual(40, engine.state.players[0].score)
+
+    def test_robin_hood_same_number_lights_every_ring(self):
+        engine = GameEngine()
+        engine.reset(
+            "robin_hood",
+            ["Ada", "Bob"],
+            options={"rounds": 5, "matching": "number"},
+        )
+        field = engine.state.mode_state["remaining_targets"][0]["field"]
+        rings = {
+            item["ring"]
+            for item in engine.state.as_dict()["overlay"]["targets"]
+            if item["field"] == field
+        }
+        self.assertEqual(
+            {"single_inner", "triple", "single_outer", "double"},
+            rings,
+        )
+
+    def test_lightning_number_tasks_light_every_accepted_ring(self):
+        engine = GameEngine()
+        engine.reset("lightning_round", ["Ada"], options={"rounds": 5})
+        engine.state.mode_state["task_id"] = "under_10"
+        targets = engine.state.as_dict()["overlay"]["targets"]
+        self.assertEqual(36, len(targets))
+        for field in range(1, 10):
+            self.assertEqual(
+                {"single_inner", "triple", "single_outer", "double"},
+                {item["ring"] for item in targets if item["field"] == field},
+            )
 
     def test_normal_target_rush_sequence_repeats_for_every_player(self):
         engine = GameEngine()

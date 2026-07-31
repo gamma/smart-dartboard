@@ -2,7 +2,14 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-from .arcade import choose_targets, finish_round_game, overlay_item, same_field, same_target
+from .arcade import (
+    choose_targets,
+    finish_round_game,
+    number_overlay_items,
+    overlay_item,
+    same_field,
+    same_target,
+)
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -33,8 +40,8 @@ class RobinHoodMode:
                 {"value": 8, "label": "8 Runden"},
             ]),
             GameOption("matching", "Trefferregel", "choice", "exact", [
-                {"value": "exact", "label": "Exact Ring"},
-                {"value": "number", "label": "Same Number"},
+                {"value": "exact", "label": "Exact Ring", "description": "Zahl und physischer Ring des Sheriff-Pfeils müssen stimmen.", "description_en": "Both the number and physical ring of the Sheriff arrow must match."},
+                {"value": "number", "label": "Same Number", "description": "Jeder Ring derselben Zahl spaltet den Sheriff-Pfeil.", "description_en": "Any ring of the same number splits the Sheriff arrow."},
             ]),
         ],
         instructions=[
@@ -43,6 +50,7 @@ class RobinHoodMode:
             InstructionStep("Ziele weitergeben", "Deine gültigen Treffer werden die Ziele des nächsten Spielers.", "shuffle"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -114,9 +122,20 @@ class RobinHoodMode:
         targets = state.mode_state.get("remaining_targets", [])
         next_targets = state.mode_state.get("sheriff_targets", [])
         shown = next_targets if state.status == "hold" else targets
+        overlay_targets = []
+        for item in shown:
+            if state.options.get("matching") == "number" and item.get("field") != 25:
+                overlay_targets.extend(
+                    number_overlay_items(int(item["field"]), "green", "SPLIT", False)
+                )
+            else:
+                overlay_targets.append(overlay_item(item, "green", "SPLIT", False))
         return {
-            "prompt": "Freie Runde – lege neue Pfeile!" if not shown else "Spalte: " + " · ".join(item["label"] for item in shown),
-            "targets": [overlay_item(item, "green", "SPLIT", False) for item in shown],
+            "prompt": "Freie Runde – lege neue Pfeile!" if not shown else "Spalte: " + " · ".join(
+                str(item["field"]) if state.options.get("matching") == "number" else item["label"]
+                for item in shown
+            ),
+            "targets": overlay_targets,
             "panel": {
                 "title": "SHERIFF-PFEILE",
                 "headline": f"{len(targets)} noch offen",

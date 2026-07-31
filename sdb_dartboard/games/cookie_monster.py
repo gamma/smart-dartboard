@@ -31,9 +31,9 @@ class CookieMonsterMode:
         icon="cookie",
         options=[
             GameOption("difficulty", "Spielstufe", "choice", "easy", [
-                {"value": "easy", "label": "Einfach · Snack Time"},
-                {"value": "normal", "label": "Mittel · Cookie Hunt"},
-                {"value": "hard", "label": "Schwer · Sugar Rush"},
+                {"value": "easy", "label": "Einfach · Snack Time", "description": "15 große Zahlenfelder; jeder Ring isst den Cookie. Bull gibt +30.", "description_en": "15 large number areas; any ring eats the cookie. Bull scores +30."},
+                {"value": "normal", "label": "Mittel · Cookie Hunt", "description": "12 exakte Cookies mit Gold und Schimmel. Bull verdoppelt oder rettet den Zug.", "description_en": "12 exact cookies with gold and mold. Bull doubles or saves the visit."},
+                {"value": "hard", "label": "Schwer · Sugar Rush", "description": "15 exakte, farbige Cookies; Serien aktivieren Sugar Rush. Bull verdoppelt oder rettet.", "description_en": "15 exact colored cookies; streaks trigger Sugar Rush. Bull doubles or saves."},
             ]),
             GameOption("rounds", "Runden", "choice", 5, [
                 {"value": 5, "label": "5 Runden"},

@@ -29,7 +29,10 @@ class DartsBingoMode:
         accent_secondary="#9b5cff",
         visual="darts-bingo",
         icon="grid",
-        options=[GameOption("points", "Sieg", "choice", "line", [{"value":"line","label":"Erste Linie"},{"value":"full","label":"Volle Karte"}])],
+        options=[GameOption("points", "Sieg", "choice", "line", [
+            {"value":"line","label":"Erste Linie","description":"Drei erledigte Aufgaben waagerecht, senkrecht oder diagonal gewinnen.","description_en":"Three completed tasks horizontally, vertically, or diagonally win."},
+            {"value":"full","label":"Volle Karte","description":"Alle neun Aufgaben müssen erfüllt werden.","description_en":"All nine tasks must be completed."},
+        ])],
         instructions=[
             InstructionStep("Karte füllen", "Jeder Treffer kann eine Aufgabe markieren.", "grid"),
             InstructionStep("Siegziel beachten", "Je nach Auswahl zählt die erste Linie oder die volle Karte.", "line"),

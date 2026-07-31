@@ -22,9 +22,9 @@ class KingOfBoardMode:
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
             GameOption("ownership", "Eroberung", "choice", "segment", [
-                {"value": "area", "label": "Leicht · Double-Reihe, Triple-Nachbarn"},
-                {"value": "segment", "label": "Klassisch · Segment genau"},
-                {"value": "field", "label": "Sehr leicht · Ganzes Zahlenfeld"},
+                {"value": "area", "label": "Leicht · Double-Reihe, Triple-Nachbarn", "description": "Double erobert die ganze Zahl; Triple zusätzlich beide Nachbarzahlen.", "description_en": "A Double captures the whole number; a Triple also captures both neighbors."},
+                {"value": "segment", "label": "Klassisch · Segment genau", "description": "Nur das tatsächlich getroffene physische Segment wird erobert.", "description_en": "Only the exact physical segment hit is captured."},
+                {"value": "field", "label": "Sehr leicht · Ganzes Zahlenfeld", "description": "Jeder Treffer erobert alle vier Ringe der getroffenen Zahl.", "description_en": "Every hit captures all four rings of the number."},
             ]),
         ],
         instructions=[

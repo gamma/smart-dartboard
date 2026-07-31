@@ -7,6 +7,7 @@ from .arcade import (
     TARGET_POOL_BASIC,
     TARGET_POOL_HARD,
     TARGET_POOL_NORMAL,
+    number_overlay_items,
     overlay_item,
     same_field,
     same_target,
@@ -31,9 +32,9 @@ class MiniGolfMode:
                 {"value": 9, "label": "9 Löcher"},
             ]),
             GameOption("difficulty", "Platz", "choice", "normal", [
-                {"value": "easy", "label": "Easy · Zahl genügt"},
-                {"value": "normal", "label": "Normal · Single/Double exakt"},
-                {"value": "hard", "label": "Hard · Double/Triple/Bull"},
+                {"value": "easy", "label": "Easy · Zahl genügt", "description": "Jeder Ring der Zielzahl trifft das Loch.", "description_en": "Any ring of the target number hits the hole."},
+                {"value": "normal", "label": "Normal · Single/Double exakt", "description": "Das angezeigte äußere Single- oder Double-Segment muss exakt getroffen werden.", "description_en": "Hit the displayed outer Single or Double segment exactly."},
+                {"value": "hard", "label": "Hard · Double/Triple/Bull", "description": "Das angezeigte Double-, Triple- oder Bull-Segment muss exakt getroffen werden.", "description_en": "Hit the displayed Double, Triple, or Bull segment exactly."},
             ]),
         ],
         instructions=[
@@ -42,6 +43,7 @@ class MiniGolfMode:
             InstructionStep("Niedrig gewinnt", "Kein Treffer zählt vier Schläge. Nach dem letzten Loch gewinnt der niedrigste Score.", "trophy"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -146,9 +148,22 @@ class MiniGolfMode:
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         target = state.mode_state.get("target")
+        targets = []
+        if target:
+            targets = (
+                number_overlay_items(target["field"], "green", "⚑", True)
+                if state.options.get("difficulty") == "easy"
+                else [overlay_item(target, "green", "⚑", True)]
+            )
         return {
-            "prompt": f"Loch {state.round_number}: {target['label']}" if target else "Nächstes Loch",
-            "targets": [overlay_item(target, "green", "⚑", True)] if target else [],
+            "prompt": (
+                f"Loch {state.round_number}: Zahl {target['field']}"
+                if target and state.options.get("difficulty") == "easy"
+                else f"Loch {state.round_number}: {target['label']}"
+                if target
+                else "Nächstes Loch"
+            ),
+            "targets": targets,
             "panel": {
                 "title": f"LOCH {state.round_number}/{state.options.get('holes', 9)}",
                 "headline": target["label"] if target else "–",

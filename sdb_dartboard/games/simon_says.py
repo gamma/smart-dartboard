@@ -29,10 +29,10 @@ class SimonSaysMode:
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
             GameOption("difficulty", "Zielgröße", "choice", "easy", [
-                {"value":"very_easy","label":"Sehr leicht · 4 Zonen"},
-                {"value":"easy","label":"Leicht · 5 Zonen"},
-                {"value":"normal","label":"Mittel · 10 Zonen"},
-                {"value":"hard","label":"Schwer · 20 Zahlen"},
+                {"value":"very_easy","label":"Sehr leicht · 4 Zonen","description":"Fünf benachbarte Zahlen bilden jeweils ein großes Zielgebiet.","description_en":"Five neighboring numbers form each large target zone."},
+                {"value":"easy","label":"Leicht · 5 Zonen","description":"Vier benachbarte Zahlen bilden jeweils ein Zielgebiet.","description_en":"Four neighboring numbers form each target zone."},
+                {"value":"normal","label":"Mittel · 10 Zonen","description":"Je zwei benachbarte Zahlen bilden ein Zielgebiet.","description_en":"Each pair of neighboring numbers forms one target zone."},
+                {"value":"hard","label":"Schwer · 20 Zahlen","description":"Jede Zahl ist ein eigenes Ziel; der Ring bleibt egal.","description_en":"Every number is its own target; the ring still does not matter."},
             ]),
         ],
         instructions=[

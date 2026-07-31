@@ -26,8 +26,8 @@ class RiskItMode:
                 {"value": 8, "label": "8 Runden"},
             ]),
             GameOption("miss_loses", "Miss", "choice", "pot", [
-                {"value": "pot", "label": "Pot verlieren"},
-                {"value": "half", "label": "Pot halbieren"},
+                {"value": "pot", "label": "Pot verlieren", "description": "Ein Miss löscht den gesamten eigenen ungesicherten Pot.", "description_en": "A miss removes your entire unsecured pot."},
+                {"value": "half", "label": "Pot halbieren", "description": "Ein Miss halbiert den eigenen ungesicherten Pot; bei Dart 3 wird die Hälfte gesichert.", "description_en": "A miss halves your unsecured pot; on dart 3, half is secured."},
             ]),
         ],
         instructions=[

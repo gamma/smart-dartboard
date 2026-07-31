@@ -5,14 +5,12 @@ from typing import Any, Dict
 from .arcade import (
     choose_targets,
     finish_round_game,
+    number_overlay_items,
     overlay_item,
     same_field,
     same_target,
 )
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
-
-NUMBER_RINGS = ["single_inner", "triple", "single_outer", "double"]
-
 
 class TargetRushMode:
     metadata = GameMetadata(
@@ -27,9 +25,9 @@ class TargetRushMode:
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
             GameOption("difficulty", "Ziele", "choice", "normal", [
-                {"value":"easy","label":"Easy · ganze Zahl"},
-                {"value":"normal","label":"Normal · exaktes Segment"},
-                {"value":"hard","label":"Hard · Double/Triple"},
+                {"value":"easy","label":"Easy · ganze Zahl","description":"Alle vier Ringe zählen; dieselbe Zahl bleibt die komplette Runde aktiv.","description_en":"All four rings score; the same number stays active for the full round."},
+                {"value":"normal","label":"Normal · exaktes Segment","description":"Drei exakte Ziele pro Runde wechseln nach jedem Dart; falscher Ring gibt +10.","description_en":"Three exact targets per round change after each dart; the wrong ring scores +10."},
+                {"value":"hard","label":"Hard · Double/Triple","description":"Wie Normal, aber die Zielfolge enthält nur Doubles, Triples und Double Bull.","description_en":"Like Normal, but the sequence contains only Doubles, Triples, and Double Bull."},
             ]),
         ],
         instructions=[
@@ -122,14 +120,7 @@ class TargetRushMode:
         targets = []
         if target:
             if easy:
-                targets = [
-                    {
-                        **overlay_item(target, "cyan", "+50" if ring == "single_outer" else "", True),
-                        "id": f"target-rush-{ring}-{target['field']}",
-                        "ring": ring,
-                    }
-                    for ring in NUMBER_RINGS
-                ]
+                targets = number_overlay_items(target["field"], "cyan", "+50", True)
             else:
                 targets = [overlay_item(target, "cyan", "+50", True)]
         return {

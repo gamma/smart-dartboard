@@ -3,7 +3,7 @@ from __future__ import annotations
 import random
 from typing import Any, Dict, List
 
-from .arcade import DARTS, finish_round_game, overlay_item
+from .arcade import DARTS, finish_round_game, number_overlay_items, overlay_item
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 TASKS = [
@@ -14,6 +14,17 @@ TASKS = [
     {"id":"bull","prompt":"Triff Bull", "accept":lambda e: int(e.get("field",0) or 0)==25, "zones":[d for d in DARTS if d["field"]==25]},
     {"id":"even","prompt":"Triff eine gerade Zahl", "accept":lambda e: int(e.get("field",0) or 0) in range(2,21,2), "zones":[d for d in DARTS if d["field"] in range(2,21,2)]},
 ]
+
+
+def task_overlay(task: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if task["id"] in {"over_15", "under_10", "even"}:
+        fields = sorted({int(dart["field"]) for dart in task["zones"]})
+        return [
+            item
+            for field in fields
+            for item in number_overlay_items(field, "cyan", "OK", False)
+        ]
+    return [overlay_item(dart, "cyan", "OK", False) for dart in task["zones"]]
 
 
 class LightningRoundMode:
@@ -33,6 +44,7 @@ class LightningRoundMode:
             InstructionStep("Erfolg punktet", "Erfolg gibt +25, Fehler gibt 0.", "success"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -86,7 +98,7 @@ class LightningRoundMode:
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         task = self._task(state)
-        return {"prompt": task["prompt"], "targets": [overlay_item(d, "cyan", "OK", False) for d in task["zones"][:40]]}
+        return {"prompt": task["prompt"], "targets": task_overlay(task)}
 
 
 GAME_MODE = LightningRoundMode()

@@ -34,6 +34,21 @@ GAME_MODE = ExampleMode()
 - optionale grafische `control_legend` für Steuerflächen
 - Soundthema
 
+Jede ausgewählte Option wird live auf beiden Anleitungsansichten angezeigt.
+Ein Choice kann dafür neben `value` und `label` eine konkrete deutsche und
+englische Erklärung mitliefern:
+
+```python
+{"value": "easy", "label": "Easy · ganze Zahl",
+ "description": "Alle vier Ringe zählen.",
+ "description_en": "All four rings score."}
+```
+
+Neue Modi benötigen dafür keine Änderung an der Weboberfläche. Mengen wie
+Runden oder Leben sind bereits über ihr Label verständlich; Varianten mit
+abweichender Treffer-, Risiko- oder Ablaufregel sollten beide Beschreibungen
+setzen.
+
 ## Neues Spiel hinzufügen
 
 1. `sdb_dartboard/games/mein_spiel.py` anlegen.
@@ -113,6 +128,9 @@ Das Event enthält bei einem Treffer typischerweise:
 - `get_overlay(state)` darf neben Zielen ein deklaratives `panel` sowie
   mehrteilige `zones` liefern. Beide Ansichten rendern diese Daten ohne
   modusabhängige Core-Änderung.
+- Akzeptiert eine Regel eine komplette Zahl, müssen alle physischen Zahlenringe
+  (`single_inner`, `triple`, `single_outer`, `double`) im Overlay erscheinen.
+  `number_overlay_items(...)` hält Logik und Projektion dabei synchron.
 - `GameMetadata.control_legend` rendert dieselbe vertikale Steuerungslegende in
   Anleitung und laufendem Spiel. Jeder Eintrag enthält `icon`, `color`,
   `label` sowie optional `secondary_color` und `detail`. Unterstützte

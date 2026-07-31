@@ -69,9 +69,9 @@ class BlockDropMode:
                 "choice",
                 "easy",
                 [
-                    {"value": "easy", "label": "Easy · Double, Triple oder Bull"},
-                    {"value": "normal", "label": "Mittel · Double oder Bull"},
-                    {"value": "hard", "label": "Schwer · nur Bull"},
+                    {"value": "easy", "label": "Easy · Double, Triple oder Bull", "description": "Double, Triple, Single Bull und Double Bull lassen den Stein fallen.", "description_en": "Doubles, Triples, Single Bull, and Double Bull drop the block."},
+                    {"value": "normal", "label": "Mittel · Double oder Bull", "description": "Double und beide Bulls lassen den Stein fallen.", "description_en": "Doubles and both Bulls drop the block."},
+                    {"value": "hard", "label": "Schwer · nur Bull", "description": "Nur Single Bull oder Double Bull lassen den Stein fallen.", "description_en": "Only Single Bull or Double Bull drop the block."},
                 ],
             ),
             GameOption(
@@ -80,8 +80,8 @@ class BlockDropMode:
                 "choice",
                 "classic",
                 [
-                    {"value": "classic", "label": "Klassisch · 5 Linien"},
-                    {"value": "action", "label": "Action · 10 Linien, Sink je Dart"},
+                    {"value": "classic", "label": "Klassisch · 5 Linien", "description": "Der Stein sinkt erst, nachdem alle Spieler ihre Aufnahme beendet haben.", "description_en": "The block sinks only after every player has completed the visit."},
+                    {"value": "action", "label": "Action · 10 Linien, Sink je Dart", "description": "Nach jedem Dart sinkt der Stein eine Zeile; Ziel sind zehn Linien.", "description_en": "The block sinks one row after every dart; clear ten lines."},
                 ],
             ),
             GameOption(
@@ -90,8 +90,8 @@ class BlockDropMode:
                 "choice",
                 "continue",
                 [
-                    {"value": "continue", "label": "Weiterwerfen"},
-                    {"value": "hold", "label": "Zug beenden"},
+                    {"value": "continue", "label": "Weiterwerfen", "description": "Nach einem Drop bleiben übrige Darts spielbar.", "description_en": "After a drop, any remaining darts can still be thrown."},
+                    {"value": "hold", "label": "Zug beenden", "description": "Ein erfolgreicher Drop beendet sofort die Aufnahme.", "description_en": "A successful drop ends the visit immediately."},
                 ],
             ),
         ],

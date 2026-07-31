@@ -9,6 +9,7 @@ from .x01_advisor import DARTS
 TARGET_POOL_BASIC = [d for d in DARTS if d["field"] != 25 and d["ring"] in {"single_outer", "single_inner"}]
 TARGET_POOL_NORMAL = [d for d in DARTS if d["label"] not in {"SBull"}]
 TARGET_POOL_HARD = [d for d in DARTS if d["ring"] in {"triple", "double", "double_bull"}]
+NUMBER_RINGS = ("single_inner", "triple", "single_outer", "double")
 
 
 def zone_id(dart: Dict[str, Any]) -> str:
@@ -40,6 +41,26 @@ def choose_targets(count: int, difficulty: str = "normal", exclude: Iterable[str
 
 def overlay_item(dart: Dict[str, Any], color: str, label: str = "", pulse: bool = True) -> Dict[str, Any]:
     return {"id": zone_id(dart), "field": dart["field"], "ring": dart["ring"], "color": color, "label": label, "pulse": pulse}
+
+
+def number_overlay_items(
+    field: int,
+    color: str,
+    label: str = "",
+    pulse: bool = True,
+) -> List[Dict[str, Any]]:
+    """Render every physical ring of one number as a single logical target."""
+    return [
+        {
+            "id": f"FIELD-{field}-{ring}",
+            "field": field,
+            "ring": ring,
+            "color": color,
+            "label": label if ring == "single_outer" else "",
+            "pulse": pulse,
+        }
+        for ring in NUMBER_RINGS
+    ]
 
 
 def score_winner(players: Iterable[Any]) -> tuple[Any | None, List[Any]]:

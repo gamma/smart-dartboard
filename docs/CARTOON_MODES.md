@@ -352,7 +352,7 @@ Geist bekommt eine Fluchtladung
 ### Varianten
 
 ```text
-Easy: Single-Ziele
+Easy: Single-Ziele; innerer und äußerer Single zählen
 Normal: beliebige Ringe
 Hard: Double/Triple/Bull
 ```
@@ -494,7 +494,8 @@ Jede Runde ist ein Dartloch. Der Projector zeigt ein Ziel; möglichst wenige Dar
 
 ### Regeln
 
-- Ein Zielsegment ist das Loch.
+- Easy zeigt eine ganze Zahl; alle vier Ringe treffen das Loch.
+- Normal und Hard zeigen ein exaktes Zielsegment.
 - Jeder Spieler wirft bis zu drei Darts.
 - Treffer beendet sein Loch.
 - Wertung:

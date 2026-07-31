@@ -173,9 +173,11 @@ class CartoonModeTests(unittest.TestCase):
         engine.handle_event(MISS | {"seq": 3})
         engine.continue_turn()
 
+        ghost_targets = engine.state.as_dict()["overlay"]["targets"]
+        self.assertTrue(all(item["field"] == path[0]["field"] for item in ghost_targets))
         self.assertEqual(
-            path[0]["label"],
-            engine.state.as_dict()["overlay"]["targets"][0]["id"],
+            {"single_inner", "single_outer"},
+            {item["ring"] for item in ghost_targets},
         )
         self.assertEqual(0, engine.state.mode_state["path_index"][engine.state.players[1].id])
         self.assertEqual(0, engine.state.mode_state["escape"][engine.state.players[1].id])

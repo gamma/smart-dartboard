@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .arcade import choose_targets, finish_round_game, overlay_item, same_target
+from .arcade import choose_targets, finish_round_game, number_overlay_items, overlay_item, same_target
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -22,9 +22,9 @@ class GhostChaseMode:
                 {"value": 8, "label": "8 Runden"},
             ]),
             GameOption("difficulty", "Geisterpfad", "choice", "normal", [
-                {"value": "easy", "label": "Easy · Singles"},
-                {"value": "normal", "label": "Normal · Alle Ringe"},
-                {"value": "hard", "label": "Hard · Double/Triple/Bull"},
+                {"value": "easy", "label": "Easy · Singles", "description": "Innerer und äußerer Single der Zielzahl fangen den Geist.", "description_en": "Both the inner and outer Single of the target number catch the ghost."},
+                {"value": "normal", "label": "Normal · Alle Ringe", "description": "Das zufällig gewählte Segment muss exakt getroffen werden.", "description_en": "The randomly selected segment must be hit exactly."},
+                {"value": "hard", "label": "Hard · Double/Triple/Bull", "description": "Ziele erscheinen nur in Double, Triple oder Double Bull.", "description_en": "Targets appear only in Doubles, Triples, or Double Bull."},
             ]),
         ],
         instructions=[
@@ -34,6 +34,7 @@ class GhostChaseMode:
             InstructionStep("Gleicher Pfad", "Alle jagen pro Runde dieselbe Folge von Geisterzielen.", "shuffle"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -70,7 +71,12 @@ class GhostChaseMode:
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
         target = self._target(state, player)
         combo = int(state.mode_state["combo"].get(player.id, 0))
-        if event.get("type") == "hit" and same_target(event, target):
+        easy_single = (
+            state.options.get("difficulty") == "easy"
+            and int(event.get("field", 0) or 0) == int(target["field"])
+            and str(event.get("ring", "")).startswith("single_")
+        )
+        if event.get("type") == "hit" and (easy_single or same_target(event, target)):
             points = 40 + min(combo, 2) * 10
             player.score += points
             state.mode_state["combo"][player.id] = combo + 1
@@ -94,9 +100,26 @@ class GhostChaseMode:
         target = self._target(state, current) if current else None
         combo = int(state.mode_state.get("combo", {}).get(current.id if current else "", 0))
         escape = int(state.mode_state.get("escape", {}).get(current.id if current else "", 0))
+        targets = []
+        if target:
+            targets = (
+                [
+                    item
+                    for item in number_overlay_items(target["field"], "cyan", "👻", True)
+                    if item["ring"].startswith("single_")
+                ]
+                if state.options.get("difficulty") == "easy"
+                else [overlay_item(target, "cyan", "👻", True)]
+            )
         return {
-            "prompt": f"Fang {target['label']}!" if target else "Fang den Geist!",
-            "targets": [overlay_item(target, "cyan", "👻", True)] if target else [],
+            "prompt": (
+                f"Fang Single {target['field']}!"
+                if target and state.options.get("difficulty") == "easy"
+                else f"Fang {target['label']}!"
+                if target
+                else "Fang den Geist!"
+            ),
+            "targets": targets,
             "combo": {"count": combo, "bonus": combo * 10},
             "panel": {
                 "title": "GHOST CHAIN",

@@ -583,6 +583,8 @@ Schnelle Aufgaben, ein Dart pro Aufgabe.
 - Spieler hat einen Dart.
 - Erfolg gibt Punkt(e), Fehler 0.
 - Danach nächster Spieler oder nächste Aufgabe.
+- Bei zahlenbasierten Aufgaben leuchten beide Single-Flächen, Triple und
+  Double, weil alle vier Ringe logisch als Treffer gelten.
 
 ### Beispiel-Aufgaben
 

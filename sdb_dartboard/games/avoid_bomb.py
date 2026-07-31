@@ -63,8 +63,14 @@ class AvoidBombMode:
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
             GameOption("bomb_count", "Startbomben", "choice", 6, [{"value":4,"label":"4 Bomben"},{"value":6,"label":"6 Bomben"},{"value":8,"label":"8 Bomben"}]),
-            GameOption("bomb_growth", "Bombenzuwachs", "choice", "escalating", [{"value":"steady","label":"+1 pro Runde"},{"value":"escalating","label":"+ Rundennummer"}]),
-            GameOption("hidden_bombs", "Bombensicht", "choice", "memory", [{"value":"visible","label":"Immer sichtbar"},{"value":"memory","label":"Memory · zeitweise versteckt"}]),
+            GameOption("bomb_growth", "Bombenzuwachs", "choice", "escalating", [
+                {"value":"steady","label":"+1 pro Runde","description":"Nach jeder vollständigen Runde kommt genau eine Bombe dazu.","description_en":"Exactly one bomb is added after every full round."},
+                {"value":"escalating","label":"+ Rundennummer","description":"Vor Runde 2 kommen zwei, vor Runde 3 drei neue Bomben dazu usw.","description_en":"Two bombs are added before round 2, three before round 3, and so on."},
+            ]),
+            GameOption("hidden_bombs", "Bombensicht", "choice", "memory", [
+                {"value":"visible","label":"Immer sichtbar","description":"Alle Bomben bleiben auf der Scheibe sichtbar.","description_en":"Every bomb remains visible on the board."},
+                {"value":"memory","label":"Memory · zeitweise versteckt","description":"Nach einer sichtbaren Runde wird die Hälfte für zwei Runden ausgeblendet.","description_en":"After one visible round, half the bombs are hidden for two rounds."},
+            ]),
             GameOption("penalty", "Strafe", "choice", -50, [{"value":-25,"label":"-25"},{"value":-50,"label":"-50"},{"value":-100,"label":"-100"}]),
         ],
         instructions=[

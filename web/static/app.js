@@ -558,6 +558,24 @@ function optionControl(option, selected){
     ${option.choices.map(choice => `<button class="${String(choice.value)===String(selected) ? 'selected' : ''}" data-action="set-option" data-key="${escapeHtml(option.key)}" data-value="${escapeHtml(choice.value)}">${escapeHtml(localText(choice.label))}</button>`).join('')}
   </div></div>`;
 }
+function selectedOptionRules(mode,placement=''){
+  const selected=appState.experience?.selected_options || {};
+  const rules=(mode.options || []).map(option=>{
+    const value=selected[option.key] ?? option.default;
+    const choice=(option.choices || []).find(item=>String(item.value)===String(value));
+    if(!choice) return '';
+    const detail=language()==='en'
+      ? (choice.description_en || localText(choice.description || ''))
+      : (choice.description || '');
+    return `<article class="selected-rule">
+      <span>${escapeHtml(localText(option.label))}</span>
+      <b>${escapeHtml(localText(choice.label))}</b>
+      ${detail?`<small>${escapeHtml(detail)}</small>`:''}
+    </article>`;
+  }).join('');
+  if(!rules) return '';
+  return `<aside class="selected-rules ${escapeHtml(placement)}"><header>${t('selected_rules')}</header><div>${rules}</div></aside>`;
+}
 function instructionSteps(mode){
   return mode.instructions.map((step,index) => `<article class="instruction-step">
     <span>${index+1}</span><div><h3>${escapeHtml(step.title)}</h3><p>${escapeHtml(step.body)}</p></div>
@@ -622,7 +640,7 @@ function controlInstructions(){
       <div>${sceneHeader(mode.tagline,mode.title,mode.description)}</div>
     </div>
     <div class="instruction-content">
-      <div class="instruction-list">${controlLegend(mode.control_legend,'control-instructions')}${instructionSteps(mode)}</div>
+      <div class="instruction-list">${selectedOptionRules(mode,'control-selected-rules')}${controlLegend(mode.control_legend,'control-instructions')}${instructionSteps(mode)}</div>
       <div class="game-options">${starterSelector()}${mode.options.map(option => optionControl(option,appState.experience.selected_options[option.key])).join('')}</div>
     </div>
     <footer class="sticky-actions">
@@ -1234,7 +1252,7 @@ function projectorInstructions(){
     : `<div class="projector-step-list">${instructionSteps(mode)}</div>`;
   return projectorBackdrop(mode,`<div class="projector-instructions">
     <div><div class="kicker">${escapeHtml(mode.tagline)}</div><h1>${escapeHtml(mode.title)}</h1><p>${escapeHtml(mode.description)}</p>${starter&&hasStarterChoice()?`<div class="projector-starter"><span>${t('starter')}</span><b>${avatarEmoji(starter.avatar)} ${escapeHtml(starter.name)}</b><small>${starterSourceLabel(appState.experience.starter?.selection)}</small></div>`:''}</div>
-    ${instructions}
+    <div class="projector-instruction-content">${selectedOptionRules(mode,'projector-selected-rules')}${instructions}</div>
   </div>`,'mode-projector');
 }
 function projectorCountdown(){

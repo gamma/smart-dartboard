@@ -26,9 +26,9 @@ class DartSweeperMode:
         icon="mine",
         options=[
             GameOption("preset", "Schwierigkeit", "choice", "classic", [
-                {"value": "explorer", "label": "Explorer · 3 Minen / 5 Leben"},
-                {"value": "classic", "label": "Classic · 5 Minen / 3 Leben"},
-                {"value": "expert", "label": "Expert · 7 Minen / 2 Leben"},
+                {"value": "explorer", "label": "Explorer · 3 Minen / 5 Leben", "description": "Wenige Minen und fünf gemeinsame Fehler – gut zum Kennenlernen.", "description_en": "Few mines and five shared mistakes—best for learning."},
+                {"value": "classic", "label": "Classic · 5 Minen / 3 Leben", "description": "Ausgewogenes Minenfeld mit drei gemeinsamen Leben.", "description_en": "A balanced minefield with three shared lives."},
+                {"value": "expert", "label": "Expert · 7 Minen / 2 Leben", "description": "Viele Minen und nur zwei gemeinsame Fehler.", "description_en": "Many mines and only two shared mistakes."},
             ]),
         ],
         instructions=[

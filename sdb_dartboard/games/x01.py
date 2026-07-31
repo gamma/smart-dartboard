@@ -28,7 +28,10 @@ class X01Mode:
                 "Checkout",
                 "choice",
                 "straight",
-                [{"value": "straight", "label": "Straight Out"}, {"value": "double", "label": "Double Out"}],
+                [
+                    {"value": "straight", "label": "Straight Out", "description": "Jeder Treffer darf das Spiel exakt auf null beenden.", "description_en": "Any hit may finish the game exactly on zero."},
+                    {"value": "double", "label": "Double Out", "description": "Der letzte Treffer muss ein Double oder Double Bull sein.", "description_en": "The final hit must be a Double or Double Bull."},
+                ],
             ),
         ],
         instructions=[
