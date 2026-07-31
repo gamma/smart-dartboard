@@ -26,7 +26,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          # Match the production image so syntax and dependency behavior do
+          # not diverge between verification and deployment.
+          python-version: "3.14"
           cache: pip
           cache-dependency-path: requirements.txt
 
@@ -42,6 +44,7 @@ jobs:
       - name: Check browser JavaScript
         run: |
           node --check web/static/app.js
+          node --check web/static/i18n.js
           node --check website/app.js
 
       - name: Validate Docker Compose
