@@ -1,9 +1,19 @@
 from __future__ import annotations
 
+import random
 from typing import Any, Dict
 
-from .arcade import choose_targets, finish_round_game, overlay_item, same_target
+from .arcade import finish_round_game
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
+
+BOARD_ORDER = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5]
+NUMBER_RINGS = ["single_inner", "triple", "single_outer", "double"]
+ZONE_COUNTS = {
+    "very_easy": 4,
+    "easy": 5,
+    "normal": 10,
+    "hard": 20,
+}
 
 
 class SimonSaysMode:
@@ -18,15 +28,22 @@ class SimonSaysMode:
         icon="memory",
         options=[
             GameOption("rounds", "Runden", "choice", 5, [{"value":3,"label":"3 Runden"},{"value":5,"label":"5 Runden"},{"value":8,"label":"8 Runden"}]),
-            GameOption("difficulty", "Ziele", "choice", "easy", [{"value":"easy","label":"Easy"},{"value":"normal","label":"Normal"},{"value":"hard","label":"Hard"}]),
+            GameOption("difficulty", "Zielgröße", "choice", "easy", [
+                {"value":"very_easy","label":"Sehr leicht · 4 Zonen"},
+                {"value":"easy","label":"Leicht · 5 Zonen"},
+                {"value":"normal","label":"Mittel · 10 Zonen"},
+                {"value":"hard","label":"Schwer · 20 Zahlen"},
+            ]),
         ],
         instructions=[
-            InstructionStep("Sequenz merken", "Die leuchtenden Felder sind deine Reihenfolge.", "memory"),
-            InstructionStep("Richtig treffen", "Jeder Treffer muss zum nächsten Sequenzziel passen.", "target"),
+            InstructionStep("Sequenz merken", "Die leuchtenden Zahlengruppen sind deine Reihenfolge.", "memory"),
+            InstructionStep("Jeder Ring zählt", "Triff eine Zahl der aktuellen Gruppe. Single, Double und Triple sind gleich richtig.", "target"),
+            InstructionStep("Bull ist Joker", "Single Bull und Double Bull erfüllen immer das nächste Ziel.", "joker"),
             InstructionStep("Sequenz wächst", "Die gemeinsame Aufgabe wächst über die ersten drei Runden.", "grow"),
             InstructionStep("Gleiche Chancen", "Alle spielen in einer Runde exakt dieselbe Sequenz.", "shuffle"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -39,12 +56,40 @@ class SimonSaysMode:
 
     def _generate_round_sequence(self, state: Any) -> None:
         length = min(3, state.round_number)
-        state.mode_state["sequence"] = choose_targets(
-            length,
+        zone_count = ZONE_COUNTS.get(
             str(state.options.get("difficulty", "easy")),
+            ZONE_COUNTS["easy"],
         )
+        fields_per_zone = len(BOARD_ORDER) // zone_count
+        zones = [
+            {
+                "zone": index + 1,
+                "fields": BOARD_ORDER[
+                    index * fields_per_zone:(index + 1) * fields_per_zone
+                ],
+            }
+            for index in range(zone_count)
+        ]
+        # Gameplay variety only; no security decision depends on this randomness.
+        state.mode_state["sequence"] = random.sample(zones, length)  # nosec B311
+        state.mode_state["zone_count"] = zone_count
         state.mode_state["sequence_round"] = state.round_number
         state.mode_state["position"] = 0
+
+    @staticmethod
+    def _matches_target(event: Dict[str, Any], target: Dict[str, Any]) -> bool:
+        if event.get("type") != "hit":
+            return False
+        if int(event.get("field", 0) or 0) == 25:
+            return str(event.get("ring", "")) in {"single_bull", "double_bull"}
+        return int(event.get("field", 0) or 0) in target.get("fields", [])
+
+    @staticmethod
+    def _target_label(target: Dict[str, Any], zone_count: int) -> str:
+        fields = list(target.get("fields", []))
+        if zone_count == 20 and fields:
+            return str(fields[0])
+        return f"Z{int(target.get('zone', 0))}"
 
     def on_turn_start(self, state: Any, player: Any) -> None:
         del player
@@ -57,7 +102,7 @@ class SimonSaysMode:
         seq = state.mode_state.get("sequence", [])
         pos = int(state.mode_state.get("position", 0))
         target = seq[pos] if pos < len(seq) else None
-        if event.get("type") != "hit" or not target or not same_target(event, target):
+        if not target or not self._matches_target(event, target):
             state.mode_state["position"] = 0
             return finish_round_game(
                 state,
@@ -83,14 +128,55 @@ class SimonSaysMode:
                 ),
                 "{winner} gewinnt Simon Says!",
             )
-        return ThrowOutcome(turn_value=0, message=f"Weiter: {seq[pos+1]['label']}")
+        zone_count = int(state.mode_state.get("zone_count", 5))
+        return ThrowOutcome(
+            turn_value=0,
+            message=f"Weiter: {self._target_label(seq[pos + 1], zone_count)}",
+        )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         seq = state.mode_state.get("sequence", [])
         pos = int(state.mode_state.get("position", 0))
+        zone_count = int(state.mode_state.get("zone_count", 5))
+        targets = []
+        for step, target in enumerate(seq):
+            fields = list(target.get("fields", []))
+            label_field = fields[len(fields) // 2] if fields else 0
+            for field in fields:
+                for ring in NUMBER_RINGS:
+                    targets.append({
+                        "id": f"simon-{step + 1}-{ring}-{field}",
+                        "field": field,
+                        "ring": ring,
+                        "color": "cyan" if step == pos else "green",
+                        "label": str(step + 1)
+                        if field == label_field and ring == "single_outer"
+                        else "",
+                        "pulse": step == pos,
+                    })
         return {
-            "prompt": " → ".join(item["label"] for item in seq) or "Simon Says",
-            "targets": [overlay_item(item, "cyan" if index == pos else "green", str(index + 1), index == pos) for index, item in enumerate(seq)],
+            "prompt": " → ".join(
+                self._target_label(item, zone_count) for item in seq
+            ) or "Simon Says",
+            "targets": targets,
+            "bonus": [
+                {
+                    "id": "simon-joker-sbull",
+                    "field": 25,
+                    "ring": "single_bull",
+                    "color": "gold",
+                    "label": "JOKER",
+                    "pulse": True,
+                },
+                {
+                    "id": "simon-joker-dbull",
+                    "field": 25,
+                    "ring": "double_bull",
+                    "color": "gold",
+                    "label": "",
+                    "pulse": True,
+                },
+            ],
         }
 
 

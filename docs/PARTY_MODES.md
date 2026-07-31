@@ -721,8 +721,13 @@ Merke dir eine Zielsequenz und triff sie in Reihenfolge.
 
 ### Regeln
 
-- Sequenz wird angezeigt oder vorgespielt.
-- Spieler muss Ziele in Reihenfolge treffen.
+- Die Sequenz besteht aus zusammenhängenden, gleich großen Zahlengruppen und
+  wird drei Sekunden lang angezeigt.
+- Schwierigkeitsstufen teilen die 20 Zahlen in 4 Gruppen à 5 Zahlen, 5 Gruppen
+  à 4 Zahlen, 10 Gruppen à 2 Zahlen oder 20 einzelne Zahlen.
+- Inner Single, Triple, Outer Single und Double einer Zielzahl sind gleich
+  gültig. Single Bull und Double Bull dienen immer als Joker für den nächsten
+  Sequenzschritt.
 - Runde 1 hat ein Ziel, Runde 2 zwei Ziele, ab Runde 3 sind es drei.
 - Alle Spieler erhalten innerhalb einer Runde exakt dieselbe Sequenz.
 - Fehler beendet Runde oder setzt Sequenz zurück.

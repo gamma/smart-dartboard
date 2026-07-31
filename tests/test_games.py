@@ -918,16 +918,93 @@ class GameEngineTests(unittest.TestCase):
         )
         sequence = list(engine.state.mode_state["sequence"])
         target = dict(sequence[0])
+        target_event = {
+            "type": "hit",
+            "seq": 220,
+            "field": target["fields"][0],
+            "ring": "single_outer",
+            "multiplier": 1,
+            "score": target["fields"][0],
+            "label": f"S{target['fields'][0]}",
+        }
 
-        engine.handle_event({"type": "hit", "seq": 220, **target})
+        engine.handle_event(target_event)
         engine.continue_turn()
         self.assertEqual(sequence, engine.state.mode_state["sequence"])
         self.assertEqual(0, engine.state.mode_state["position"])
 
-        engine.handle_event({"type": "hit", "seq": 221, **target})
+        engine.handle_event({**target_event, "seq": 221})
         engine.continue_turn()
         self.assertEqual(2, engine.state.round_number)
         self.assertEqual(2, len(engine.state.mode_state["sequence"]))
+
+    def test_simon_difficulties_split_board_into_equal_contiguous_zones(self):
+        expected = {
+            "very_easy": (4, 5),
+            "easy": (5, 4),
+            "normal": (10, 2),
+            "hard": (20, 1),
+        }
+        board_order = [20, 1, 18, 4, 13, 6, 10, 15, 2, 17, 3, 19, 7, 16, 8, 11, 14, 9, 12, 5]
+        for difficulty, (zone_count, fields_per_zone) in expected.items():
+            with self.subTest(difficulty=difficulty):
+                engine = GameEngine()
+                engine.reset(
+                    "simon_says",
+                    ["Ada"],
+                    options={"rounds": 5, "difficulty": difficulty},
+                )
+                self.assertEqual(zone_count, engine.state.mode_state["zone_count"])
+                target = engine.state.mode_state["sequence"][0]
+                self.assertEqual(fields_per_zone, len(target["fields"]))
+                start = (target["zone"] - 1) * fields_per_zone
+                self.assertEqual(
+                    board_order[start:start + fields_per_zone],
+                    target["fields"],
+                )
+
+    def test_simon_accepts_any_ring_in_the_target_number_group(self):
+        engine = GameEngine()
+        engine.reset(
+            "simon_says",
+            ["Ada"],
+            options={"rounds": 5, "difficulty": "easy"},
+        )
+        field = engine.state.mode_state["sequence"][0]["fields"][0]
+
+        engine.handle_event({
+            "type": "hit",
+            "seq": 230,
+            "field": field,
+            "ring": "double",
+            "multiplier": 2,
+            "score": field * 2,
+            "label": f"D{field}",
+        })
+
+        self.assertEqual(25, engine.state.players[0].score)
+        self.assertIn("Sequenz geschafft", engine.state.message)
+
+    def test_simon_bull_is_a_joker_for_every_target(self):
+        engine = GameEngine()
+        engine.reset(
+            "simon_says",
+            ["Ada"],
+            options={"rounds": 5, "difficulty": "hard"},
+        )
+
+        engine.handle_event({
+            "type": "hit",
+            "seq": 231,
+            "field": 25,
+            "ring": "single_bull",
+            "multiplier": 1,
+            "score": 25,
+            "label": "SBull",
+        })
+
+        self.assertEqual(25, engine.state.players[0].score)
+        self.assertIn("Sequenz geschafft", engine.state.message)
 
     def test_risk_it_bank_can_finish_final_round(self):
         engine = GameEngine()

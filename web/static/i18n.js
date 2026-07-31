@@ -531,8 +531,9 @@
       ['Pass targets on','Your valid hits become targets for the next player.'],
     ],
     simon_says:[
-      ['Remember the sequence','The lit segments show the order.'],
-      ['Hit in order','Every hit must match the next target.'],
+      ['Remember the sequence','The glowing number groups show the order.'],
+      ['Every ring scores','Hit a number in the current group. Single, Double, and Triple are all correct.'],
+      ['Bull is a joker','Single Bull and Double Bull always complete the next target.'],
       ['The sequence grows','The shared task grows during the first three rounds.'],
       ['Equal chances','Everyone gets exactly the same sequence in a round.'],
     ],
@@ -563,7 +564,7 @@
     'Runden':'Rounds','Startbomben':'Starting bombs','Bombenzuwachs':'Bomb growth','Bombensicht':'Bomb visibility',
     'Strafe':'Penalty','Drop-Ziel':'Drop target','Spieltempo':'Pace','Nach Drop':'After drop',
     'Boss HP':'Boss HP','Schwachpunkte':'Weak spots','Rundenlimit':'Round limit',
-    'Farbwechsel':'Color change','Spielstufe':'Difficulty','Schwierigkeit':'Difficulty',
+    'Farbwechsel':'Color change','Spielstufe':'Difficulty','Schwierigkeit':'Difficulty','Zielgröße':'Target size',
     'Sieg':'Win condition','Dracheneier':'Dragon eggs','Geisterpfad':'Ghost path',
     'Herzen':'Hearts','Eroberung':'Capture rules','Ziele':'Targets','Löcher':'Holes',
     'Platz':'Course','Miss':'Miss','Trefferregel':'Hit rule','Wellen':'Waves',
@@ -581,6 +582,8 @@
     'Klassisch · 5 Linien':'Classic · 5 lines','Action · 10 Linien, Sink je Dart':'Action · 10 lines, sink each dart',
     'Einfach · Snack Time':'Easy · Snack Time','Mittel · Cookie Hunt':'Medium · Cookie Hunt',
     'Schwer · Sugar Rush':'Hard · Sugar Rush','Gleiches Spiel · Startspieler wechselt':'Same game · starting player rotates',
+    'Sehr leicht · 4 Zonen':'Very easy · 4 zones','Leicht · 5 Zonen':'Easy · 5 zones',
+    'Mittel · 10 Zonen':'Medium · 10 zones','Schwer · 20 Zahlen':'Hard · 20 numbers',
     'Nach links':'Move left','Links drehen':'Rotate left','Rechts drehen':'Rotate right',
     'Nach rechts':'Move right','Stein droppen':'Drop block','STEUERUNG':'CONTROLS',
     'AKTUELLE AUFGABE':'CURRENT TARGET','SPIELSTATUS':'GAME STATUS',
@@ -712,6 +715,7 @@
       .replace(/^Jagd eröffnet: ([0-9]+)$/, 'Chase set: $1')
       .replace(/^(.+) muss strikt mehr werfen$/, '$1 must score strictly more')
       .replace(/^Falsches Feld: (.+)$/, 'Wrong segment: $1')
+      .replace(/^Weiter: Z([0-9]+)$/, 'Next: Z$1')
       .replace(/^(.+): leer$/, '$1: empty')
       .replace(/^(.+) überspringt · Pot verloren$/, '$1 skips · pot lost')
       .replace(/^8-Ball zu früh! (.+) gewinnt$/, 'Black 8 too early! $1 wins')
