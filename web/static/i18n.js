@@ -584,6 +584,11 @@
     'Meide Rot!':'Avoid red!','Gold zählt am meisten!':'Gold scores the most!',
     'Der erste Treffer ist garantiert sicher!':'The first hit is guaranteed safe!',
     'ALLE COOKIES ESSEN · SCHIMMEL MEIDEN · BULL = MILCH':'EAT ALL COOKIES · AVOID MOLD · BULL = MILK',
+    'MILCH':'MILK','MILCH! +30':'MILK! +30','Schimmel':'Mold',
+    'Bull-Milch':'Bull = Milk','Grüner Cookie':'Green Cookie',
+    'Keine Krümel':'No crumbs','Hier ist schon alles aufgegessen':'Already eaten',
+    'Board erst komplett leer essen':'Clear the whole board first',
+    'Turn ×2 / retten':'Visit ×2 / save',
     'Goldene Eier sammeln · rote Schuppen meiden!':'Collect golden eggs · avoid red scales!',
     'GOLDENE EIER SAMMELN · ROTE SCHUPPEN MEIDEN':'COLLECT GOLDEN EGGS · AVOID RED SCALES',
     'GOLDENES EI':'GOLDEN EGG','ROTE SCHUPPE':'RED SCALE','DRACHEN-HITZE':'DRAGON HEAT',
@@ -598,6 +603,26 @@
     'Laser geht vorbei':'Laser misses','LETZTE AUFRÄUMRUNDE!':'FINAL CLEANUP ROUND!',
     'Aufräumrunde!':'Cleanup round!','Bei 10 aktiven Schiffen ist die Erde verloren':'Earth is lost at 10 active ships',
     'Bust – Aufnahme wird zurückgesetzt':'Bust – visit reset',
+    'Miss – kein Schaden':'Miss – no damage',
+    'OVERHEAT! Ladung verloren':'OVERHEAT! Charge lost',
+    'Über 10 überhitzt die Kanone':'Above 10 overheats the cannon',
+    'MINENFELD GERÄUMT! Das Team gewinnt!':'MINEFIELD CLEARED! The team wins!',
+    'MISS · Das Minenfeld bleibt verdeckt':'MISS · The minefield stays hidden',
+    'Single 1 Feld · Double +1 · Triple +2':'Single 1 cell · Double +1 · Triple +2',
+    'Für alle liegt dieselbe Bingo-Karte bereit!':'Everyone gets the same Bingo card!',
+    'Dieses Ei ist schon leer':'This egg is already empty',
+    'Der Geist bleibt':'The ghost stays',
+    'WHOOSH! Der Geist ist geflohen':'WHOOSH! The ghost escaped',
+    'Fang den Geist!':'Catch the ghost!',
+    'EROBERE DIE SCHEIBE!':'CAPTURE THE DARTBOARD!',
+    'DOUBLE BOGEY · 4 Schläge':'DOUBLE BOGEY · 4 strokes',
+    'Am Loch vorbei':'Missed the hole',
+    'Nächstes Loch':'Next hole',
+    'Miss – Pot verloren':'Miss – pot lost',
+    'Die Sheriff-Pfeile liegen bereit!':'The Sheriff arrows are ready!',
+    'ERDE GERETTET! Das Team gewinnt!':'EARTH SAVED! The team wins!',
+    'Die Flotte entkommt · Team-Niederlage':'The fleet escapes · team defeat',
+    'INVASION! Zehn Schiffe haben die Erde erreicht':'INVASION! Ten ships reached Earth',
     'Miss – Combo reset':'Miss – combo reset','Miss – kein Fund':'Miss – nothing found',
     'Treffer decken Schätze auf!':'Hits reveal treasure!',
     'Triff ein Double':'Hit any Double','Triff ein Triple':'Hit any Triple',
@@ -631,6 +656,57 @@
     const raw=String(value ?? '');
     if(lang!=='en') return raw;
     if(exactEn[raw]) return exactEn[raw];
+    const runtimeEn=raw
+      .replace(/^(.+) gewinnt die Keksdose!$/, '$1 wins the cookie jar!')
+      .replace(/^(.+) gewinnt die Candy Cannon!$/, '$1 wins Candy Cannon!')
+      .replace(/^(.+) gewinnt den Color Clash!$/, '$1 wins Color Clash!')
+      .replace(/^(.+) gewinnt Count Up!$/, '$1 wins Count Up!')
+      .replace(/^(.+) gewinnt den Target Rush!$/, '$1 wins Target Rush!')
+      .replace(/^(.+) gewinnt Lightning!$/, '$1 wins Lightning!')
+      .replace(/^(.+) gewinnt Simon Says!$/, '$1 wins Simon Says!')
+      .replace(/^(.+) gewinnt Risk It!$/, '$1 wins Risk It!')
+      .replace(/^(.+) überlebt Avoid the Bomb!$/, '$1 survives Avoid the Bomb!')
+      .replace(/^(.+) hütet den Drachenschatz!$/, '$1 guards the dragon treasure!')
+      .replace(/^(.+) ist der beste Geisterjäger!$/, '$1 is the best ghost hunter!')
+      .replace(/^(.+) regiert die Scheibe!$/, '$1 rules the dartboard!')
+      .replace(/^(.+) findet den größten Schatz!$/, '$1 finds the greatest treasure!')
+      .replace(/^(.+) ist der beste Pfeilspalter!$/, '$1 is the best arrow splitter!')
+      .replace(/^(.+) gewinnt die Herzjagd!$/, '$1 wins Heart Chase!')
+      .replace(/^MILK! Turn gerettet ([+-][0-9]+)$/, 'MILK! Visit saved $1')
+      .replace(/^MILK! Turn verdoppelt ([+-][0-9]+)$/, 'MILK! Visit doubled $1')
+      .replace(/^SCHIMMEL! (-[0-9]+)$/, 'MOLD! $1')
+      .replace(/^BOARD GEPUTZT! (\+[0-9]+) · Neue Cookies!$/, 'BOARD CLEARED! $1 · New cookies!')
+      .replace(/^SUGAR RUSH BEREIT · nächster Cookie doppelt$/, 'SUGAR RUSH READY · next cookie scores double')
+      .replace(/^Serie ([0-9]+)\/3 · Board erst komplett leer essen$/, 'Streak $1/3 · clear the whole board first')
+      .replace(/^(.+) hat BINGO · Ausgleichsrunde läuft$/, '$1 has BINGO · equalizer round in progress')
+      .replace(/^Schuppe! (-[0-9]+) · Hitze ([0-9]+)\/3$/, 'Scale! $1 · Heat $2/3')
+      .replace(/^(.+): kein Cricket-Ziel$/, '$1: not a Cricket target')
+      .replace(/^Boss gewinnt mit ([0-9]+) HP!$/, 'Boss wins with $1 HP!')
+      .replace(/^(.+) macht ([0-9]+) Schaden$/, '$1 deals $2 damage')
+      .replace(/^FLÄCHENLASER! ([0-9]+) Schaden an allen$/, 'AREA LASER! $1 damage to all')
+      .replace(/^(.+) getroffen · ([0-9]+) Schaden$/, '$1 hit · $2 damage')
+      .replace(/^Welle ([0-9]+) ist gelandet!$/, 'Wave $1 has landed!')
+      .replace(/^Runde ([0-9]+): Eine neue Bombe ist aktiv!$/, 'Round $1: one new bomb is active!')
+      .replace(/^Runde ([0-9]+): ([0-9]+) neue Bomben sind aktiv!$/, 'Round $1: $2 new bombs are active!')
+      .replace(/^Runde ([0-9]+): Stein fällt eine Zeile$/, 'Round $1: block drops one row')
+      .replace(/^([0-9]+) sichere Felder \+ ([0-9]+)$/, '$1 safe cells + $2')
+      .replace(/^BOOM auf (.+)$/, 'BOOM on $1')
+      .replace(/^(.+) ist bereits bekannt$/, '$1 is already known')
+      .replace(/^(.+) ist bereits aufgedeckt$/, '$1 is already revealed')
+      .replace(/^Loch ([0-9]+):/, 'Hole $1:')
+      .replace(/^(.+) gewinnt den Platz mit ([0-9]+) Schlägen!$/, '$1 wins the course with $2 strokes!')
+      .replace(/^(.+) überspringt · 4 Schläge$/, '$1 skips · 4 strokes')
+      .replace(/^Miss – Pot halbiert auf ([0-9]+)$/, 'Miss – pot halved to $1')
+      .replace(/^(.+) – banken oder riskieren\?$/, '$1 – bank or risk it?')
+      .replace(/^(.+) – BANK oder RISK\?$/, '$1 – BANK or RISK?')
+      .replace(/^Jagd eröffnet: ([0-9]+)$/, 'Chase set: $1')
+      .replace(/^(.+) muss strikt mehr werfen$/, '$1 must score strictly more')
+      .replace(/^Falsches Feld: (.+)$/, 'Wrong segment: $1')
+      .replace(/^(.+): leer$/, '$1: empty')
+      .replace(/^(.+) überspringt · Pot verloren$/, '$1 skips · pot lost')
+      .replace(/^8-Ball zu früh! (.+) gewinnt$/, 'Black 8 too early! $1 wins')
+      .replace(/^Kugel ([0-9]+) versenkt! (\+[0-9]+)$/, 'Ball $1 cleared! $2');
+    if(runtimeEn!==raw) return runtimeEn;
     return raw
       .replace(/^([0-9]+) Runden$/, '$1 rounds')
       .replace(/^([0-9]+) Bomben$/, '$1 bombs')
@@ -652,7 +728,7 @@
       .replace(/([0-9]+) Kugeln übrig/g, '$1 balls left')
       .replace(/([0-9]+) Schiffe/g, '$1 ships')
       .replace(/([0-9]+) Linien/g, '$1 lines')
-      .replace(/([0-9]+) Schläge/g, '$1 strokes')
+      .replace(/([0-9]+) Schläge(?:n)?/g, '$1 strokes')
       .replace(/Ladung/g, 'Charge')
       .replace(/FLAMMEN/g, 'FLAMES')
       .replace(/Schaden/g, 'damage')

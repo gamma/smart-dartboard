@@ -1239,7 +1239,7 @@ function projectorAdvice(game){
       ? (language()==='en'?'SET UP':'STELLEN')
       : (language()==='en'?'NEXT DART':'NÄCHSTER WURF');
   const sequence = (advice.sequence || []).map(dart => dart.label).join(' → ');
-  return `<aside class="projector-advice ${escapeHtml(advice.status)}"><span>${headline}</span><b>${escapeHtml(advice.primary.label)}</b><small>${escapeHtml(sequence || advice.message || '')}</small></aside>`;
+  return `<aside class="projector-advice ${escapeHtml(advice.status)}"><span>${headline}</span><b>${escapeHtml(advice.primary.label)}</b><small>${escapeHtml(sequence || localText(advice.message || ''))}</small></aside>`;
 }
 
 function projectorOverlayPrompt(game){
@@ -1497,8 +1497,9 @@ function renderBoardEvent(event){
     if(radius===undefined || (!isBull && index<0)) return;
     const [x,y]=isBull ? [250,250] : polar(250,250,radius,index*18);
     const asset=overlayIconAsset(item.icon);
+    const label=localText(item.label || '');
     if(!asset){
-      labelLayer.insertAdjacentHTML('beforeend',`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(item.label)}</text>`);
+      labelLayer.insertAdjacentHTML('beforeend',`<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(label)}</text>`);
       return;
     }
     const propKey=isBull ? `${item.icon}:bull` : `${item.icon}:${item.ring}:${item.field}`;
@@ -1514,12 +1515,12 @@ function renderBoardEvent(event){
     const variant=/^[a-z_-]+$/.test(String(item.variant || '')) ? item.variant : 'default';
     const width=item.icon==='milk'?26:item.icon==='mine'?35:item.icon==='egg'?26:item.icon==='dragon_scale'?28:30;
     const height=item.icon==='milk'?36:item.icon==='mine'?39:item.icon==='egg'?34:item.icon==='dragon_scale'?34:30;
-    const imageY=y-height/2-(item.label?5:0);
+    const imageY=y-height/2-(label?5:0);
     const labelY=y+height/2+4;
     labelLayer.insertAdjacentHTML('beforeend',`<g class="overlay-prop variant-${variant} ${propHit?'overlay-prop-hit':''}">
       <circle class="overlay-prop-halo" cx="${x}" cy="${y-3}" r="${item.icon==='milk'?18:17}" fill="${escapeHtml(item.color || '#e9a23b')}"></circle>
       <image href="${asset}" x="${x-width/2}" y="${imageY}" width="${width}" height="${height}" preserveAspectRatio="xMidYMid meet"></image>
-      ${item.label?`<text x="${x}" y="${labelY}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(item.label)}</text>`:''}
+      ${label?`<text x="${x}" y="${labelY}" text-anchor="middle" dominant-baseline="middle">${escapeHtml(label)}</text>`:''}
     </g>`);
   };
   const paint = (items, cls) => (items || []).forEach(item => {
