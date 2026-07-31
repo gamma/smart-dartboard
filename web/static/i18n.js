@@ -416,7 +416,7 @@
     king_of_board: ['King of the Board','Capture the dartboard','Every hit captures territory in your color. The largest kingdom wins after the final round.'],
     lightning_round: ['Lightning Round','One task, one dart','Fast mini-challenges: complete the displayed task with your next dart.'],
     mini_golf: ['Mini Golf Darts','Nine holes on the board','Everyone plays the same hole. The earlier you hit the target, the fewer strokes you take.'],
-    risk_it: ['Risk It','Bank it or keep gambling','Hits build your pot. Bank it in time—a Miss can lose the current pot.'],
+    risk_it: ['Risk It','Bank or risk the Hot Pot','Hits build your pot. Bank after dart 1 or 2—after dart 3, the next player can steal it with one hit.'],
     robin_hood: ['Robin Hood Hunt','Split the Sheriff’s arrows','Chase the previous player’s three targets. Your valid hits become targets for the next player.'],
     simon_says: ['Simon Says','Remember, hit, extend','The projector shows a sequence. Hit its targets in the correct order.'],
     space_defender: ['Space Defender','Stop the waves together','A co-op space adventure: destroy the ships before the invasion reaches ten enemies.'],
@@ -517,10 +517,10 @@
       ['Lowest score wins','No hit counts four strokes. Lowest score after the final hole wins.'],
     ],
     risk_it:[
-      ['Build the pot','Every hit adds to your visit pot.'],
-      ['Bank it','Secure the pot from the Control screen.'],
-      ['A Miss hurts','A Miss loses or halves the pot.'],
-      ['Third dart','Any remaining pot is banked automatically after dart three.'],
+      ['Build the pot','Every hit adds to your unsecured pot.'],
+      ['Bank after dart 1 or 2','BANK secures the pot and ends your visit.'],
+      ['Dart 3 is the risk','A hit turns its number into the glowing Hot Pot target.'],
+      ['The first dart can steal','The next player hits that number to steal the pot. Otherwise it is secured for you.'],
     ],
     robin_hood:[
       ['Chase arrows','Hit the Sheriff targets. Duplicate targets count separately.'],
@@ -619,6 +619,11 @@
     'Am Loch vorbei':'Missed the hole',
     'Nächstes Loch':'Next hole',
     'Miss – Pot verloren':'Miss – pot lost',
+    'UNGESICHERTER POT':'UNSECURED POT','BESITZER':'OWNER',
+    'DIEBSTAHL-ZIEL':'HEIST TARGET','TREFFER FÜLLEN DEINEN POT':'HITS BUILD YOUR POT',
+    'BANKEN ODER WEITERWERFEN':'BANK OR KEEP THROWING',
+    'BANKEN ODER DART 3 RISKIEREN':'BANK OR RISK DART 3',
+    'Finaler Hot Pot gesichert':'Final Hot Pot secured',
     'Die Sheriff-Pfeile liegen bereit!':'The Sheriff arrows are ready!',
     'ERDE GERETTET! Das Team gewinnt!':'EARTH SAVED! The team wins!',
     'Die Flotte entkommt · Team-Niederlage':'The fleet escapes · team defeat',
@@ -705,7 +710,20 @@
       .replace(/^(.+): leer$/, '$1: empty')
       .replace(/^(.+) überspringt · Pot verloren$/, '$1 skips · pot lost')
       .replace(/^8-Ball zu früh! (.+) gewinnt$/, 'Black 8 too early! $1 wins')
-      .replace(/^Kugel ([0-9]+) versenkt! (\+[0-9]+)$/, 'Ball $1 cleared! $2');
+      .replace(/^Kugel ([0-9]+) versenkt! (\+[0-9]+)$/, 'Ball $1 cleared! $2')
+      .replace(/^([0-9]+) PUNKTE$/, '$1 POINTS')
+      .replace(/^TRIFF (.+) MIT DART 1 · STIEHL ([0-9]+)$/, 'HIT $1 WITH DART 1 · STEAL $2')
+      .replace(/^HOT POT ([0-9]+) · ZIEL (.+)$/, 'HOT POT $1 · TARGET $2')
+      .replace(/^(.+): Triff (.+) mit Dart 1$/, '$1: Hit $2 with dart 1')
+      .replace(/^(.+) kann mit Dart 1 auf (.+) stehlen$/, '$1 can steal with dart 1 on $2')
+      .replace(/^Pot ([0-9]+) · BANK oder weiter\?$/, 'Pot $1 · BANK or keep going?')
+      .replace(/^HEIST! (.+) stiehlt ([0-9]+) von (.+)$/, 'HEIST! $1 steals $2 from $3')
+      .replace(/^SAFE! (.+) bankt ([0-9]+)$/, 'SAFE! $1 banks $2')
+      .replace(/^Miss · halber Pot gesichert \+([0-9]+)$/, 'Miss · half the pot secured +$1')
+      .replace(/^Miss · Pot halbiert auf ([0-9]+)$/, 'Miss · pot halved to $1')
+      .replace(/^Miss · eigener Pot verloren$/, 'Miss · own pot lost')
+      .replace(/^(.+) bankt \+([0-9]+)$/, '$1 banks +$2')
+      .replace(/^(.+) überspringt · Pot ([0-9]+) verloren$/, '$1 skips · pot $2 lost');
     if(runtimeEn!==raw) return runtimeEn;
     return raw
       .replace(/^([0-9]+) Runden$/, '$1 rounds')

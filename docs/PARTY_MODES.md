@@ -516,41 +516,49 @@ Team Color: Treffer auf eigene Farbe gibt Bonus
 
 ### Kurzbeschreibung
 
-Sammle Punkte in einem temporären Pot. Nach jedem Dart: sichern oder weiter riskieren.
+Sammle Punkte in einem temporären Pot. Banke früh oder mache ihn mit Dart 3
+zum angreifbaren Hot Pot.
 
 ### Regeln
 
 - Treffer addiert zum Turn Pot.
-- Spieler kann nach Dart 1 oder 2 bank drücken.
-- Miss oder Gefahrenfeld verliert den Turn Pot.
-- Nach 3 Darts wird automatisch gebankt, falls kein Bust.
+- Spieler kann nach Dart 1 oder 2 BANK drücken; das beendet den Zug.
+- Miss verliert oder halbiert den eigenen ungesicherten Pot, je nach Option.
+- Ein erfolgreicher Dart 3 macht den gesamten Pot zum Hot Pot. Seine Zahl
+  wird als Diebstahlziel markiert; jeder Ring derselben Zahl zählt.
+- Der direkt folgende Spieler erhält mit Dart 1 genau eine Diebstahlchance.
+  Trifft er das Ziel, wird der Pot sofort für ihn gesichert. Andernfalls wird
+  er automatisch für den Besitzer gesichert.
+- In der letzten Runde wird ein noch offener Hot Pot mit genau einem finalen
+  Heist-Dart aufgelöst, bevor das Ergebnis feststeht.
 
 ### Scoring
 
 ```text
 Hit: Pot += score
-Bull: Pot *= 2 optional
 Miss: Pot = 0, Turn endet
 Bank: Score += Pot, Turn endet
+Dart 3: Pot wird Hot Pot, letzter Zahlenbereich wird Ziel
+Heist-Treffer: Angreifer-Score += fremder Pot
+Heist verfehlt: Besitzer-Score += eigener Pot
 ```
 
 ### Control Requirement
 
-Benötigt in `/control` und optional Boardbutton:
+Benötigt in `/control`:
 
 ```text
 BANK
-CONTINUE
 ```
-
-Board-Menübutton könnte im Hold/Risk-Kontext als `BANK` interpretiert werden.
 
 ### Visual Incentives
 
 - Pot-Zahl groß und wachsend.
-- Risk-Meter wird aggressiver.
+- Vor Dart 3 wird das Risiko deutlich angekündigt.
+- Hot Pot, Besitzer und Diebstahlziel werden auf beiden Screens gezeigt.
+- Die komplette Zahlenreihe des Diebstahlziels leuchtet auf der Scheibe.
 - Bei Bank: Münzregen / Safe-Animation.
-- Bei Bust: Pot zerplatzt.
+- Bei Heist: Pot wechselt sichtbar zum Angreifer.
 
 ---
 

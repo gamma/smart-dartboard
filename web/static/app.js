@@ -203,6 +203,11 @@ function isCookieEvent(experience,event,effect){
     && event?.type==='hit'
     && event?.effect===effect;
 }
+function isRiskEvent(experience,event,effect){
+  return experience?.game?.game_type==='risk_it'
+    && event?.type==='hit'
+    && event?.effect===effect;
+}
 function clearScoreCountdown(){
   cancelAnimationFrame(appState.scoreCountdownFrame);
   appState.scoreCountdownFrame=null;
@@ -718,7 +723,7 @@ function x01AdvicePanel(game){
 function overlayActionButtons(game){
   const actions = game.overlay?.actions || [];
   if(!actions.length) return '';
-  return actions.map(item => `<button class="action-button primary" data-action="game-action" data-game-action="${escapeHtml(item.id)}" ${item.enabled===false?'disabled':''}>${escapeHtml(item.label || item.id)}</button>`).join('');
+  return actions.map(item => `<button class="action-button primary" data-action="game-action" data-game-action="${escapeHtml(item.id)}" ${item.enabled===false?'disabled':''}>${escapeHtml(localText(item.label || item.id))}</button>`).join('');
 }
 function controlModePrompt(game){
   const overlay=game.overlay;
@@ -1737,6 +1742,15 @@ function playEventCue(event,experience){
   } else if(event.type==='hit' && isCookieEvent(experience,event,'cookie_moldy')){
     tone(170,.2,0,'sawtooth',.1);
     tone(105,.28,.1,'triangle',.07);
+  } else if(event.type==='hit' && isRiskEvent(experience,event,'risk_steal')){
+    [440,660,880,1100].forEach((frequency,index)=>tone(frequency,.2,index*.07,'square',.075));
+  } else if(event.type==='hit' && isRiskEvent(experience,event,'risk_hot_pot')){
+    tone(260,.16,0,'sawtooth',.08);
+    tone(390,.2,.12,'triangle',.1);
+    tone(520,.24,.25,'square',.055);
+  } else if(event.type==='hit' && isRiskEvent(experience,event,'risk_secured')){
+    tone(520,.13,0,'triangle',.1);
+    tone(780,.2,.09,'sine',.08);
   } else if(event.type==='hit'){
     const base=event.multiplier===3?themeBase*1.45:event.multiplier===2?themeBase*1.22:event.field===25?themeBase*1.7:themeBase;
     tone(base,.16,0,'triangle',.16); tone(base*1.5,.2,.08,'sine',.1);

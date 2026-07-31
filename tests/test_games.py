@@ -462,6 +462,108 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual(50, engine.state.players[0].score)
         self.assertEqual(0, engine.state.mode_state["pot"][engine.state.players[0].id])
 
+    def test_risk_it_third_dart_creates_hot_pot_for_next_player(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada", "Bob"], options={"rounds": 3})
+        engine.handle_event(hit(20, 1, field=20, label="S20"))
+        engine.handle_event(hit(18, 2, field=18, label="S18"))
+        engine.handle_event(hit(27, 3, field=9, multiplier=3, label="T9"))
+
+        ada = engine.state.players[0]
+        self.assertEqual(0, ada.score)
+        self.assertEqual(65, engine.state.mode_state["pot"][ada.id])
+        self.assertEqual(
+            {"owner_id": ada.id, "amount": 65, "field": 9, "label": "9"},
+            engine.state.mode_state["hot_pot"],
+        )
+        self.assertEqual([], engine.state.as_dict()["overlay"]["actions"])
+
+        engine.continue_turn()
+        overlay = engine.state.as_dict()["overlay"]
+        self.assertIn("TRIFF 9 MIT DART 1", overlay["prompt"])
+        self.assertEqual(4, len(overlay["targets"]))
+
+    def test_risk_it_next_players_first_dart_can_steal_hot_pot(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada", "Bob"], options={"rounds": 3})
+        for seq, score in enumerate((20, 20, 20), start=1):
+            engine.handle_event(hit(score, seq, field=20, label="S20"))
+        engine.continue_turn()
+
+        engine.handle_event(hit(5, 4, field=20, label="S20"))
+
+        ada, bob = engine.state.players
+        self.assertEqual(0, ada.score)
+        self.assertEqual(60, bob.score)
+        self.assertEqual(5, engine.state.mode_state["pot"][bob.id])
+        self.assertEqual(5, engine.state.turn_score)
+        self.assertIsNone(engine.state.mode_state["hot_pot"])
+        self.assertEqual("risk_steal", engine.state.last_event["effect"])
+        self.assertEqual(60, engine.state.last_event["stolen_amount"])
+
+    def test_risk_it_failed_heist_secures_owner_pot_and_expires(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada", "Bob"], options={"rounds": 3})
+        for seq in range(1, 4):
+            engine.handle_event(hit(20, seq, field=20, label="S20"))
+        engine.continue_turn()
+
+        engine.handle_event(hit(19, 4, field=19, label="S19"))
+        ada, bob = engine.state.players
+        self.assertEqual(60, ada.score)
+        self.assertEqual(19, engine.state.mode_state["pot"][bob.id])
+        self.assertIsNone(engine.state.mode_state["hot_pot"])
+        self.assertEqual("risk_secured", engine.state.last_event["effect"])
+
+        engine.handle_event(hit(20, 5, field=20, label="S20"))
+        self.assertEqual(60, ada.score)
+        self.assertEqual(39, engine.state.mode_state["pot"][bob.id])
+
+    def test_risk_it_skipped_heist_secures_hot_pot_for_owner(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada", "Bob"], options={"rounds": 3})
+        for seq in range(1, 4):
+            engine.handle_event(hit(20, seq, field=20, label="S20"))
+        engine.continue_turn()
+
+        engine.next_player()
+
+        self.assertEqual(60, engine.state.players[0].score)
+        self.assertIsNone(engine.state.mode_state["hot_pot"])
+        self.assertEqual("Ada", engine.state.current_player().name)
+
+    def test_risk_it_solo_third_dart_banks_without_heist(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada"], options={"rounds": 3})
+        for seq in range(1, 4):
+            engine.handle_event(hit(20, seq, field=20, label="S20"))
+
+        self.assertEqual(60, engine.state.players[0].score)
+        self.assertEqual(0, engine.state.mode_state["pot"][engine.state.players[0].id])
+        self.assertIsNone(engine.state.mode_state["hot_pot"])
+        self.assertEqual("hold", engine.state.status)
+
+    def test_risk_it_final_hot_pot_gets_one_last_heist_dart(self):
+        engine = GameEngine()
+        engine.reset("risk_it", ["Ada", "Bob"], options={"rounds": 3})
+        engine.state.round_number = 3
+        for seq in range(1, 4):
+            engine.handle_event(hit(1, seq, field=1, label="S1"))
+        engine.continue_turn()
+        engine.handle_event(hit(2, 4, field=2, label="S2"))
+        engine.handle_event(hit(2, 5, field=2, label="S2"))
+        engine.handle_event(hit(20, 6, field=20, label="S20"))
+
+        self.assertEqual("hold", engine.state.status)
+        self.assertTrue(engine.state.mode_state["final_heist"])
+        engine.continue_turn()
+        engine.handle_event(hit(1, 7, field=20, label="S20"))
+
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual(engine.state.players[0].id, engine.state.winner_id)
+        self.assertEqual(27, engine.state.players[0].score)
+        self.assertEqual(0, engine.state.players[1].score)
+
     def test_king_of_board_tracks_owned_segments(self):
         engine = GameEngine()
         engine.reset("king_of_board", ["Ada", "Bob"])
