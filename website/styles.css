@@ -73,6 +73,9 @@ button{color:inherit;font:inherit}
 .site-nav{display:flex;align-items:center;gap:28px;color:#c0d0dc;font-size:13px;font-weight:750}
 .site-nav a{transition:.2s}.site-nav a:hover{color:var(--cyan)}
 .site-nav .nav-github{padding:10px 14px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.035);color:var(--text)}
+.site-language{display:flex;gap:2px;padding:3px;border:1px solid var(--line);border-radius:999px;background:rgba(4,10,15,.72)}
+.site-language button{display:flex;align-items:center;gap:5px;min-height:30px;padding:0 9px;border:0;border-radius:999px;background:transparent;color:#849aa8;font-size:10px;font-weight:900;cursor:pointer}
+.site-language button.active{background:var(--cyan);color:#031017}.site-language button span{font-size:16px}
 .nav-toggle{display:none;width:42px;height:42px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.04)}
 .nav-toggle span:not(.sr-only){display:block;width:18px;height:2px;margin:5px auto;background:var(--text)}
 
@@ -326,7 +329,7 @@ h1 em,h2 em{color:var(--coral);font-style:normal}
 }
 @media (max-width:900px){
   .site-header{width:calc(100% - 28px);margin-top:10px;background:rgba(5,13,20,.88);border-color:var(--line);backdrop-filter:blur(16px)}
-  .nav-toggle{display:block}.site-nav{position:absolute;top:62px;left:0;right:0;display:none;align-items:stretch;padding:14px;border:1px solid var(--line);border-radius:17px;background:#09131b;box-shadow:0 25px 70px #000}.site-nav.open{display:grid}.site-nav a{padding:12px}
+  .nav-toggle{display:block}.site-nav{position:absolute;top:62px;left:0;right:0;display:none;align-items:stretch;padding:14px;border:1px solid var(--line);border-radius:17px;background:#09131b;box-shadow:0 25px 70px #000}.site-nav.open{display:grid}.site-nav a{padding:12px}.site-language{justify-content:center}
   .hero{grid-template-columns:1fr;min-height:auto;padding:150px 24px 50px}.hero-copy{padding-left:0}.hero h1{font-size:clamp(52px,12vw,78px)}.hero-visual{min-height:590px;margin:50px 0 0}.screen-projector{right:-155px;width:850px}.screen-controller{left:10px;width:340px}
   .proof-strip{grid-template-columns:repeat(2,1fr)}.proof-strip div:nth-child(2){border-right:0}.proof-strip div:nth-child(-n+2){border-bottom:1px solid var(--line)}
   .section{padding-top:110px}.section-heading.compact{display:block}.section-heading.compact>p{max-width:650px;margin-top:23px}
