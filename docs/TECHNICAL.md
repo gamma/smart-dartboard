@@ -11,7 +11,14 @@ Das System soll zwei getrennte Oberflächen bereitstellen:
 - **Projector UI**: reine Anzeige für Beamer/TV, z. B. Spielstand, aktueller Spieler, letzter Treffer, Animationen.
 - **Control UI**: Bedienoberfläche für iPad, Handy, Mac oder zweiten Bildschirm, z. B. Spielauswahl, Spieler, Korrekturen, Einstellungen.
 
-Langfristig soll die Anwendung lokal auf einem Raspberry Pi, Mini-PC oder Mac laufen und optional per Docker deploybar sein.
+Langfristig soll die Anwendung lokal auf einem Raspberry Pi, Mini-PC oder Mac
+laufen und optional per Docker deploybar sein. Die Bewertung einer gemeinsamen
+Web-, iOS- und macOS-Codebasis einschließlich der Silent-Shark-
+Referenzarchitektur steht in [APPLE_PORTABILITY.md](APPLE_PORTABILITY.md). Die
+ergänzende Bewertung eines eigenständigen Android-Spieltablets steht in
+[ANDROID_PORTABILITY.md](ANDROID_PORTABILITY.md). Die gemeinsame Zielarchitektur
+für Linux/Docker, macOS, iPadOS, Android und Windows steht in
+[CROSS_PLATFORM_ARCHITECTURE.md](CROSS_PLATFORM_ARCHITECTURE.md).
 
 ---
 

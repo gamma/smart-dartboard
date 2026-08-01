@@ -195,6 +195,9 @@ erzeugen versionierte AMD64-/ARM64-Images in der GitHub Container Registry.
 ## Dokumentation
 
 - [Technische Architektur](docs/TECHNICAL.md)
+- [Plattformübergreifende Zielarchitektur](docs/CROSS_PLATFORM_ARCHITECTURE.md)
+- [Portabilität für iOS und macOS](docs/APPLE_PORTABILITY.md)
+- [Portabilität für Android und ein eigenständiges Spieltablet](docs/ANDROID_PORTABILITY.md)
 - [Betrieb und Kiosk-Setup](docs/OPERATIONS.md)
 - [CI, Releases und Deployment](docs/DEPLOYMENT.md)
 - [Neue Spielmodule entwickeln](docs/GAME_PLUGINS.md)
