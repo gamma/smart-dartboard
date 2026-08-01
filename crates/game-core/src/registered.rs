@@ -1,4 +1,4 @@
-use crate::{GameError, GameStatus};
+use crate::{GameError, GameStatus, with_seq};
 use sdb_contracts::{DartEvent, Ring};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -108,13 +108,58 @@ pub struct RegisteredGameState {
     pub overlay: Value,
     pub last_event: Option<DartEvent>,
     #[serde(default)]
+    pub editable_darts: Vec<RegisteredDartRecord>,
+    #[serde(default)]
     pub mode_state: Value,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RegisteredDartRecord {
+    pub action_id: u64,
+    pub event: DartEvent,
+    pub player_id: String,
+    pub score_after: u32,
+    pub round_number: u16,
+    pub dart_in_turn: u8,
+    pub outcome: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum RegisteredAction {
+    Dart {
+        id: u64,
+        event: DartEvent,
+    },
+    Continue {
+        id: u64,
+    },
+    Mode {
+        id: u64,
+        action: String,
+        payload: Value,
+    },
+}
+
+impl RegisteredAction {
+    const fn id(&self) -> u64 {
+        match self {
+            Self::Dart { id, .. } | Self::Continue { id } | Self::Mode { id, .. } => *id,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RegisteredGame {
     state: RegisteredGameState,
+    #[serde(default)]
     history: Vec<RegisteredGameState>,
+    #[serde(default)]
+    initial_state: Option<RegisteredGameState>,
+    #[serde(default)]
+    actions: Vec<RegisteredAction>,
+    #[serde(default = "first_action_id")]
+    next_action_id: u64,
 }
 
 impl RegisteredGame {
@@ -164,13 +209,17 @@ impl RegisteredGame {
             options,
             overlay: Value::Null,
             last_event: None,
+            editable_darts: Vec::new(),
             mode_state: Value::Object(Map::new()),
         };
         mode.initialize(&mut state)?;
         state.overlay = mode.overlay(&state);
         Ok(Self {
+            initial_state: Some(state.clone()),
             state,
             history: Vec::new(),
+            actions: Vec::new(),
+            next_action_id: first_action_id(),
         })
     }
 
@@ -189,18 +238,14 @@ impl RegisteredGame {
             return Err(GameError::NotRunning);
         }
         let mode = self.resolve_mode()?;
-        let mut next = self.state.clone();
-        let turn_value = mode.apply_throw(&mut next, event)?;
-        next.darts_in_turn = next.darts_in_turn.saturating_add(1);
-        next.turn_score = next.turn_score.saturating_add(turn_value);
-        next.last_event = Some(event.clone());
-        if next.status == GameStatus::Running && next.darts_in_turn >= 3 {
-            next.status = GameStatus::Hold;
-            next.message = "Turn complete. Press continue.".into();
-        }
-        next.overlay = mode.overlay(&next);
-        self.history.push(self.state.clone());
-        self.state = next;
+        self.ensure_timeline();
+        apply_throw_to_state(mode, &mut self.state, event)?;
+        let action_id = self.take_action_id();
+        self.actions.push(RegisteredAction::Dart {
+            id: action_id,
+            event: event.clone(),
+        });
+        self.refresh_editable_darts()?;
         Ok(&self.state)
     }
 
@@ -214,21 +259,12 @@ impl RegisteredGame {
             return Err(GameError::NotHolding);
         }
         let mode = self.resolve_mode()?;
-        let mut next = self.state.clone();
-        let last_player = next.current_player_index + 1 == next.players.len();
-        next.current_player_index = (next.current_player_index + 1) % next.players.len();
-        if last_player {
-            next.round_number = next.round_number.saturating_add(1);
-        }
-        next.darts_in_turn = 0;
-        next.turn_score = 0;
-        next.status = GameStatus::Running;
-        next.message = "Next player".into();
-        next.last_event = None;
-        mode.on_turn_started(&mut next)?;
-        next.overlay = mode.overlay(&next);
-        self.history.push(self.state.clone());
-        self.state = next;
+        self.ensure_timeline();
+        advance_player(mode, &mut self.state)?;
+        let action_id = self.take_action_id();
+        self.actions
+            .push(RegisteredAction::Continue { id: action_id });
+        self.refresh_editable_darts()?;
         Ok(&self.state)
     }
 
@@ -243,11 +279,18 @@ impl RegisteredGame {
         payload: &Value,
     ) -> Result<&RegisteredGameState, GameError> {
         let mode = self.resolve_mode()?;
+        self.ensure_timeline();
         let mut next = self.state.clone();
         mode.handle_action(&mut next, action, payload)?;
         next.overlay = mode.overlay(&next);
-        self.history.push(self.state.clone());
         self.state = next;
+        let action_id = self.take_action_id();
+        self.actions.push(RegisteredAction::Mode {
+            id: action_id,
+            action: action.into(),
+            payload: payload.clone(),
+        });
+        self.refresh_editable_darts()?;
         Ok(&self.state)
     }
 
@@ -257,8 +300,208 @@ impl RegisteredGame {
     ///
     /// Returns [`GameError::NothingToUndo`] when no prior state exists.
     pub fn undo(&mut self) -> Result<&RegisteredGameState, GameError> {
-        self.state = self.history.pop().ok_or(GameError::NothingToUndo)?;
+        if self.initial_state.is_none() {
+            self.state = self.history.pop().ok_or(GameError::NothingToUndo)?;
+            return Ok(&self.state);
+        }
+        let action = self.actions.pop().ok_or(GameError::NothingToUndo)?;
+        if let Err(error) = self.replay() {
+            self.actions.push(action);
+            return Err(error);
+        }
         Ok(&self.state)
+    }
+
+    /// Replaces a dart in the current or immediately previous turn.
+    ///
+    /// The original sequence number and action ID remain stable.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GameError::ActionNotEditable`] for unknown or older darts, or
+    /// a ruleset error when replaying the resulting timeline fails.
+    pub fn correct_throw(
+        &mut self,
+        action_id: u64,
+        replacement: DartEvent,
+    ) -> Result<&RegisteredGameState, GameError> {
+        if !self.editable_dart_ids().contains(&action_id) {
+            return Err(GameError::ActionNotEditable);
+        }
+        let original_actions = self.actions.clone();
+        let action = self
+            .actions
+            .iter_mut()
+            .find(|action| action.id() == action_id)
+            .ok_or(GameError::ActionNotEditable)?;
+        let RegisteredAction::Dart { event, .. } = action else {
+            return Err(GameError::ActionNotEditable);
+        };
+        *event = with_seq(replacement, event.seq());
+        if let Err(error) = self.replay() {
+            self.actions = original_actions;
+            self.replay()?;
+            return Err(error);
+        }
+        Ok(&self.state)
+    }
+
+    /// Deletes an editable dart and deterministically replays all later actions.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GameError::ActionNotEditable`] for unknown or older darts, or
+    /// a ruleset error when replaying the resulting timeline fails.
+    pub fn delete_throw(&mut self, action_id: u64) -> Result<&RegisteredGameState, GameError> {
+        if !self.editable_dart_ids().contains(&action_id) {
+            return Err(GameError::ActionNotEditable);
+        }
+        let original_actions = self.actions.clone();
+        self.actions.retain(
+            |action| !matches!(action, RegisteredAction::Dart { id, .. } if *id == action_id),
+        );
+        if self.actions.len() == original_actions.len() {
+            return Err(GameError::ActionNotEditable);
+        }
+        if let Err(error) = self.replay() {
+            self.actions = original_actions;
+            self.replay()?;
+            return Err(error);
+        }
+        Ok(&self.state)
+    }
+
+    #[must_use]
+    pub fn dart_records(&self) -> Vec<RegisteredDartRecord> {
+        let Ok(mode) = self.resolve_mode() else {
+            return Vec::new();
+        };
+        let Some(mut state) = self.initial_state.clone() else {
+            return Vec::new();
+        };
+        state.editable_darts.clear();
+        let mut records = Vec::new();
+        for action in &self.actions {
+            match action {
+                RegisteredAction::Dart { id, event } if state.status == GameStatus::Running => {
+                    let Some(player) = state.players.get(state.current_player_index) else {
+                        continue;
+                    };
+                    let player_id = player.id.clone();
+                    if apply_throw_to_state(mode, &mut state, event).is_err() {
+                        continue;
+                    }
+                    let Some(player) = state.players.iter().find(|player| player.id == player_id)
+                    else {
+                        continue;
+                    };
+                    let outcome = if matches!(event, DartEvent::Miss { .. }) {
+                        "miss"
+                    } else if state.status == GameStatus::Finished {
+                        "win"
+                    } else {
+                        "success"
+                    };
+                    records.push(RegisteredDartRecord {
+                        action_id: *id,
+                        event: event.clone(),
+                        player_id,
+                        score_after: player.score,
+                        round_number: state.round_number,
+                        dart_in_turn: state.darts_in_turn,
+                        outcome: outcome.into(),
+                    });
+                }
+                RegisteredAction::Continue { .. }
+                    if matches!(state.status, GameStatus::Running | GameStatus::Hold) =>
+                {
+                    if advance_player(mode, &mut state).is_err() {
+                        break;
+                    }
+                }
+                RegisteredAction::Mode {
+                    action, payload, ..
+                } => {
+                    if mode.handle_action(&mut state, action, payload).is_ok() {
+                        state.overlay = mode.overlay(&state);
+                    }
+                }
+                RegisteredAction::Dart { .. } | RegisteredAction::Continue { .. } => {}
+            }
+        }
+        records
+    }
+
+    fn replay(&mut self) -> Result<(), GameError> {
+        let mode = self.resolve_mode()?;
+        let mut state = self
+            .initial_state
+            .clone()
+            .ok_or_else(|| GameError::RulesetUnavailable("missing initial state".into()))?;
+        state.editable_darts.clear();
+        for action in self.actions.clone() {
+            match action {
+                RegisteredAction::Dart { event, .. } if state.status == GameStatus::Running => {
+                    apply_throw_to_state(mode, &mut state, &event)?;
+                }
+                RegisteredAction::Continue { .. }
+                    if matches!(state.status, GameStatus::Running | GameStatus::Hold) =>
+                {
+                    advance_player(mode, &mut state)?;
+                }
+                RegisteredAction::Mode {
+                    action, payload, ..
+                } => {
+                    mode.handle_action(&mut state, &action, &payload)?;
+                    state.overlay = mode.overlay(&state);
+                }
+                RegisteredAction::Dart { .. } | RegisteredAction::Continue { .. } => {}
+            }
+        }
+        self.state = state;
+        self.refresh_editable_darts()?;
+        Ok(())
+    }
+
+    fn editable_dart_ids(&self) -> Vec<u64> {
+        let mut turns = vec![Vec::new()];
+        for action in &self.actions {
+            match action {
+                RegisteredAction::Dart { id, .. } => {
+                    turns.last_mut().expect("turn").push(*id);
+                }
+                RegisteredAction::Continue { .. } => turns.push(Vec::new()),
+                RegisteredAction::Mode { .. } => {}
+            }
+        }
+        turns.into_iter().rev().take(2).flatten().collect()
+    }
+
+    fn refresh_editable_darts(&mut self) -> Result<(), GameError> {
+        self.resolve_mode()?;
+        let editable_ids = self.editable_dart_ids();
+        self.state.editable_darts = self
+            .dart_records()
+            .into_iter()
+            .filter(|record| editable_ids.contains(&record.action_id))
+            .collect();
+        Ok(())
+    }
+
+    fn take_action_id(&mut self) -> u64 {
+        let action_id = self.next_action_id;
+        self.next_action_id = self.next_action_id.saturating_add(1);
+        action_id
+    }
+
+    fn ensure_timeline(&mut self) {
+        if self.initial_state.is_none() {
+            self.initial_state = Some(self.state.clone());
+            self.state.editable_darts.clear();
+            self.history.clear();
+            self.actions.clear();
+            self.next_action_id = first_action_id();
+        }
     }
 
     fn resolve_mode(&self) -> Result<&'static dyn GameMode, GameError> {
@@ -271,6 +514,50 @@ impl RegisteredGame {
         }
         Ok(mode)
     }
+}
+
+const fn first_action_id() -> u64 {
+    1
+}
+
+fn apply_throw_to_state(
+    mode: &'static dyn GameMode,
+    state: &mut RegisteredGameState,
+    event: &DartEvent,
+) -> Result<(), GameError> {
+    let mut next = state.clone();
+    let turn_value = mode.apply_throw(&mut next, event)?;
+    next.darts_in_turn = next.darts_in_turn.saturating_add(1);
+    next.turn_score = next.turn_score.saturating_add(turn_value);
+    next.last_event = Some(event.clone());
+    if next.status == GameStatus::Running && next.darts_in_turn >= 3 {
+        next.status = GameStatus::Hold;
+        next.message = "Turn complete. Press continue.".into();
+    }
+    next.overlay = mode.overlay(&next);
+    *state = next;
+    Ok(())
+}
+
+fn advance_player(
+    mode: &'static dyn GameMode,
+    state: &mut RegisteredGameState,
+) -> Result<(), GameError> {
+    let mut next = state.clone();
+    let last_player = next.current_player_index + 1 == next.players.len();
+    next.current_player_index = (next.current_player_index + 1) % next.players.len();
+    if last_player {
+        next.round_number = next.round_number.saturating_add(1);
+    }
+    next.darts_in_turn = 0;
+    next.turn_score = 0;
+    next.status = GameStatus::Running;
+    next.message = "Next player".into();
+    next.last_event = None;
+    mode.on_turn_started(&mut next)?;
+    next.overlay = mode.overlay(&next);
+    *state = next;
+    Ok(())
 }
 
 trait GameMode: Sync {
@@ -741,6 +1028,17 @@ const fn ring_name(ring: Ring) -> &'static str {
 mod tests {
     use super::*;
 
+    fn hit(seq: u64, field: u8, ring: Ring, multiplier: u8, label: &str) -> DartEvent {
+        DartEvent::Hit {
+            seq,
+            field,
+            ring,
+            multiplier,
+            label: label.into(),
+            score: u16::from(field) * u16::from(multiplier),
+        }
+    }
+
     #[test]
     fn registry_exposes_complete_cricket_metadata() {
         let metadata = game_metadata("cricket").expect("Cricket metadata");
@@ -758,5 +1056,77 @@ mod tests {
             &json!({"surprise": true}),
         );
         assert!(matches!(result, Err(GameError::InvalidOptions(_))));
+    }
+
+    #[test]
+    fn registered_corrections_replay_the_current_and_previous_turn() {
+        let mut game =
+            RegisteredGame::new("cricket", vec![("ada".into(), "Ada".into())], &json!({}))
+                .expect("game");
+        game.apply_throw(&hit(1, 20, Ring::Triple, 3, "T20"))
+            .expect("first");
+        game.apply_throw(&hit(2, 19, Ring::Triple, 3, "T19"))
+            .expect("second");
+        game.apply_throw(&hit(3, 18, Ring::Triple, 3, "T18"))
+            .expect("third");
+        game.continue_turn().expect("continue");
+        game.apply_throw(&hit(4, 17, Ring::Triple, 3, "T17"))
+            .expect("fourth");
+
+        game.correct_throw(
+            1,
+            DartEvent::Miss {
+                seq: 999,
+                label: "MISS".into(),
+                score: 0,
+            },
+        )
+        .expect("correct previous turn");
+        assert_eq!(game.state().players[0].marks["20"], 0);
+        assert_eq!(game.dart_records()[0].event.seq(), 1);
+        game.delete_throw(2).expect("delete previous turn");
+        assert_eq!(game.state().players[0].marks["19"], 0);
+        assert_eq!(game.state().players[0].marks["17"], 3);
+
+        game.apply_throw(&DartEvent::Miss {
+            seq: 5,
+            label: "MISS".into(),
+            score: 0,
+        })
+        .expect("fifth");
+        game.apply_throw(&DartEvent::Miss {
+            seq: 6,
+            label: "MISS".into(),
+            score: 0,
+        })
+        .expect("sixth");
+        game.continue_turn().expect("second continue");
+        assert_eq!(
+            game.correct_throw(1, hit(7, 20, Ring::Triple, 3, "T20")),
+            Err(GameError::ActionNotEditable)
+        );
+    }
+
+    #[test]
+    fn first_registry_snapshot_format_remains_restorable() {
+        let mut game =
+            RegisteredGame::new("cricket", vec![("ada".into(), "Ada".into())], &json!({}))
+                .expect("game");
+        let initial = game.state().clone();
+        game.apply_throw(&hit(1, 20, Ring::Triple, 3, "T20"))
+            .expect("throw");
+        let legacy = json!({
+            "state": game.state(),
+            "history": [initial],
+        });
+        let mut restored: RegisteredGame =
+            serde_json::from_value(legacy).expect("legacy registry snapshot");
+
+        restored.undo().expect("legacy undo");
+        assert_eq!(restored.state().players[0].marks["20"], 0);
+        restored
+            .apply_throw(&hit(2, 19, Ring::Triple, 3, "T19"))
+            .expect("new timeline action");
+        assert_eq!(restored.state().editable_darts[0].action_id, 1);
     }
 }

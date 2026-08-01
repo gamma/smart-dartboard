@@ -36,6 +36,9 @@ struct FixtureStep {
 enum FixtureCommand {
     Dart { event: DartEvent },
     Continue,
+    Correct { action_id: u64, event: DartEvent },
+    Delete { action_id: u64 },
+    Undo,
 }
 
 #[test]
@@ -60,6 +63,15 @@ fn cricket_matches_shared_golden_fixture() {
                 }
                 FixtureCommand::Continue => {
                     game.continue_turn().expect("accepted continue");
+                }
+                FixtureCommand::Correct { action_id, event } => {
+                    game.correct_throw(action_id, event).expect("correction");
+                }
+                FixtureCommand::Delete { action_id } => {
+                    game.delete_throw(action_id).expect("deletion");
+                }
+                FixtureCommand::Undo => {
+                    game.undo().expect("undo");
                 }
             }
             let state = game.state();

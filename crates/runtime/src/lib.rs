@@ -90,7 +90,7 @@ pub struct RuntimeSnapshot {
 pub enum RuntimeGame {
     CountUp(CountUpGame),
     X01(Box<X01Game>),
-    Registered(RegisteredGame),
+    Registered(Box<RegisteredGame>),
 }
 
 impl RuntimeGame {
@@ -121,14 +121,16 @@ impl RuntimeGame {
     fn correct_dart(&mut self, action_id: u64, replacement: DartEvent) -> Result<(), GameError> {
         match self {
             Self::X01(game) => game.correct_throw(action_id, replacement).map(|_| ()),
-            Self::CountUp(_) | Self::Registered(_) => Err(GameError::ActionNotEditable),
+            Self::Registered(game) => game.correct_throw(action_id, replacement).map(|_| ()),
+            Self::CountUp(_) => Err(GameError::ActionNotEditable),
         }
     }
 
     fn delete_dart(&mut self, action_id: u64) -> Result<(), GameError> {
         match self {
             Self::X01(game) => game.delete_throw(action_id).map(|_| ()),
-            Self::CountUp(_) | Self::Registered(_) => Err(GameError::ActionNotEditable),
+            Self::Registered(game) => game.delete_throw(action_id).map(|_| ()),
+            Self::CountUp(_) => Err(GameError::ActionNotEditable),
         }
     }
 
@@ -663,7 +665,9 @@ fn start_direct_game(
             game_type,
             players,
             options,
-        } => RuntimeGame::Registered(RegisteredGame::new(&game_type, players, &options)?),
+        } => RuntimeGame::Registered(Box::new(RegisteredGame::new(
+            &game_type, players, &options,
+        )?)),
         _ => unreachable!("start_direct_game only accepts direct game actions"),
     });
     Ok(())
@@ -740,9 +744,9 @@ fn game_from_options(
                 out_rule,
             )?)))
         }
-        _ if game_metadata(game_type).is_some() => Ok(RuntimeGame::Registered(
+        _ if game_metadata(game_type).is_some() => Ok(RuntimeGame::Registered(Box::new(
             RegisteredGame::new(game_type, players, options)?,
-        )),
+        ))),
         _ => Err(RuntimeError::InvalidGameOptions(format!(
             "unsupported game type: {game_type}"
         ))),

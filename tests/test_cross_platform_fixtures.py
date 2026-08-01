@@ -125,6 +125,15 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                         engine.handle_event(dict(command["event"]))
                     elif command["type"] == "continue":
                         engine.continue_turn()
+                    elif command["type"] == "correct":
+                        engine.correct_throw(
+                            int(command["action_id"]),
+                            dict(command["event"]),
+                        )
+                    elif command["type"] == "delete":
+                        engine.delete_throw(int(command["action_id"]))
+                    elif command["type"] == "undo":
+                        engine.undo()
                     else:
                         self.fail(f"Unsupported fixture command: {command['type']}")
                     state = engine.state

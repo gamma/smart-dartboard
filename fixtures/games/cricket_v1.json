@@ -45,6 +45,10 @@
         {
           "command": {"type": "dart", "event": {"type": "hit", "seq": 7, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
           "expected": {"scores": [60, 0], "marks_20": [3, 3], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "correct", "action_id": 5, "event": {"type": "miss", "seq": 999, "label": "MISS", "score": 0}},
+          "expected": {"scores": [120, 0], "marks_20": [3, 0], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 60, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
         }
       ]
     },

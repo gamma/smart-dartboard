@@ -50,10 +50,13 @@ Umgesetzt und lokal verifiziert:
 - Gemeinsamer Dart-Source-Contract für Board, Projektor-Test und manuelle
   Korrektur. Der Apple-Testtreffer ist als `projector_test` markiert; solche
   Spiele bleiben dauerhaft aus der normalen Statistik ausgeschlossen.
-- Öffentliche X01-Commands zum Korrigieren und Löschen über stabile Action-IDs.
-  Der gemeinsame State liefert die editierbaren Darts der aktuellen und
-  vorherigen Aufnahme. Replay, Sessionpunkte, Gewinner, kanonische `throws`
-  und append-only Korrekturevents werden atomar synchronisiert.
+- Öffentliche Commands zum Korrigieren und Löschen über stabile Action-IDs für
+  X01 und alle Registry-Modi, derzeit Cricket. Der gemeinsame State liefert die
+  editierbaren Darts der aktuellen und vorherigen Aufnahme. Replay,
+  Sessionpunkte, Gewinner, kanonische `throws` und append-only
+  Korrekturevents werden atomar synchronisiert. Bereits mit dem ersten
+  Registry-Snapshotformat gespeicherte Spiele bleiben lesbar und wechseln bei
+  der nächsten Aktion auf die neue Timeline.
 - API-v2-Details für Sessions und Spiele sowie ein vollständiges Replay-Envelope
   mit Initialzustand, Finalzustand, Frames, unwirksam gemachten Originalevents
   und Korrekturverkettung. Unbekannte IDs liefern stabil `not_found`/HTTP 404.
@@ -166,8 +169,8 @@ Noch nicht als produktionsreif nachgewiesen:
   Projector-Animationen,
 - vollständige Portierung aller Spielmodi sowie Heatmap, Modusstatistiken,
   Export und Trainingsempfehlungen,
-- generische Wurfkorrektur und Löschung für Registry-Modi; derzeit besitzt nur
-  X01 den vollständigen Action-ID-/Replay-Vertrag,
+- Action-ID-Korrektur für den noch separat implementierten CountUp-Kern; X01
+  und Registry-Modi besitzen den Replay-Vertrag bereits,
 - vollständige Docker-Parität zur Python-Anwendung,
 - reale Linux-BlueZ-/Board-Abnahme des neuen Sidecars.
 

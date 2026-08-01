@@ -1504,6 +1504,9 @@ fn record_dart(
     let event_json = serde_json::to_string(&event_value).map_err(|error| error.to_string())?;
     let action_id = match next.game.as_ref() {
         Some(RuntimeGame::X01(game)) => game.dart_records().last().map(|record| record.action_id),
+        Some(RuntimeGame::Registered(game)) => {
+            game.dart_records().last().map(|record| record.action_id)
+        }
         _ => None,
     };
     let audit_payload = serde_json::json!({
@@ -1661,7 +1664,7 @@ fn project_dart_edit(
             .execute("UPDATE games SET environment='test' WHERE id=?1", [game_id])
             .map_err(|error| error.to_string())?;
     }
-    rewrite_x01_throws(
+    rewrite_dart_throws(
         transaction,
         next,
         game_id,
@@ -1685,16 +1688,58 @@ struct StoredThrowMeta {
     created_at: String,
 }
 
-fn rewrite_x01_throws(
+#[derive(Debug)]
+struct ReplayedDartRecord {
+    action_id: u64,
+    event: DartEvent,
+    player_id: String,
+    score_after: u32,
+    round_number: u16,
+    dart_in_turn: u8,
+    outcome: String,
+}
+
+impl From<sdb_game_core::X01DartRecord> for ReplayedDartRecord {
+    fn from(record: sdb_game_core::X01DartRecord) -> Self {
+        Self {
+            action_id: record.action_id,
+            event: record.event,
+            player_id: record.player_id,
+            score_after: record.score_after,
+            round_number: record.round_number,
+            dart_in_turn: record.dart_in_turn,
+            outcome: record.outcome,
+        }
+    }
+}
+
+impl From<sdb_game_core::RegisteredDartRecord> for ReplayedDartRecord {
+    fn from(record: sdb_game_core::RegisteredDartRecord) -> Self {
+        Self {
+            action_id: record.action_id,
+            event: record.event,
+            player_id: record.player_id,
+            score_after: record.score_after,
+            round_number: record.round_number,
+            dart_in_turn: record.dart_in_turn,
+            outcome: record.outcome,
+        }
+    }
+}
+
+fn rewrite_dart_throws(
     transaction: &Transaction<'_>,
     snapshot: &RuntimeSnapshot,
     game_id: &str,
     edited_action_id: u64,
     edit: Option<(&str, i64)>,
 ) -> Result<(), String> {
-    let records = match snapshot.game.as_ref() {
-        Some(RuntimeGame::X01(game)) => game.dart_records(),
-        _ => return Err("dart edits are only supported for X01".into()),
+    let records: Vec<ReplayedDartRecord> = match snapshot.game.as_ref() {
+        Some(RuntimeGame::X01(game)) => game.dart_records().into_iter().map(Into::into).collect(),
+        Some(RuntimeGame::Registered(game)) => {
+            game.dart_records().into_iter().map(Into::into).collect()
+        }
+        _ => return Err("dart edits are unsupported for this game".into()),
     };
     let mut statement = transaction
         .prepare(
@@ -1762,7 +1807,7 @@ fn rewrite_x01_throws(
 fn insert_replayed_throw(
     transaction: &Transaction<'_>,
     game_id: &str,
-    record: &sdb_game_core::X01DartRecord,
+    record: &ReplayedDartRecord,
     source: &str,
     event_id: Option<i64>,
     created_at: &str,
@@ -2534,6 +2579,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // Covers play, correction, scoring, audit and recovery atomically.
     fn registered_cricket_projects_history_and_recovers_like_legacy_modes() {
         let repository = SqliteRepository::in_memory().expect("repository");
         let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
@@ -2619,6 +2665,54 @@ mod tests {
             runtime.snapshot().session.state().standings[0].session_points,
             3
         );
+        runtime
+            .dispatch(
+                "runtime",
+                "cricket-correct-win-to-miss",
+                None,
+                RuntimeAction::CorrectDart {
+                    action_id: 10,
+                    replacement: DartEvent::Miss {
+                        seq: 999,
+                        label: "MISS".into(),
+                        score: 0,
+                    },
+                    source: sdb_contracts::DartSource::ManualCorrection,
+                },
+            )
+            .expect("reopen corrected Cricket win");
+        assert_eq!(runtime.snapshot().session.state().screen, Screen::Playing);
+        assert_eq!(
+            runtime.snapshot().session.state().standings[0].session_points,
+            0
+        );
+        runtime
+            .dispatch(
+                "runtime",
+                "cricket-correct-miss-to-win",
+                None,
+                RuntimeAction::CorrectDart {
+                    action_id: 10,
+                    replacement: DartEvent::Hit {
+                        seq: 1_000,
+                        field: 25,
+                        ring: Ring::SingleBull,
+                        multiplier: 1,
+                        label: "BULL".into(),
+                        score: 25,
+                    },
+                    source: sdb_contracts::DartSource::ManualCorrection,
+                },
+            )
+            .expect("restore corrected Cricket win");
+        assert_eq!(
+            runtime.snapshot().session.state().screen,
+            Screen::GameResult
+        );
+        assert_eq!(
+            runtime.snapshot().session.state().standings[0].session_points,
+            3
+        );
         let repository = runtime.into_repository();
         let detail = repository
             .game_detail("game-cricket")
@@ -2628,6 +2722,9 @@ mod tests {
         assert_eq!(detail.game.status, "finished");
         assert_eq!(detail.game.winner_ids, vec!["ada"]);
         assert_eq!(detail.throws.len(), 8);
+        assert_eq!(detail.throws[7].action_id, Some(10));
+        assert_eq!(detail.throws[7].seq, 8);
+        assert_eq!(detail.throws[7].source, "manual_correction");
         assert_eq!(detail.game.ruleset_version, 1);
         let restored = Runtime::restore("restored", repository).expect("restore Cricket runtime");
         let Some(RuntimeGame::Registered(game)) = restored.snapshot().game.as_ref() else {
