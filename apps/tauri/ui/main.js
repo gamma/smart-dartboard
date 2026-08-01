@@ -7,7 +7,21 @@ document.querySelector('#role').textContent=role.toUpperCase();
 function render(payload){
   document.querySelector('#counter').textContent=String(payload.counter ?? 0);
   document.querySelector('#status').textContent=`Runtime ${payload.runtime_instance_id} · Revision ${payload.revision}`;
+  renderBoardStatus(payload.board);
   renderDisplayStatus(payload.external_display_count ?? 0);
+}
+
+function renderBoardStatus(board={}){
+  const labels={
+    unavailable:'nicht verfügbar',permission_required:'Bluetooth erlauben',
+    bluetooth_off:'Bluetooth ausgeschaltet',scanning:'sucht …',connecting:'verbindet …',
+    discovering:'prüft Dienste …',subscribing:'abonniert Treffer …',ready:'bereit',
+    reconnecting:'verbindet erneut …',error:'Fehler',disabled:'deaktiviert'
+  };
+  const status=document.querySelector('#boardStatus');
+  const ready=board.phase==='ready';
+  status.dataset.connected=String(ready);
+  status.textContent=`Board: ${labels[board.phase] ?? board.phase ?? 'unbekannt'}`;
 }
 
 function renderDisplayStatus(displayCount){

@@ -134,7 +134,10 @@ jobs:
           cargo check --workspace --target aarch64-apple-ios-sim
 
       - name: Check native shell
-        run: cargo clippy --manifest-path apps/tauri/src-tauri/Cargo.toml --all-targets -- -D warnings
+        run: |
+          cargo fmt --manifest-path apps/tauri/src-tauri/Cargo.toml -- --check
+          cargo test --manifest-path apps/tauri/src-tauri/Cargo.toml
+          cargo clippy --manifest-path apps/tauri/src-tauri/Cargo.toml --all-targets -- -D warnings
 
       - name: Build macOS shell
         run: npm --prefix apps/tauri run build

@@ -1,3 +1,8 @@
+use sdb_board::BoardStatus;
+#[cfg(target_os = "ios")]
+use sdb_board::{BoardFailureCode, BoardPhase};
+#[cfg(any(target_os = "ios", test))]
+use sdb_board::{BoardIngress, BoardIngressOutcome};
 use sdb_contracts::{DartEvent, DartSource, Ring};
 use sdb_runtime::{MemoryRepository, Runtime, RuntimeAction, RuntimeGameState};
 use serde::Serialize;
@@ -20,6 +25,9 @@ static EXTERNAL_DISPLAY_COUNT: AtomicU32 = AtomicU32::new(0);
 struct NativeState {
     runtime: Runtime<MemoryRepository>,
     next_dart_seq: u64,
+    #[cfg(any(target_os = "ios", test))]
+    board_ingress: BoardIngress,
+    board_status: BoardStatus,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -28,6 +36,7 @@ struct PublicState {
     revision: u64,
     counter: u64,
     external_display_count: u32,
+    board: BoardStatus,
     game: Option<RuntimeGameState>,
 }
 
@@ -49,6 +58,9 @@ impl NativeState {
         Ok(Self {
             runtime,
             next_dart_seq: 1,
+            #[cfg(any(target_os = "ios", test))]
+            board_ingress: BoardIngress::new(),
+            board_status: BoardStatus::unavailable(),
         })
     }
 
@@ -68,6 +80,7 @@ impl NativeState {
             revision: self.runtime.snapshot().revision,
             counter,
             external_display_count: external_display_count(),
+            board: self.board_status.clone(),
             game,
         }
     }
@@ -95,6 +108,27 @@ impl NativeState {
             )
             .map_err(|error| error.to_string())?;
         Ok(self.public())
+    }
+
+    #[cfg(any(target_os = "ios", test))]
+    fn ingest_board_packet(&mut self, connection_id: &str, raw: &[u8]) -> Result<bool, String> {
+        let BoardIngressOutcome::Dart { event, command_id } =
+            self.board_ingress.ingest(connection_id, raw)
+        else {
+            return Ok(false);
+        };
+        self.runtime
+            .dispatch(
+                "native-m0",
+                &command_id,
+                Some(self.runtime.snapshot().revision),
+                RuntimeAction::Dart {
+                    event,
+                    source: DartSource::Board,
+                },
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(true)
     }
 }
 
@@ -139,6 +173,128 @@ mod ios_display {
         if let Some(update) = projector_update() {
             unsafe { update(json.as_ptr()) };
         }
+    }
+}
+
+#[cfg(target_os = "ios")]
+#[allow(unsafe_code)]
+mod ios_board {
+    use super::{
+        APP_HANDLE, BoardFailureCode, BoardPhase, BoardStatus, NativeState, publish_public_state,
+    };
+    use std::ffi::{CStr, c_char};
+    use tauri::Manager;
+
+    fn phase(value: u32) -> BoardPhase {
+        match value {
+            1 => BoardPhase::PermissionRequired,
+            2 => BoardPhase::BluetoothOff,
+            3 => BoardPhase::Scanning,
+            4 => BoardPhase::Connecting,
+            5 => BoardPhase::Discovering,
+            6 => BoardPhase::Subscribing,
+            7 => BoardPhase::Ready,
+            8 => BoardPhase::Reconnecting,
+            9 => BoardPhase::Error,
+            _ => BoardPhase::Unavailable,
+        }
+    }
+
+    fn failure(value: i32) -> Option<BoardFailureCode> {
+        match value {
+            1 => Some(BoardFailureCode::AdapterUnavailable),
+            2 => Some(BoardFailureCode::PermissionDenied),
+            3 => Some(BoardFailureCode::BluetoothPoweredOff),
+            4 => Some(BoardFailureCode::DeviceNotFound),
+            5 => Some(BoardFailureCode::ConnectionFailed),
+            6 => Some(BoardFailureCode::ServiceMissing),
+            7 => Some(BoardFailureCode::CharacteristicMissing),
+            8 => Some(BoardFailureCode::SubscriptionFailed),
+            9 => Some(BoardFailureCode::QueueOverflow),
+            10 => Some(BoardFailureCode::RuntimeUnavailable),
+            11 => Some(BoardFailureCode::TransportError),
+            _ => None,
+        }
+    }
+
+    unsafe fn string(pointer: *const c_char) -> Option<String> {
+        if pointer.is_null() {
+            return None;
+        }
+        unsafe { CStr::from_ptr(pointer) }
+            .to_str()
+            .ok()
+            .map(str::to_owned)
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn sdb_board_status_changed(
+        phase_value: u32,
+        failure_value: i32,
+        detail: *const c_char,
+        connection_id: *const c_char,
+    ) {
+        let detail = unsafe { string(detail) }.filter(|value| value.len() <= 256);
+        let connection_id = unsafe { string(connection_id) }.filter(|value| value.len() <= 64);
+        let Some(app) = APP_HANDLE.get() else {
+            return;
+        };
+        let Some(state) = app.try_state::<std::sync::Mutex<NativeState>>() else {
+            return;
+        };
+        let public = {
+            let Ok(mut state) = state.lock() else {
+                return;
+            };
+            state.board_status = BoardStatus {
+                enabled: true,
+                phase: phase(phase_value),
+                failure_code: failure(failure_value),
+                detail,
+                connection_id,
+            };
+            state.public()
+        };
+        publish_public_state(app, &public);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn sdb_board_notification(
+        bytes: *const u8,
+        length: usize,
+        connection_id: *const c_char,
+    ) {
+        if bytes.is_null() || length > 64 {
+            return;
+        }
+        let Some(connection_id) = (unsafe { string(connection_id) }) else {
+            return;
+        };
+        if connection_id.len() > 64 {
+            return;
+        }
+        let raw = unsafe { std::slice::from_raw_parts(bytes, length) };
+        let Some(app) = APP_HANDLE.get() else {
+            return;
+        };
+        let Some(state) = app.try_state::<std::sync::Mutex<NativeState>>() else {
+            return;
+        };
+        let public = {
+            let Ok(mut state) = state.lock() else {
+                return;
+            };
+            match state.ingest_board_packet(&connection_id, raw) {
+                Ok(true) => state.public(),
+                Ok(false) => return,
+                Err(error) => {
+                    state.board_status.failure_code = Some(BoardFailureCode::RuntimeUnavailable);
+                    state.board_status.detail = Some(error);
+                    state.public()
+                }
+            }
+        };
+        publish_public_state(app, &public);
     }
 }
 
@@ -204,10 +360,13 @@ fn increment_runtime(
         let mut state = state.lock().map_err(|error| error.to_string())?;
         state.ingest_test_hit()?
     };
-    publish_to_external_projector(&public);
-    app.emit("runtime-state", &public)
-        .map_err(|error| error.to_string())?;
+    publish_public_state(app, &public);
     Ok(public)
+}
+
+fn publish_public_state(app: &tauri::AppHandle, public: &PublicState) {
+    publish_to_external_projector(public);
+    let _ = app.emit("runtime-state", public);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -253,4 +412,28 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running Smart Dartboard native M0");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raw_board_packet_uses_shared_ingress_and_runtime_once() {
+        let mut state = NativeState::new().expect("native state");
+        let packet = [1, 0, 0, 0, 5, 0, 0x0d, 0, 2, 0x0f];
+        assert!(
+            state
+                .ingest_board_packet("test-link", &packet)
+                .expect("first packet")
+        );
+        assert!(
+            !state
+                .ingest_board_packet("test-link", &packet)
+                .expect("duplicate")
+        );
+        let public = state.public();
+        assert_eq!(public.revision, 2);
+        assert_eq!(public.counter, 40);
+    }
 }

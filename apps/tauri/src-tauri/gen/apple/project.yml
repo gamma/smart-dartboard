@@ -53,6 +53,8 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: "0.1.0"
+        NSBluetoothAlwaysUsageDescription: Smart Dartboard verbindet sich mit deiner elektronischen Dartscheibe.
+        UIBackgroundModes: [bluetooth-central]
     entitlements:
       path: sdb-native-m0_iOS/sdb-native-m0_iOS.entitlements
     scheme:
@@ -73,6 +75,7 @@ targets:
       - framework: libapp.a
         embed: false
       - sdk: CoreGraphics.framework
+      - sdk: CoreBluetooth.framework
       - sdk: Metal.framework
       - sdk: MetalKit.framework
       - sdk: QuartzCore.framework

@@ -14,8 +14,10 @@
 		4923A4935C256B9855FFFC73 /* libapp.a in Resources */ = {isa = PBXBuildFile; fileRef = DAE57E1E821C1B95F9E635E6 /* libapp.a */; };
 		52BE30277572DABEC40BE063 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 203FF380527E4CB403054650 /* Security.framework */; };
 		577CFC2641E3EAE43F3DEACA /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E29BE45429DDFE60C0089110 /* UIKit.framework */; };
+		59A8C84D38C1D6431B5CAD9D /* CoreBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7215C9DB52C663ED57174077 /* CoreBluetooth.framework */; };
 		9823E4AD829BCE3E7A175922 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91CF9EBAD127047153940344 /* CoreGraphics.framework */; };
 		D571B95AA1786C4A54511A0E /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 7D40A1650231C610CD8C3C99 /* main.mm */; };
+		D5898D485B2BC4F88031444E /* BoardTransportHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = 62A18C92C1E928ECA55C7FDC /* BoardTransportHost.mm */; };
 		E204201F0FB38CF5073797A6 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F887F5660CD9632B7C904FD8 /* WebKit.framework */; };
 		E571E4C5EE7922CADDFF9CDA /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 10E6EDDDE86EA282DA5C8C80 /* LaunchScreen.storyboard */; };
 		EB3B5A6383801E69A4767164 /* MetalKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = BF36697C53B0946F7B5E5F49 /* MetalKit.framework */; };
@@ -29,10 +31,13 @@
 		0CB82108290AA99350E05CAD /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		10E6EDDDE86EA282DA5C8C80 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		203FF380527E4CB403054650 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
+		244093BCAD3DB7B9D9EA8B4C /* BoardTransportHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BoardTransportHost.h; sourceTree = "<group>"; };
 		4BBB39A5278574C663F72A0A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5B056CC525D69904F551CC56 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		62A18C92C1E928ECA55C7FDC /* BoardTransportHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = BoardTransportHost.mm; sourceTree = "<group>"; };
 		664DBB93EFBC8B306B3A8922 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		6C93AFE2F52A68BAE26268C2 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		7215C9DB52C663ED57174077 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		74BA6DEB4FF7464F40C74728 /* sdb-native-m0_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "sdb-native-m0_iOS.entitlements"; sourceTree = "<group>"; };
 		7BF1B662EDAAECA04E85FD80 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		7D40A1650231C610CD8C3C99 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
@@ -54,6 +59,7 @@
 			files = (
 				FE0B79560AE4D1117D2813A0 /* libapp.a in Frameworks */,
 				9823E4AD829BCE3E7A175922 /* CoreGraphics.framework in Frameworks */,
+				59A8C84D38C1D6431B5CAD9D /* CoreBluetooth.framework in Frameworks */,
 				179125BCC41C2DD5409596E2 /* Metal.framework in Frameworks */,
 				EB3B5A6383801E69A4767164 /* MetalKit.framework in Frameworks */,
 				3B437BB1B33E4B19FAF6AEE6 /* QuartzCore.framework in Frameworks */,
@@ -134,6 +140,7 @@
 		DE09ADBE4EE2953F8EEF90A8 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				7215C9DB52C663ED57174077 /* CoreBluetooth.framework */,
 				91CF9EBAD127047153940344 /* CoreGraphics.framework */,
 				5B056CC525D69904F551CC56 /* libapp.a */,
 				664DBB93EFBC8B306B3A8922 /* Metal.framework */,
@@ -166,6 +173,8 @@
 		EF5C3CF1F7EF071E0FD455B3 /* sdb-native-m0 */ = {
 			isa = PBXGroup;
 			children = (
+				244093BCAD3DB7B9D9EA8B4C /* BoardTransportHost.h */,
+				62A18C92C1E928ECA55C7FDC /* BoardTransportHost.mm */,
 				7D40A1650231C610CD8C3C99 /* main.mm */,
 				B9CC417A162E3407588330FE /* ProjectorDisplayHost.h */,
 				EA9BFC414BC28065A79C93A0 /* ProjectorDisplayHost.mm */,
@@ -174,7 +183,7 @@
 			path = "sdb-native-m0";
 			sourceTree = "<group>";
 		};
-		"TEMP_A2726F7F-BACE-42A1-80D9-AEDBA3D178E3" /* x86_64 */ = {
+		"TEMP_7A353B40-562E-48A7-AA57-4D5E9FCBF68C" /* x86_64 */ = {
 			isa = PBXGroup;
 			children = (
 			);
@@ -277,6 +286,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D5898D485B2BC4F88031444E /* BoardTransportHost.mm in Sources */,
 				35F61D673558B421FC3D670C /* ProjectorDisplayHost.mm in Sources */,
 				D571B95AA1786C4A54511A0E /* main.mm in Sources */,
 			);

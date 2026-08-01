@@ -56,10 +56,19 @@ Umgesetzt und lokal verifiziert:
   unprivilegierter Linux-Bleak-Sidecar liefert nur Notifications und Status
   über token-authentisierte interne Endpunkte; der reale Containervertrag ist
   ohne Hardware per D20-Rohpaket verifiziert.
+- iOS-/iPadOS-CoreBluetooth-Host mit State Restoration, gespeicherter
+  Peripheral-ID, Namens-/Service-Scan-Fallback und den Phasen Berechtigung,
+  Scan, Verbindung, Serviceprüfung, Subscription, Ready und Reconnect. Der
+  Adapter liefert FFF1 unverändert an denselben Rust-Ingress. Simulator-Bundle
+  und FFI linken erfolgreich; ein nativer Test verarbeitet D20 genau einmal,
+  und die Control UI zeigt im BLE-losen Simulator verständlich `nicht
+  verfügbar`.
 
 Noch nicht als produktionsreif nachgewiesen:
 
-- echtes CoreBluetooth-Board auf macOS und iOS/iPadOS,
+- echtes CoreBluetooth-Board auf macOS und iOS/iPadOS; der iOS-Adapter ist
+  implementiert, aber noch nicht mit der realen Scheibe qualifiziert, der
+  macOS-Host ist noch nicht verdrahtet,
 - reale AirPlay-, HDMI- und Audio-Hardware,
 - External-Display-Scene-Accessory ab iOS/iPadOS 27,
 - iPhone/iPad-zu-iPad-Companion mit Pairing,
@@ -107,6 +116,21 @@ Die technische Entscheidung und ihre Versionsgrenzen stehen in
 [ADR 0001](adr/0001-apple-external-display-host.md). Die Control UI zeigt den
 aktuellen Status `nicht verbunden` oder die Zahl der aktiven AirPlay-/HDMI-
 Displays. Das Projector-Fenster besitzt keinen schreibenden Runtime-Zugriff.
+
+## Apple-BoardTransport
+
+`BoardTransportHost.mm` besitzt als dünner Plattformadapter ausschließlich
+CoreBluetooth-Discovery, Verbindung, State Restoration und FFF1-Subscription.
+Decoder, Button-/Miss-Interpretation, Deduplizierung und Runtime-Dispatch liegen
+im gemeinsamen Rust-`sdb-board`-Crate. Damit kann derselbe Byte-Fixture-Test auf
+Linux, macOS, iPhone und iPad gelten.
+
+Die App verlangt `NSBluetoothAlwaysUsageDescription` und deklariert
+`bluetooth-central` für Preservation/Restoration. Eine bekannte iOS-Peripheral-
+UUID wird in `NSUserDefaults` gespeichert; ist sie nicht mehr abrufbar oder
+scheitert die Verbindung, scannt der Host erneut nach Name `SDB-BT` oder Service
+`FFF0`. Die UI zeigt den stabilen Boardstatus, aber keine rohen Backendfehler als
+Spielmeldung.
 
 ## Hardware-Abnahme
 

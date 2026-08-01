@@ -14,4 +14,5 @@ button{border:0;border-radius:18px;padding:18px 28px;background:linear-gradient(
 .display-status[data-connected="true"]::before{background:#28e7ff;box-shadow:0 0 12px #28e7ff}
 .status{font-size:13px;color:#8ca0b7;margin-top:24px}
 body[data-role="projector"] button{display:none}
+body[data-role="projector"] .board-status{display:none}
 body[data-role="projector"] h1{font-size:clamp(72px,10vw,150px)}
