@@ -1174,7 +1174,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(4));
+        assert_eq!(modes.as_array().map(Vec::len), Some(5));
         assert!(
             modes
                 .as_array()
@@ -1192,6 +1192,14 @@ mod tests {
         assert!(modes.as_array().is_some_and(|items| {
             items.iter().any(|mode| {
                 mode["slug"] == "eight_ball" && mode["min_players"] == 2 && mode["max_players"] == 2
+            })
+        }));
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "heart_chase"
+                    && mode["min_players"] == 2
+                    && mode["max_players"] == 8
+                    && mode["options"][0]["default"] == 3
             })
         }));
     }

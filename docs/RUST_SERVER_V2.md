@@ -124,8 +124,9 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 
 ## Aktueller Funktionsumfang
 
-- CountUp, X01, Cricket und 8-Ball starten; Cricket und 8-Ball nutzen dieselbe
-  generische, statische Modus-Registry statt neuer Runtime- oder Serverzweige,
+- CountUp, X01, Cricket, 8-Ball und Heart Chase starten; Cricket, 8-Ball und
+  Heart Chase nutzen dieselbe generische, statische Modus-Registry statt neuer
+  Runtime- oder Serverzweige,
 - Modusmetadaten einschließlich validierter Optionen, Anleitungen,
   Artwork-/Sound-Referenzen und Regelsatz-Version über `/api/v2/modes` liefern,
 - den deterministischen Registry-Zufall aus der stabilen Spiel-ID ableiten und

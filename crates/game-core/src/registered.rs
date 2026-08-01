@@ -5,8 +5,10 @@ use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
 mod eight_ball;
+mod heart_chase;
 
 use eight_ball::EIGHT_BALL_MODE;
+use heart_chase::HEART_CHASE_MODE;
 
 const CRICKET_TARGETS: [u8; 7] = [20, 19, 18, 17, 16, 15, 25];
 
@@ -600,11 +602,23 @@ fn advance_player(
     state: &mut RegisteredGameState,
 ) -> Result<(), GameError> {
     let mut next = state.clone();
-    let last_player = next.current_player_index + 1 == next.players.len();
-    next.current_player_index = (next.current_player_index + 1) % next.players.len();
-    if last_player {
+    let previous_index = next.current_player_index;
+    let player_count = next.players.len();
+    let mut selected = None;
+    for offset in 1..=player_count {
+        let candidate = (previous_index + offset) % player_count;
+        if mode.is_player_active(&next, candidate) {
+            selected = Some(candidate);
+            break;
+        }
+    }
+    let selected = selected.ok_or_else(|| {
+        GameError::RulesetUnavailable("mode has no active player to continue".into())
+    })?;
+    if selected <= previous_index {
         next.round_number = next.round_number.saturating_add(1);
     }
+    next.current_player_index = selected;
     next.darts_in_turn = 0;
     next.turn_score = 0;
     next.status = GameStatus::Running;
@@ -625,6 +639,10 @@ trait GameMode: Sync {
         event: &DartEvent,
     ) -> Result<u32, GameError>;
     fn overlay(&self, state: &RegisteredGameState) -> Value;
+
+    fn is_player_active(&self, _state: &RegisteredGameState, _player_index: usize) -> bool {
+        true
+    }
 
     fn on_turn_started(&self, _state: &mut RegisteredGameState) -> Result<(), GameError> {
         Ok(())
@@ -975,7 +993,7 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 2] = [&CRICKET_MODE, &EIGHT_BALL_MODE];
+static MODES: [&'static dyn GameMode; 3] = [&CRICKET_MODE, &EIGHT_BALL_MODE, &HEART_CHASE_MODE];
 
 fn mode(slug: &str) -> Result<&'static dyn GameMode, GameError> {
     MODES

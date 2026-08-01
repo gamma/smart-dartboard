@@ -1,0 +1,71 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 1,
+  "players": [
+    {"id": "player-ada", "name": "Ada"},
+    {"id": "player-bob", "name": "Bob"}
+  ],
+  "options": {"hearts": 2},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+      "expected": {"scores": [60, 0], "hearts": [2, 2], "challenge_score": 0, "current_player_index": 0, "darts_in_turn": 1, "turn_score": 60, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 2, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [2, 2], "challenge_score": 0, "current_player_index": 0, "darts_in_turn": 2, "turn_score": 60, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 3, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [2, 2], "challenge_score": 60, "current_player_index": 0, "darts_in_turn": 3, "turn_score": 60, "round_number": 1, "status": "hold", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [60, 0], "hearts": [2, 2], "challenge_score": 60, "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 4, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [2, 2], "challenge_score": 60, "current_player_index": 1, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 5, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [2, 2], "challenge_score": 60, "current_player_index": 1, "darts_in_turn": 2, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 6, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [2, 1], "challenge_score": 0, "current_player_index": 1, "darts_in_turn": 3, "turn_score": 0, "round_number": 1, "status": "hold", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [60, 0], "hearts": [2, 1], "challenge_score": 0, "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 7, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [2, 1], "challenge_score": 0, "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 8, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [2, 1], "challenge_score": 0, "current_player_index": 0, "darts_in_turn": 2, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 9, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [1, 1], "challenge_score": 0, "current_player_index": 0, "darts_in_turn": 3, "turn_score": 0, "round_number": 2, "status": "hold", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [60, 0], "hearts": [1, 1], "challenge_score": 0, "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 10, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [1, 1], "challenge_score": 0, "current_player_index": 1, "darts_in_turn": 1, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 11, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [1, 1], "challenge_score": 0, "current_player_index": 1, "darts_in_turn": 2, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 12, "label": "MISS", "score": 0}},
+      "expected": {"scores": [60, 0], "hearts": [1, 0], "challenge_score": 0, "current_player_index": 1, "darts_in_turn": 3, "turn_score": 0, "round_number": 2, "status": "finished", "winner_id": "player-ada", "result_type": "individual_win"}
+    }
+  ]
+}
