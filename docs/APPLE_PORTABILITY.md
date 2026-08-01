@@ -373,17 +373,21 @@ werden und ein widerrufbares Token erhalten.
 - Eine iPad-App mit externem Bildschirm ist möglich, aber deutlich anfälliger
   für Lifecycle-, AirPlay- und Displaywechsel als ein fester macOS-Host.
 
-Der bevorzugte mobile Arcade-Modus ist dennoch ein einzelnes unterstütztes
-iPhone oder iPad, das Board, Runtime, SQLite und Control UI besitzt und eine
-separate Projector UI über AirPlay oder HDMI ausgibt. Der Controller muss also
-kein iPad sein. System-Mirroring der Control UI reicht dafür nicht aus; ein
-AirPlay-Ziel ohne erweiterte externe Anzeige führt kontrolliert zum HDMI- oder
-Companion-Fallback. Bis iOS/iPadOS 26 wird die nichtinteraktive externe Scene über
+Der bevorzugte mobile Arcade-Modus heißt **Direkte Ausgabe**: Ein einzelnes
+unterstütztes iPhone oder iPad besitzt Board, Runtime, SQLite und Control UI und
+gibt eine separate Projector UI über AirPlay oder HDMI aus. Der Controller muss
+also kein iPad sein. Nach dem App-Start und Einschalten eines bekannten Boards
+soll ohne erneutes Pairing oder manuelle Navigation gespielt werden können.
+System-Mirroring der Control UI reicht dafür nicht aus; ein AirPlay-Ziel ohne
+erweiterte externe Anzeige führt kontrolliert zum HDMI- oder Companion-Fallback.
+Bis iOS/iPadOS 26 wird die nichtinteraktive externe Scene über
 `windowExternalDisplayNonInteractive` angebunden; ab Version 27 muss die App
 dafür ein External-Display-Scene-Accessory registrieren. Beide Implementierungen
 liegen hinter demselben `DisplayHost`-Vertrag.
 
-Als Fallback und zweiter Produktmodus dient ein Companion-iPad:
+Als Fallback und zweiter Produktmodus dient **Companion-Projektor**. Sein
+prominenter Produktfall ist ein iPhone als handlicher Controller und ein iPad
+als kabelloser Projector; auch ein iPad darf Controller sein:
 
 ```text
 iPhone/iPad: Controller + BLE + Runtime + SQLite

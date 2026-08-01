@@ -126,20 +126,26 @@ fachlichen Tests.
 
 ### 2.3 Bevorzugte iOS-/iPadOS-Anzeigemodi
 
-Die primäre Apple-Mobile-Konfiguration ist ein einzelnes unterstütztes iOS-
-oder iPadOS-Gerät als Controller und Runtime; konkret darf das ein iPhone oder
-iPad sein. Der Controller ist ausdrücklich nicht an ein iPad gebunden. Er
-verbindet das Board direkt per CoreBluetooth und gibt
-eine eigenständige Projector-Ansicht über AirPlay oder einen kabelgebundenen
-HDMI-/USB-C-Displayadapter aus. Das interne Display bleibt dabei immer die
-interaktive Control UI. Das externe Display zeigt nicht deren Spiegelung,
-sondern ausschließlich die nichtinteraktive Projector-Rolle.
+Die Apple-App bietet zwei klar benannte Produktmodi. **Direkte Ausgabe** ist der
+bevorzugte Arcade-Pfad: Ein beliebiges unterstütztes iPhone oder iPad ist
+Controller, BLE-Host, Runtime und Datenbank. Es verbindet das Board direkt per
+CoreBluetooth und gibt eine eigenständige Projector-Ansicht über AirPlay oder
+einen kabelgebundenen HDMI-/USB-C-Displayadapter aus. Das interne Display bleibt
+dabei immer die interaktive Control UI. Das externe Display zeigt nicht deren
+Spiegelung, sondern ausschließlich die nichtinteraktive Projector-Rolle.
 
-Als sekundärer Modus wird Companion unterstützt:
+Der normale Start öffnet direkt diesen Controller-Modus. Nach dem Einschalten
+des bekannten Boards verbindet sich die App automatisch; eine verfügbare,
+zuletzt verwendete externe Ausgabe wird wiederhergestellt. Die Arcade-Kette
+lautet damit im Idealfall: App starten, Board einschalten, spielen. AirPlay und
+HDMI sind lediglich zwei Adapter desselben `DisplayHost` und dürfen weder eine
+zweite Runtime noch unterschiedliche Spielregeln erzeugen.
+
+**Companion-Projektor** ist der zweite Produktmodus und benötigt zwei Geräte:
 
 ```text
-iPhone oder iPad                         iPad
-Controller + BLE + Runtime + SQLite  →  Projector + Sound
+iPhone oder iPad                              iPad
+Controller + BLE + Runtime + SQLite  ──────→  Projector + Sound
 ```
 
 Beide Geräte verwenden dieselbe App; es gibt keine gesonderte zweite
@@ -165,6 +171,21 @@ Reihenfolge der Produktpräferenz:
 1. iPhone/iPad als Controller mit AirPlay oder HDMI als Projector,
 2. iPhone/iPad als Controller mit iPad als Companion-Projector,
 3. vorübergehende Projector-Vorschau auf demselben Display als Fallback.
+
+Für die Abnahme müssen mindestens diese Kombinationen denselben laufenden
+Spielstand und dieselbe Projector-Darstellung liefern:
+
+| Controller | Projector | Modus |
+|---|---|---|
+| iPhone | AirPlay-Empfänger | direkte Ausgabe |
+| iPhone | HDMI-/USB-C-Adapter | direkte Ausgabe |
+| iPad | AirPlay-Empfänger | direkte Ausgabe |
+| iPad | HDMI-/USB-C-Adapter | direkte Ausgabe |
+| iPhone oder iPad | zweites iPad | Companion-Projektor |
+
+„Direkte Ausgabe“ gilt nur dann als verfügbar, wenn iOS/iPadOS eine separate
+externe Anzeige bereitstellt. Reine Bildschirmspiegelung, bei der die Control UI
+auf dem Projektor erscheint, ist kein zulässiger Arcade-Modus.
 
 Der Spielbetrieb muss beim Trennen eines externen Displays oder Companion-
 Geräts auf dem Controller weiterlaufen. Nach Wiederverbindung erhält der
