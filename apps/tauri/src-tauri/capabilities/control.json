@@ -15,6 +15,9 @@
     "allow-companion-discovery-start",
     "allow-companion-discovered-hosts",
     "allow-companion-discovery-stop",
+    "allow-companion-pairing-prepare",
+    "allow-companion-pairing-complete",
+    "allow-companion-client-status",
     "allow-projector-output-select"
   ]
 }

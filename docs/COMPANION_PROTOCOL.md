@@ -133,15 +133,22 @@ Implementiert und automatisiert getestet:
   Host-Transport und aktiviert ausschließlich Discovery. Beim Wechsel zurück
   wird der Board-Host wieder gestartet. Rust-Tests belegen Persistenz und die
   Command-Sperren; iPhone-WebKit wurde im Simulator visuell geprüft.
+- sichere Hostauswahl und Pairing-UI des nativen Apple-Clients. Der erste
+  Handshake liest ausschließlich das Zertifikat und sendet weder Code noch
+  Token. Der Nutzer bestätigt den kurzen Fingerprint; erst danach läuft das
+  Einmalcode-Pairing über eine zweite TLS-Verbindung mit genau diesem
+  Zertifikat als Trust Anchor. Der Projector-Grant wird validiert und zusammen
+  mit Zertifikat und Host-ID im Apple Keychain abgelegt. Temporäre
+  Klartextpuffer werden überschrieben. Ein echter Host-/Client-TLS-Test belegt
+  korrektes Pairing und Ablehnung eines falschen Pins; ein Playwright-Test mit
+  WebKit belegt den gesperrten UI-Ablauf bis Fingerprint und Code vollständig
+  bestätigt sind.
 
 Noch offen:
 
-- Tokenablage des Companion-Clients im Apple Keychain beziehungsweise Android
-  Keystore; die persistente lokale Apple-TLS-Identität des Controller-Hosts
-  liegt bereits im Keychain,
-- Auswahl, TLS-Fingerprint-Vergleich und Einmalcode-Pairing eines vom
-  implementierten Bonjour-Browser gefundenen Controller-Hosts,
+- Android-Keystore-Adapter für den Companion-Client,
 - signierte iOS-/iPadOS-Hardwareabnahme der nativen TLS-Identität; der
   lokal getestete unsigned Simulator stellte keinen nutzbaren Keychain bereit,
-- Pairing-UI auf dem Companion,
+- Bootstrap-Snapshot, revisionsgenauer WebSocket-Stream, Reconnect-Zustand und
+  Übergabe an den read-only Projector-Renderer auf dem Companion,
 - echte iPhone/iPad-zu-iPad-Abnahme mit Disconnect, Resume und Widerruf.

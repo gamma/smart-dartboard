@@ -9,9 +9,11 @@
     "build": "tauri build --no-bundle",
     "ios:init": "tauri ios init",
     "ios:build:sim": "node scripts/clean-ios-simulator-output.mjs && tauri ios build --debug --target aarch64-sim --no-sign --ci",
-    "ios:dev": "tauri ios dev"
+    "ios:dev": "tauri ios dev",
+    "test:webkit": "playwright test tests --browser=webkit --workers=1"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@tauri-apps/cli": "2.11.4"
   }
 }

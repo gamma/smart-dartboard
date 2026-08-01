@@ -4,9 +4,12 @@ use sdb_board::BoardFailureCode;
 use sdb_board::{BoardIngress, BoardIngressOutcome};
 use sdb_board::{BoardPhase, BoardStatus};
 use sdb_companion::{
-    CompanionRole, PairedDevice, PairingAuthority, PairingBootstrap, PairingGrant, PairingRequest,
+    COMPANION_PROTOCOL_VERSION, CompanionRole, PairedDevice, PairingAuthority, PairingBootstrap,
+    PairingGrant, PairingRequest,
 };
-use sdb_companion_transport::{SecretStore, TlsIdentity, load_identity, load_or_create_identity};
+use sdb_companion_transport::{
+    SecretStore, TlsIdentity, certificate_sha256, load_identity, load_or_create_identity,
+};
 use sdb_contracts::{DartEvent, DartSource, Ring};
 use sdb_runtime::{Runtime, RuntimeAction, RuntimeGameState};
 use sdb_storage::SqliteRepository;
@@ -16,11 +19,14 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tauri::{Emitter, Manager, State};
-use tokio::sync::broadcast;
+use tokio::sync::{Mutex as AsyncMutex, broadcast};
 use uuid::Uuid;
+use zeroize::{Zeroize, Zeroizing};
 
 const PROJECTOR_OUTPUT_PREFERENCE: &str = "projector.output";
 const COMPANION_HOST_ID_PREFERENCE: &str = "companion.host_id";
+const COMPANION_CLIENT_DEVICE_ID_PREFERENCE: &str = "companion.client_device_id";
+const COMPANION_CLIENT_HOST_ID_PREFERENCE: &str = "companion.client_host_id";
 const APP_ROLE_PREFERENCE: &str = "app.role";
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -36,6 +42,8 @@ static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 static EXTERNAL_DISPLAY_COUNT: AtomicU32 = AtomicU32::new(0);
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 static COMPANION_PORT: AtomicU16 = AtomicU16::new(0);
+#[cfg(all(test, any(target_os = "ios", target_os = "macos")))]
+static APPLE_NETWORK_TEST_LOCK: AsyncMutex<()> = AsyncMutex::const_new(());
 
 struct NativeState {
     runtime: Runtime<SqliteRepository>,
@@ -143,6 +151,21 @@ struct DiscoveredCompanionHost {
     tls: bool,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct CompanionPairingTargetView {
+    host_id: String,
+    service_name: String,
+    manual_fingerprint: String,
+    expires_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CompanionClientView {
+    host_id: String,
+    service_name: String,
+    paired: bool,
+}
+
 fn is_valid_mdns_hostname(host_name: &str) -> bool {
     if host_name.len() > 253 || !host_name.ends_with(".local") {
         return false;
@@ -156,6 +179,24 @@ fn is_valid_mdns_hostname(host_name: &str) -> bool {
                 .bytes()
                 .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
     })
+}
+
+fn manual_certificate_fingerprint(fingerprint: &str) -> Result<String, String> {
+    if fingerprint.len() != 64
+        || !fingerprint
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err("invalid TLS certificate fingerprint".into());
+    }
+    Ok(fingerprint
+        .chars()
+        .take(16)
+        .collect::<Vec<_>>()
+        .chunks(4)
+        .map(|chunk| chunk.iter().collect::<String>().to_ascii_uppercase())
+        .collect::<Vec<_>>()
+        .join("-"))
 }
 
 impl From<PairedDevice> for CompanionDeviceView {
@@ -1064,7 +1105,7 @@ mod native_companion_transport {
     #[cfg(test)]
     mod tests {
         use super::*;
-        use crate::CompanionIdentity;
+        use crate::{APPLE_NETWORK_TEST_LOCK, CompanionIdentity};
         use axum::{
             body::{Body, to_bytes},
             http::Request,
@@ -1197,6 +1238,7 @@ mod native_companion_transport {
 
         #[tokio::test]
         async fn listener_serves_http_over_the_pinned_tls_identity() {
+            let _network_guard = APPLE_NETWORK_TEST_LOCK.lock().await;
             let identity = load_or_create_identity(
                 &MemorySecretStore::default(),
                 "0dc0b075-e6b5-4d6d-a6cf-ef4dbb61f2f7",
@@ -1265,8 +1307,318 @@ mod native_companion_transport {
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
+mod native_companion_client {
+    use super::{
+        DiscoveredCompanionHost, PairingGrant, PairingRequest, certificate_sha256, now_ms,
+    };
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use serde::{Deserialize, Serialize};
+    use std::sync::{Arc, Mutex as StdMutex};
+    use tokio::{
+        io::{AsyncReadExt, AsyncWriteExt},
+        net::TcpStream,
+        time::{Duration, timeout},
+    };
+    use tokio_rustls::{
+        TlsConnector,
+        rustls::{
+            self, ClientConfig, DigitallySignedStruct, RootCertStore, SignatureScheme,
+            client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
+            pki_types::{CertificateDer, ServerName, UnixTime},
+        },
+    };
+    use zeroize::{Zeroize, Zeroizing};
+
+    pub(super) const CLIENT_GRANT_KEY: &str = "companion.client.grant.v1";
+    const PROBE_LIFETIME_MS: u64 = 5 * 60 * 1_000;
+    const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+    const MAX_HTTP_RESPONSE_BYTES: u64 = 128 * 1_024;
+
+    #[derive(Clone)]
+    pub(super) struct ProbedTarget {
+        pub host: DiscoveredCompanionHost,
+        pub certificate_der: Vec<u8>,
+        pub certificate_sha256: String,
+        pub expires_at_ms: u64,
+    }
+
+    pub(super) struct ActiveGrant {
+        pub host_id: String,
+        pub certificate_der: Vec<u8>,
+        pub token: Zeroizing<String>,
+    }
+
+    impl ActiveGrant {
+        pub(super) fn is_usable(&self) -> bool {
+            !self.host_id.is_empty() && !self.certificate_der.is_empty() && !self.token.is_empty()
+        }
+    }
+
+    #[derive(Deserialize, Serialize)]
+    pub(super) struct StoredGrant {
+        pub protocol_version: u16,
+        pub host_id: String,
+        pub certificate_der_base64: String,
+        pub device_id: String,
+        pub token: String,
+    }
+
+    pub(super) fn decode_stored_grant(bytes: &[u8]) -> Result<ActiveGrant, String> {
+        let mut stored: StoredGrant =
+            serde_json::from_slice(bytes).map_err(|_| "stored Companion grant is malformed")?;
+        if stored.protocol_version != sdb_companion::COMPANION_PROTOCOL_VERSION
+            || uuid::Uuid::parse_str(&stored.host_id).is_err()
+            || uuid::Uuid::parse_str(&stored.device_id).is_err()
+            || stored.token.len() != 43
+            || !stored
+                .token
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        {
+            stored.token.zeroize();
+            return Err("stored Companion grant is invalid".into());
+        }
+        let certificate_der = match STANDARD.decode(&stored.certificate_der_base64) {
+            Ok(certificate) => certificate,
+            Err(_) => {
+                stored.token.zeroize();
+                return Err("stored Companion certificate is malformed".into());
+            }
+        };
+        if certificate_der.is_empty() || certificate_der.len() > 64 * 1_024 {
+            stored.token.zeroize();
+            return Err("stored Companion certificate is invalid".into());
+        }
+        Ok(ActiveGrant {
+            host_id: stored.host_id,
+            certificate_der,
+            token: Zeroizing::new(stored.token),
+        })
+    }
+
+    #[derive(Debug)]
+    struct ProbeVerifier {
+        certificate: Arc<StdMutex<Option<Vec<u8>>>>,
+    }
+
+    impl ServerCertVerifier for ProbeVerifier {
+        fn verify_server_cert(
+            &self,
+            end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: UnixTime,
+        ) -> Result<ServerCertVerified, rustls::Error> {
+            if let Ok(mut certificate) = self.certificate.lock() {
+                *certificate = Some(end_entity.as_ref().to_vec());
+            }
+            Ok(ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, rustls::Error> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+            vec![SignatureScheme::ECDSA_NISTP256_SHA256]
+        }
+    }
+
+    pub(super) async fn probe(host: DiscoveredCompanionHost) -> Result<ProbedTarget, String> {
+        let certificate = Arc::new(StdMutex::new(None));
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let mut config = ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(|_| "Companion TLS protocol setup failed")?
+            .dangerous()
+            .with_custom_certificate_verifier(Arc::new(ProbeVerifier {
+                certificate: certificate.clone(),
+            }))
+            .with_no_client_auth();
+        config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        let tls = connect(&host, Arc::new(config)).await?;
+        drop(tls);
+        let certificate_der = certificate
+            .lock()
+            .map_err(|_| "Companion TLS probe state failed")?
+            .take()
+            .ok_or_else(|| "Companion did not provide a TLS certificate".to_owned())?;
+        let fingerprint = certificate_sha256(&certificate_der);
+        Ok(ProbedTarget {
+            host,
+            certificate_der,
+            certificate_sha256: fingerprint,
+            expires_at_ms: now_ms().saturating_add(PROBE_LIFETIME_MS),
+        })
+    }
+
+    pub(super) async fn pair(
+        target: &ProbedTarget,
+        request: &PairingRequest,
+    ) -> Result<PairingGrant, String> {
+        if now_ms() >= target.expires_at_ms {
+            return Err("TLS comparison expired; select the Controller again".into());
+        }
+        let body = serde_json::to_vec(request).map_err(|_| "pairing request encoding failed")?;
+        let mut response = post_json(
+            &target.host,
+            &target.certificate_der,
+            "/api/v2/companion/pairing",
+            &body,
+        )
+        .await?;
+        let grant =
+            serde_json::from_slice(&response).map_err(|_| "invalid pairing response".to_owned());
+        response.zeroize();
+        grant
+    }
+
+    async fn post_json(
+        host: &DiscoveredCompanionHost,
+        certificate_der: &[u8],
+        path: &str,
+        body: &[u8],
+    ) -> Result<Vec<u8>, String> {
+        let mut roots = RootCertStore::empty();
+        roots
+            .add(CertificateDer::from(certificate_der.to_vec()))
+            .map_err(|_| "invalid pinned Companion certificate")?;
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let mut config = ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(|_| "Companion TLS protocol setup failed")?
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        let mut tls = connect(host, Arc::new(config)).await?;
+        let authority = format!("{}.local", host.host_id);
+        let header = format!(
+            "POST {path} HTTP/1.1\r\nHost: {authority}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        tls.write_all(header.as_bytes())
+            .await
+            .map_err(|_| "Companion request failed")?;
+        tls.write_all(body)
+            .await
+            .map_err(|_| "Companion request failed")?;
+        let mut response = Vec::new();
+        tls.take(MAX_HTTP_RESPONSE_BYTES + 1)
+            .read_to_end(&mut response)
+            .await
+            .map_err(|_| "Companion response failed")?;
+        if response.len() as u64 > MAX_HTTP_RESPONSE_BYTES {
+            return Err("Companion response exceeds size limit".into());
+        }
+        parse_http_response(&response)
+    }
+
+    async fn connect(
+        host: &DiscoveredCompanionHost,
+        config: Arc<ClientConfig>,
+    ) -> Result<tokio_rustls::client::TlsStream<TcpStream>, String> {
+        let tcp = timeout(
+            CONNECT_TIMEOUT,
+            TcpStream::connect((host.host_name.as_str(), host.port)),
+        )
+        .await
+        .map_err(|_| "Companion connection timed out")?
+        .map_err(|_| "Companion connection failed")?;
+        let server_name = ServerName::try_from(format!("{}.local", host.host_id))
+            .map_err(|_| "invalid Companion TLS server name")?;
+        timeout(
+            CONNECT_TIMEOUT,
+            TlsConnector::from(config).connect(server_name, tcp),
+        )
+        .await
+        .map_err(|_| "Companion TLS handshake timed out")?
+        .map_err(|_| "Companion TLS handshake failed".into())
+    }
+
+    fn parse_http_response(response: &[u8]) -> Result<Vec<u8>, String> {
+        let header_end = response
+            .windows(4)
+            .position(|window| window == b"\r\n\r\n")
+            .map(|index| index + 4)
+            .ok_or_else(|| "invalid Companion HTTP response".to_owned())?;
+        let status_line_end = response
+            .windows(2)
+            .position(|window| window == b"\r\n")
+            .ok_or_else(|| "invalid Companion HTTP response".to_owned())?;
+        let status_line = std::str::from_utf8(&response[..status_line_end])
+            .map_err(|_| "invalid Companion HTTP response")?;
+        let status = status_line
+            .split_ascii_whitespace()
+            .nth(1)
+            .and_then(|value| value.parse::<u16>().ok())
+            .ok_or_else(|| "invalid Companion HTTP status".to_owned())?;
+        if status != 200 {
+            return Err("pairing was rejected by the Controller".into());
+        }
+        Ok(response[header_end..].to_vec())
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{StoredGrant, decode_stored_grant, parse_http_response};
+        use base64::{Engine as _, engine::general_purpose::STANDARD};
+
+        #[test]
+        fn http_response_parser_accepts_only_complete_success_responses() {
+            assert_eq!(
+                parse_http_response(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}")
+                    .expect("response"),
+                b"{}"
+            );
+            assert!(
+                parse_http_response(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
+                    .is_err()
+            );
+            assert!(parse_http_response(b"not-http").is_err());
+        }
+
+        #[test]
+        fn stored_grant_requires_versioned_uuid_metadata_and_a_full_token() {
+            let stored = StoredGrant {
+                protocol_version: sdb_companion::COMPANION_PROTOCOL_VERSION,
+                host_id: "991708fa-c4e7-419f-ad1d-c44f01891b03".into(),
+                certificate_der_base64: STANDARD.encode([1, 2, 3]),
+                device_id: "1645ae13-53d4-4ca4-8465-803f3adb3387".into(),
+                token: "a".repeat(43),
+            };
+            let encoded = serde_json::to_vec(&stored).expect("encode");
+            assert!(decode_stored_grant(&encoded).expect("grant").is_usable());
+
+            let mut invalid = stored;
+            invalid.token = "short".into();
+            assert!(
+                decode_stored_grant(&serde_json::to_vec(&invalid).expect("encode invalid"))
+                    .is_err()
+            );
+        }
+    }
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 struct NativeCompanionService {
     transport: Option<Arc<native_companion_transport::NativeCompanionTransport>>,
+    probed_target: AsyncMutex<Option<native_companion_client::ProbedTarget>>,
+    active_grant: AsyncMutex<Option<native_companion_client::ActiveGrant>>,
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -1589,6 +1941,204 @@ fn companion_discovery_stop() {}
 
 #[tauri::command]
 #[cfg(any(target_os = "ios", target_os = "macos"))]
+async fn companion_pairing_prepare(
+    state: State<'_, SharedNativeState>,
+    service: State<'_, NativeCompanionService>,
+    host_id: String,
+) -> Result<CompanionPairingTargetView, String> {
+    {
+        let state = state.lock().map_err(|error| error.to_string())?;
+        if state.app_role != NativeAppRole::CompanionProjector {
+            return Err("select Companion projector mode before pairing".into());
+        }
+    }
+    let host = apple_bonjour::browser_snapshot()?
+        .into_iter()
+        .find(|host| host.host_id == host_id)
+        .ok_or_else(|| "Controller is no longer available".to_owned())?;
+    if host.protocol_version != COMPANION_PROTOCOL_VERSION {
+        return Err("Controller uses an incompatible Companion protocol".into());
+    }
+    let target = native_companion_client::probe(host).await?;
+    let view = CompanionPairingTargetView {
+        host_id: target.host.host_id.clone(),
+        service_name: target.host.service_name.clone(),
+        manual_fingerprint: manual_certificate_fingerprint(&target.certificate_sha256)?,
+        expires_at_ms: target.expires_at_ms,
+    };
+    *service.probed_target.lock().await = Some(target);
+    Ok(view)
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn companion_pairing_prepare(
+    _state: State<'_, SharedNativeState>,
+    _host_id: String,
+) -> Result<CompanionPairingTargetView, String> {
+    Err("native Companion pairing is not available on this platform".into())
+}
+
+#[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+async fn companion_pairing_complete(
+    state: State<'_, SharedNativeState>,
+    service: State<'_, NativeCompanionService>,
+    host_id: String,
+    manual_fingerprint: String,
+    code: String,
+) -> Result<CompanionClientView, String> {
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+
+    if code.len() != 6 || !code.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err("enter the six-digit pairing code".into());
+    }
+    let existing_grant = apple_keychain::AppleKeychainStore
+        .load(native_companion_client::CLIENT_GRANT_KEY)
+        .map_err(|_| "secure storage is unavailable; pairing was not attempted".to_owned())?;
+    let _existing_grant = existing_grant.map(Zeroizing::new);
+    let target = service
+        .probed_target
+        .lock()
+        .await
+        .clone()
+        .ok_or_else(|| "select and verify a Controller first".to_owned())?;
+    if target.host.host_id != host_id
+        || manual_certificate_fingerprint(&target.certificate_sha256)? != manual_fingerprint
+    {
+        return Err("TLS fingerprint confirmation does not match".into());
+    }
+    let (device_id, device_name) = {
+        let mut state = state.lock().map_err(|error| error.to_string())?;
+        if state.app_role != NativeAppRole::CompanionProjector {
+            return Err("pairing is unavailable in Controller mode".into());
+        }
+        let device_id = match state
+            .runtime
+            .repository()
+            .preference(COMPANION_CLIENT_DEVICE_ID_PREFERENCE)
+            .map_err(|error| error.to_string())?
+        {
+            Some(device_id) => device_id,
+            None => {
+                let device_id = Uuid::new_v4().to_string();
+                state
+                    .runtime
+                    .repository_mut()
+                    .save_preference(COMPANION_CLIENT_DEVICE_ID_PREFERENCE, &device_id)
+                    .map_err(|error| error.to_string())?;
+                device_id
+            }
+        };
+        let short_id = device_id.get(..8).unwrap_or(&device_id);
+        let device_name = format!("Companion {short_id}");
+        (device_id, device_name)
+    };
+    let request = PairingRequest {
+        device_id: device_id.clone(),
+        device_name,
+        code,
+    };
+    let mut grant = native_companion_client::pair(&target, &request).await?;
+    if grant.device_id != device_id || grant.role != CompanionRole::Projector {
+        grant.token.zeroize();
+        return Err("Controller returned an invalid Companion grant".into());
+    }
+    let mut stored = native_companion_client::StoredGrant {
+        protocol_version: COMPANION_PROTOCOL_VERSION,
+        host_id: target.host.host_id.clone(),
+        certificate_der_base64: STANDARD.encode(&target.certificate_der),
+        device_id,
+        token: grant.token.clone(),
+    };
+    let mut blob = match serde_json::to_vec(&stored) {
+        Ok(blob) => blob,
+        Err(_) => {
+            stored.token.zeroize();
+            grant.token.zeroize();
+            return Err("grant encoding failed".into());
+        }
+    };
+    stored.token.zeroize();
+    let save_result = apple_keychain::AppleKeychainStore
+        .save(native_companion_client::CLIENT_GRANT_KEY, &blob)
+        .map_err(|_| "secure grant storage failed".to_owned());
+    blob.zeroize();
+    if let Err(error) = save_result {
+        grant.token.zeroize();
+        return Err(error);
+    }
+    {
+        let mut state = state.lock().map_err(|error| error.to_string())?;
+        if let Err(error) = state
+            .runtime
+            .repository_mut()
+            .save_preference(COMPANION_CLIENT_HOST_ID_PREFERENCE, &target.host.host_id)
+        {
+            eprintln!("Companion host preference could not be saved: {error}");
+        }
+    }
+    *service.active_grant.lock().await = Some(native_companion_client::ActiveGrant {
+        host_id: target.host.host_id.clone(),
+        certificate_der: target.certificate_der,
+        token: Zeroizing::new(grant.token),
+    });
+    *service.probed_target.lock().await = None;
+    Ok(CompanionClientView {
+        host_id: target.host.host_id,
+        service_name: target.host.service_name,
+        paired: true,
+    })
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn companion_pairing_complete(
+    _state: State<'_, SharedNativeState>,
+    _host_id: String,
+    _manual_fingerprint: String,
+    _code: String,
+) -> Result<CompanionClientView, String> {
+    Err("native Companion pairing is not available on this platform".into())
+}
+
+#[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+async fn companion_client_status(
+    state: State<'_, SharedNativeState>,
+    service: State<'_, NativeCompanionService>,
+) -> Result<Option<CompanionClientView>, String> {
+    let is_companion = {
+        let state = state.lock().map_err(|error| error.to_string())?;
+        state.app_role == NativeAppRole::CompanionProjector
+    };
+    if !is_companion {
+        return Ok(None);
+    }
+    Ok(service
+        .active_grant
+        .lock()
+        .await
+        .as_ref()
+        .and_then(|grant| {
+            grant.is_usable().then(|| CompanionClientView {
+                host_id: grant.host_id.clone(),
+                service_name: "Gekoppelter Controller".into(),
+                paired: true,
+            })
+        }))
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn companion_client_status(
+    _state: State<'_, SharedNativeState>,
+) -> Result<Option<CompanionClientView>, String> {
+    Ok(None)
+}
+
+#[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 async fn app_role_select(
     app: tauri::AppHandle,
     state: State<'_, SharedNativeState>,
@@ -1842,6 +2392,26 @@ pub fn run() {
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let app_role = native_state.app_role;
             #[cfg(any(target_os = "ios", target_os = "macos"))]
+            let active_grant = match apple_keychain::AppleKeychainStore
+                .load(native_companion_client::CLIENT_GRANT_KEY)
+            {
+                Ok(Some(bytes)) => {
+                    let bytes = Zeroizing::new(bytes);
+                    match native_companion_client::decode_stored_grant(&bytes) {
+                        Ok(grant) => Some(grant),
+                        Err(error) => {
+                            eprintln!("Stored Companion grant is unavailable: {error}");
+                            None
+                        }
+                    }
+                }
+                Ok(None) => None,
+                Err(error) => {
+                    eprintln!("Companion client secure storage is unavailable: {error}");
+                    None
+                }
+            };
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
             if native_state.projector_output == ProjectorOutput::Companion
                 && companion_transport.is_none()
             {
@@ -1852,6 +2422,8 @@ pub fn run() {
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             app.manage(NativeCompanionService {
                 transport: companion_transport.clone(),
+                probed_target: AsyncMutex::new(None),
+                active_grant: AsyncMutex::new(active_grant),
             });
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let _ = APP_HANDLE.set(app.handle().clone());
@@ -1919,6 +2491,9 @@ pub fn run() {
             companion_discovery_start,
             companion_discovered_hosts,
             companion_discovery_stop,
+            companion_pairing_prepare,
+            companion_pairing_complete,
+            companion_client_status,
             app_role_select,
             projector_output_select
         ])
@@ -1929,6 +2504,22 @@ pub fn run() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    #[derive(Default)]
+    struct TestSecretStore(Mutex<Option<Vec<u8>>>);
+
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    impl SecretStore for TestSecretStore {
+        fn load(&self, _key: &str) -> Result<Option<Vec<u8>>, String> {
+            Ok(self.0.lock().map_err(|error| error.to_string())?.clone())
+        }
+
+        fn save(&self, _key: &str, value: &[u8]) -> Result<(), String> {
+            *self.0.lock().map_err(|error| error.to_string())? = Some(value.to_vec());
+            Ok(())
+        }
+    }
 
     fn test_companion_identity() -> CompanionIdentity {
         CompanionIdentity {
@@ -1946,6 +2537,76 @@ mod tests {
         assert!(!is_valid_mdns_hostname("https://arcade.local"));
         assert!(!is_valid_mdns_hostname("-arcade.local"));
         assert!(!is_valid_mdns_hostname("arcade..local"));
+    }
+
+    #[cfg(any(target_os = "ios", target_os = "macos"))]
+    #[tokio::test]
+    async fn companion_client_probes_then_pairs_over_verified_tls() {
+        let _network_guard = APPLE_NETWORK_TEST_LOCK.lock().await;
+        let host_id = "8dd5dc20-9010-4cce-9721-08e9931acc10";
+        let identity =
+            load_or_create_identity(&TestSecretStore::default(), host_id).expect("TLS identity");
+        let state = Arc::new(Mutex::new(
+            NativeState::restore(
+                SqliteRepository::in_memory().expect("repository"),
+                CompanionIdentity {
+                    host_id: host_id.into(),
+                    certificate_sha256: identity.certificate_sha256().into(),
+                    available: true,
+                },
+            )
+            .expect("native state"),
+        ));
+        let offer = state
+            .lock()
+            .expect("state")
+            .companions
+            .open(now_ms())
+            .expect("pairing offer");
+        let transport = native_companion_transport::NativeCompanionTransport::new(&identity)
+            .expect("transport");
+        let port = transport.start(state.clone()).await.expect("start");
+        let target = native_companion_client::probe(DiscoveredCompanionHost {
+            service_name: "Test Controller".into(),
+            host_name: "localhost".into(),
+            port,
+            host_id: host_id.into(),
+            protocol_version: COMPANION_PROTOCOL_VERSION,
+            tls: true,
+        })
+        .await
+        .expect("probe");
+        assert_eq!(target.certificate_sha256, identity.certificate_sha256());
+        let request = PairingRequest {
+            device_id: "0d00e843-d495-44b3-9eb0-6f7e0ce304df".into(),
+            device_name: "Test iPad".into(),
+            code: offer.code,
+        };
+        let other_identity = load_or_create_identity(
+            &TestSecretStore::default(),
+            "4fb86f35-09d7-4e20-836f-016ad1fc21a5",
+        )
+        .expect("other TLS identity");
+        let mut wrongly_pinned = target.clone();
+        wrongly_pinned.certificate_der = other_identity.certificate_der().to_vec();
+        assert!(
+            native_companion_client::pair(&wrongly_pinned, &request)
+                .await
+                .is_err()
+        );
+        let grant = native_companion_client::pair(&target, &request)
+            .await
+            .expect("pair");
+        assert_eq!(grant.role, CompanionRole::Projector);
+        assert!(
+            state
+                .lock()
+                .expect("state")
+                .companions
+                .authenticate(&grant.token)
+                .is_some()
+        );
+        transport.stop().await;
     }
 
     #[test]

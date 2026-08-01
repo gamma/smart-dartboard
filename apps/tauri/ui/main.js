@@ -15,6 +15,7 @@ function render(payload){
 
 let currentAppRole='controller';
 let discoveryTimer;
+let currentPairingTarget;
 
 function renderAppRole(appRole){
   currentAppRole=appRole;
@@ -36,17 +37,75 @@ function renderDiscoveredHosts(hosts=[]){
     : 'Lokales Netzwerk wird durchsucht …';
   for(const host of hosts){
     const item=document.createElement('li');
+    const copy=document.createElement('div');
     const name=document.createElement('strong');
     const details=document.createElement('span');
+    const select=document.createElement('button');
     const compatible=host.protocol_version===1&&host.tls===true;
     name.textContent=host.service_name;
     details.textContent=compatible
       ? `${host.host_name} · sicherer Dienst`
       : `Nicht kompatible Protokollversion ${host.protocol_version}`;
     if(!compatible) item.className='incompatible';
-    item.append(name,details);
+    copy.append(name,details);
+    select.type='button';
+    select.textContent='Auswählen';
+    select.disabled=!compatible;
+    select.addEventListener('click',()=>prepareClientPairing(host));
+    item.append(copy,select);
     list.append(item);
   }
+}
+
+async function prepareClientPairing(host){
+  const status=document.querySelector('#clientPairingStatus');
+  status.textContent='TLS-Zertifikat wird gelesen …';
+  document.querySelector('#companionClientPairing').hidden=false;
+  try{
+    currentPairingTarget=await tauri.core.invoke('companion_pairing_prepare',{hostId:host.host_id});
+    document.querySelector('#clientPairingName').textContent=currentPairingTarget.service_name;
+    document.querySelector('#clientPairingFingerprint').textContent=currentPairingTarget.manual_fingerprint;
+    document.querySelector('#fingerprintConfirmed').checked=false;
+    document.querySelector('#clientPairingCode').value='';
+    status.textContent='Vergleichen, bestätigen und den Code vom Controller eingeben.';
+    updateCompletePairingButton();
+  }catch(error){
+    currentPairingTarget=undefined;
+    status.textContent=String(error);
+  }
+}
+
+function updateCompletePairingButton(){
+  const confirmed=document.querySelector('#fingerprintConfirmed').checked;
+  const code=document.querySelector('#clientPairingCode').value.replace(/\D/g,'');
+  document.querySelector('#completeClientPairing').disabled=!currentPairingTarget||!confirmed||code.length!==6;
+}
+
+function setupCompanionClient(){
+  const code=document.querySelector('#clientPairingCode');
+  code.addEventListener('input',()=>{
+    code.value=code.value.replace(/\D/g,'').slice(0,6);
+    updateCompletePairingButton();
+  });
+  document.querySelector('#fingerprintConfirmed').addEventListener('change',updateCompletePairingButton);
+  document.querySelector('#completeClientPairing').addEventListener('click',async()=>{
+    const button=document.querySelector('#completeClientPairing');
+    const status=document.querySelector('#clientPairingStatus');
+    button.disabled=true;
+    status.textContent='Sichere Kopplung läuft …';
+    try{
+      const paired=await tauri.core.invoke('companion_pairing_complete',{
+        hostId:currentPairingTarget.host_id,
+        manualFingerprint:currentPairingTarget.manual_fingerprint,
+        code:code.value
+      });
+      status.textContent=`Mit ${paired.service_name} gekoppelt. Projector wird verbunden …`;
+    }catch(error){
+      status.textContent=String(error);
+      updateCompletePairingButton();
+    }
+  });
+  updateCompletePairingButton();
 }
 
 async function pollDiscovery(){
@@ -79,6 +138,8 @@ async function applyRoleLifecycle(){
   }else{
     await stopDiscovery();
     renderCompanionDevices(await tauri.core.invoke('companion_devices'));
+    currentPairingTarget=undefined;
+    document.querySelector('#companionClientPairing').hidden=true;
   }
 }
 
@@ -221,6 +282,7 @@ async function start(){
   });
   if(role==='control'){
     setupAppRole();
+    setupCompanionClient();
     setupProjectorOutput();
     await setupCompanions();
     await applyRoleLifecycle();

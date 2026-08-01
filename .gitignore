@@ -11,6 +11,7 @@ dist/
 build/
 target/
 apps/tauri/src-tauri/gen/schemas/
+apps/tauri/test-results/
 .coverage
 .pytest_cache/
 data/

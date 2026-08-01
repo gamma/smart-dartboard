@@ -60,6 +60,17 @@
       <p class="subtitle">Wähle das iPhone oder iPad, auf dem Board und Spiel laufen.</p>
       <p id="discoveryStatus" class="display-status">Lokales Netzwerk wird durchsucht …</p>
       <ul id="discoveredHosts" class="host-list" aria-live="polite"></ul>
+      <div id="companionClientPairing" class="client-pairing" hidden>
+        <span>Ausgewählter Controller</span>
+        <strong id="clientPairingName">Smart Dartboard</strong>
+        <p>Vergleiche diese Zeichen mit dem Controller:</p>
+        <output id="clientPairingFingerprint">0000-0000-0000-0000</output>
+        <label class="fingerprint-confirm"><input id="fingerprintConfirmed" type="checkbox"> Zeichen stimmen auf beiden Geräten überein</label>
+        <label class="pairing-code-label" for="clientPairingCode">Einmalcode</label>
+        <input id="clientPairingCode" class="pairing-code-input" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="000 000">
+        <button id="completeClientPairing" type="button">Sicher koppeln</button>
+        <p id="clientPairingStatus" class="output-hint" role="status"></p>
+      </div>
       <p class="setup-copy companion-note">Bonjour zeigt nur Geräte in der Nähe. Die sichere Identität wird vor dem Eingeben des Einmalcodes separat verglichen.</p>
     </section>
   </main>

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-companion-client-status"
+description = "Enables the companion_client_status command without any pre-configured scope."
+commands.allow = ["companion_client_status"]
+
+[[permission]]
+identifier = "deny-companion-client-status"
+description = "Denies the companion_client_status command without any pre-configured scope."
+commands.deny = ["companion_client_status"]

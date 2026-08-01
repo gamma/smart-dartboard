@@ -34,6 +34,9 @@ fn main() {
             "companion_discovery_start",
             "companion_discovered_hosts",
             "companion_discovery_stop",
+            "companion_pairing_prepare",
+            "companion_pairing_complete",
+            "companion_client_status",
             "app_role_select",
             "projector_output_select",
         ]));

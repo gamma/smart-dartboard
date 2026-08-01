@@ -102,6 +102,12 @@ impl TlsIdentity {
     }
 }
 
+/// Returns the canonical lowercase SHA-256 fingerprint for one DER certificate.
+#[must_use]
+pub fn certificate_sha256(certificate_der: &[u8]) -> String {
+    hex_digest(certificate_der)
+}
+
 /// Restores the host identity or generates and atomically stores it once.
 ///
 /// # Errors
@@ -379,6 +385,16 @@ mod tests {
                 .rustls_server_config()
                 .expect_err("mismatched key"),
             IdentityError::Malformed
+        );
+    }
+
+    #[test]
+    fn public_certificate_fingerprint_is_canonical() {
+        let identity =
+            load_or_create_identity(&MemoryStore::default(), "fingerprint-host").expect("identity");
+        assert_eq!(
+            certificate_sha256(identity.certificate_der()),
+            identity.certificate_sha256()
         );
     }
 }
