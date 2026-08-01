@@ -9,6 +9,8 @@ __pycache__/
 node_modules/
 dist/
 build/
+target/
+apps/tauri/src-tauri/gen/schemas/
 .coverage
 .pytest_cache/
 data/

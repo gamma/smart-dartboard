@@ -1,0 +1,20 @@
+[package]
+name = "sdb-game-core"
+description = "Deterministic game state machine for Smart Dartboard"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sdb-contracts = { path = "../contracts" }
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true
+

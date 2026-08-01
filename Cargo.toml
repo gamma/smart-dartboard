@@ -1,0 +1,29 @@
+[workspace]
+resolver = "2"
+exclude = ["apps/tauri/src-tauri"]
+members = [
+  "crates/contracts",
+  "crates/game-core",
+  "crates/protocol",
+  "crates/runtime",
+  "crates/storage",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.97.1"
+license = "Apache-2.0"
+repository = "https://github.com/gamma/smart-dartboard"
+
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+thiserror = "2.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"

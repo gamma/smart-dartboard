@@ -1,0 +1,93 @@
+{
+  "fixture_schema_version": 1,
+  "cases": [
+    {
+      "name": "triple_20",
+      "hex": "0100000001000b00020d",
+      "expected": {
+        "type": "hit",
+        "field": 20,
+        "ring": "triple",
+        "multiplier": 3,
+        "label": "T20",
+        "score": 60,
+        "seq": 1,
+        "event_type": 1,
+        "raw": "0100000001000b00020d",
+        "code": "0b 00 02",
+        "checksum": 13,
+        "checksum_ok": true
+      }
+    },
+    {
+      "name": "single_bull",
+      "hex": "0200000001000c000e1a",
+      "expected": {
+        "type": "hit",
+        "field": 25,
+        "ring": "single_bull",
+        "multiplier": 1,
+        "label": "SBull",
+        "score": 25,
+        "seq": 2,
+        "event_type": 1,
+        "raw": "0200000001000c000e1a",
+        "code": "0c 00 0e",
+        "checksum": 26,
+        "checksum_ok": true
+      }
+    },
+    {
+      "name": "menu_press",
+      "hex": "0300000002000000ffff",
+      "expected": {
+        "type": "button",
+        "button": "menu",
+        "action": "press",
+        "seq": 3,
+        "event_type": 2,
+        "raw": "0300000002000000ffff",
+        "code": "00 00 ff",
+        "checksum": 255,
+        "checksum_ok": true
+      }
+    },
+    {
+      "name": "ambiguous_neutral",
+      "hex": "0400000002000000eeee",
+      "expected": {
+        "type": "neutral",
+        "meaning": "miss_or_button_release",
+        "seq": 4,
+        "event_type": 2,
+        "raw": "0400000002000000eeee",
+        "code": "00 00 ee",
+        "checksum": 238,
+        "checksum_ok": true
+      }
+    },
+    {
+      "name": "bad_checksum",
+      "hex": "0500000001000d05000d",
+      "expected": {
+        "type": "checksum_error",
+        "expected_checksum": 18,
+        "seq": 5,
+        "event_type": 1,
+        "raw": "0500000001000d05000d",
+        "code": "0d 05 00",
+        "checksum": 13,
+        "checksum_ok": false
+      }
+    },
+    {
+      "name": "invalid_length",
+      "hex": "010203",
+      "expected": {
+        "type": "invalid_length",
+        "length": 3,
+        "raw": "010203"
+      }
+    }
+  ]
+}
