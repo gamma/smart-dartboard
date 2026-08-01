@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path};
 use thiserror::Error;
 
-const CURRENT_SCHEMA_VERSION: u32 = 5;
+const CURRENT_SCHEMA_VERSION: u32 = 6;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -192,6 +192,44 @@ impl SqliteRepository {
         Ok(self
             .connection
             .pragma_query_value(None, "user_version", |row| row.get(0))?)
+    }
+
+    /// Returns one small host preference, if present.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid key or an underlying `SQLite` failure.
+    pub fn preference(&self, key: &str) -> Result<Option<String>, StorageError> {
+        validate_preference_key(key)?;
+        Ok(self
+            .connection
+            .query_row(
+                "SELECT value FROM app_preferences WHERE key=?1",
+                [key],
+                |row| row.get(0),
+            )
+            .optional()?)
+    }
+
+    /// Persists one small host preference independently of runtime revisions.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid key, a value larger than 4 KiB or an
+    /// underlying `SQLite` failure.
+    pub fn save_preference(&mut self, key: &str, value: &str) -> Result<(), StorageError> {
+        validate_preference_key(key)?;
+        if value.len() > 4_096 {
+            return Err(StorageError::Integrity(
+                "app preference exceeds 4096 bytes".into(),
+            ));
+        }
+        self.connection.execute(
+            "INSERT INTO app_preferences(key, value) VALUES(?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            params![key, value],
+        )?;
+        Ok(())
     }
 
     /// Returns active projector companions in deterministic device order.
@@ -1099,6 +1137,31 @@ fn migrate(connection: &Connection) -> Result<(), StorageError> {
             COMMIT;
             ",
         )?;
+    }
+    if version < 6 {
+        connection.execute_batch(
+            "
+            BEGIN;
+            CREATE TABLE app_preferences (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL CHECK(length(value) <= 4096)
+            );
+            PRAGMA user_version=6;
+            COMMIT;
+            ",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_preference_key(key: &str) -> Result<(), StorageError> {
+    if key.is_empty()
+        || key.len() > 64
+        || !key
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
+    {
+        return Err(StorageError::Integrity("invalid app preference key".into()));
     }
     Ok(())
 }
@@ -2157,7 +2220,7 @@ mod tests {
                 .expect("legacy schema");
         }
         let repository = SqliteRepository::open(&temporary).expect("migrate");
-        assert_eq!(repository.schema_version().expect("version"), 5);
+        assert_eq!(repository.schema_version().expect("version"), 6);
         assert!(repository.journal(10).expect("journal").is_empty());
         std::fs::remove_file(temporary).expect("remove test database");
     }
@@ -2190,7 +2253,7 @@ mod tests {
                 .expect("legacy Python schema slice");
         }
         let repository = SqliteRepository::open(&temporary).expect("migrate Python database");
-        assert_eq!(repository.schema_version().expect("version"), 5);
+        assert_eq!(repository.schema_version().expect("version"), 6);
         let profiles = repository.players().expect("profiles");
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0].id, "legacy-ada");
@@ -2226,7 +2289,7 @@ mod tests {
                 .expect("schema three slice");
         }
         let repository = SqliteRepository::open(&temporary).expect("migrate action IDs");
-        assert_eq!(repository.schema_version().expect("version"), 5);
+        assert_eq!(repository.schema_version().expect("version"), 6);
         let row: (String, Option<i64>) = repository
             .connection
             .query_row(
@@ -2260,13 +2323,65 @@ mod tests {
                 .expect("schema four slice");
         }
         let repository = SqliteRepository::open(&temporary).expect("migrate companions");
-        assert_eq!(repository.schema_version().expect("version"), 5);
+        assert_eq!(repository.schema_version().expect("version"), 6);
         assert!(repository.companion_devices().expect("devices").is_empty());
         let sentinel: String = repository
             .connection
             .query_row("SELECT value FROM migration_sentinel", [], |row| row.get(0))
             .expect("preserved data");
         assert_eq!(sentinel, "preserve-me");
+        std::fs::remove_file(temporary).expect("remove test database");
+    }
+
+    #[test]
+    fn schema_five_adds_persisted_host_preferences() {
+        let temporary = std::env::temp_dir().join(format!(
+            "sdb-preference-migration-{}-{}.sqlite",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_file(&temporary);
+        {
+            let connection = Connection::open(&temporary).expect("schema five database");
+            connection
+                .execute_batch(
+                    "
+                    CREATE TABLE companion_devices (
+                        device_id TEXT PRIMARY KEY,
+                        device_name TEXT NOT NULL,
+                        role TEXT NOT NULL,
+                        token_hash TEXT NOT NULL,
+                        paired_at_ms INTEGER NOT NULL,
+                        revoked_at_ms INTEGER
+                    );
+                    INSERT INTO companion_devices(
+                        device_id, device_name, role, token_hash, paired_at_ms
+                    ) VALUES('ipad', 'Arcade iPad', 'projector',
+                             'abababababababababababababababababababababababababababababababab', 42);
+                    PRAGMA user_version=5;
+                    ",
+                )
+                .expect("schema five slice");
+        }
+        let mut repository = SqliteRepository::open(&temporary).expect("migrate preferences");
+        assert_eq!(repository.schema_version().expect("version"), 6);
+        assert_eq!(repository.companion_devices().expect("companions").len(), 1);
+        assert!(
+            repository
+                .preference("projector.output")
+                .expect("empty")
+                .is_none()
+        );
+        repository
+            .save_preference("projector.output", "external_display")
+            .expect("save preference");
+        assert_eq!(
+            repository
+                .preference("projector.output")
+                .expect("preference"),
+            Some("external_display".into())
+        );
+        assert!(repository.preference("../invalid").is_err());
         std::fs::remove_file(temporary).expect("remove test database");
     }
 

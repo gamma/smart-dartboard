@@ -158,9 +158,12 @@ deterministisch wiedergegebenen Core-Zustand neu.
 Schema 5 ergänzt widerrufbare Companion-Geräte. Gespeichert werden Geräte-ID,
 Anzeigename, feste Projector-Rolle, Pairing- und Widerrufszeit sowie
 ausschließlich der SHA-256-Token-Hash; ein Klartext-Token gelangt nie in SQLite.
+Schema 6 ergänzt kleine, plattformübergreifende Hostpräferenzen. Schlüssel sind
+streng begrenzt, Werte maximal 4 KiB groß; Spielzustand und Secrets gehören
+ausdrücklich nicht in diese Tabelle.
 
 Migrationen laufen fortlaufend und transaktional; eine Datenbank mit neuerer
 unbekannter Schema-Version wird ohne Downgrade oder Schreibversuch abgelehnt. Nach jeder
-Migration läuft `PRAGMA quick_check`. Da 1 → 2, 2 → 3, 3 → 4 und 4 → 5
+Migration läuft `PRAGMA quick_check`. Da 1 → 2, 2 → 3, 3 → 4, 4 → 5 und 5 → 6
 ausschließlich Tabellen beziehungsweise eine Spalte ergänzen, ist hierfür kein
 destruktives Migrationsbackup erforderlich.

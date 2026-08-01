@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-projector-output-select"
+description = "Enables the projector_output_select command without any pre-configured scope."
+commands.allow = ["projector_output_select"]
+
+[[permission]]
+identifier = "deny-projector-output-select"
+description = "Denies the projector_output_select command without any pre-configured scope."
+commands.deny = ["projector_output_select"]

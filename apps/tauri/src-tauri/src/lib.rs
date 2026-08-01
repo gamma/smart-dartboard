@@ -17,6 +17,8 @@ use std::{
 use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 
+const PROJECTOR_OUTPUT_PREFERENCE: &str = "projector.output";
+
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 use std::sync::OnceLock;
 #[cfg(target_os = "ios")]
@@ -34,6 +36,34 @@ struct NativeState {
     board_ingress: BoardIngress,
     board_status: BoardStatus,
     companions: PairingAuthority,
+    projector_output: ProjectorOutput,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ProjectorOutput {
+    ExternalDisplay,
+    Companion,
+    LocalPreview,
+}
+
+impl ProjectorOutput {
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "external_display" => Ok(Self::ExternalDisplay),
+            "companion" => Ok(Self::Companion),
+            "local_preview" => Ok(Self::LocalPreview),
+            _ => Err("unsupported projector output".into()),
+        }
+    }
+
+    const fn storage_value(self) -> &'static str {
+        match self {
+            Self::ExternalDisplay => "external_display",
+            Self::Companion => "companion",
+            Self::LocalPreview => "local_preview",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -44,6 +74,7 @@ struct PublicState {
     external_display_count: u32,
     board: BoardStatus,
     game: Option<RuntimeGameState>,
+    projector_output: ProjectorOutput,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -70,6 +101,12 @@ impl NativeState {
         let companion_devices = repository
             .companion_devices()
             .map_err(|error| error.to_string())?;
+        let projector_output = repository
+            .preference(PROJECTOR_OUTPUT_PREFERENCE)
+            .map_err(|error| error.to_string())?
+            .map_or(Ok(ProjectorOutput::ExternalDisplay), |value| {
+                ProjectorOutput::parse(&value)
+            })?;
         let runtime_instance_id = Uuid::new_v4().to_string();
         let mut runtime = Runtime::restore(runtime_instance_id.clone(), repository)
             .map_err(|error| error.to_string())?;
@@ -93,6 +130,7 @@ impl NativeState {
             board_ingress: BoardIngress::new(),
             board_status: BoardStatus::unavailable(),
             companions: PairingAuthority::from_devices(companion_devices),
+            projector_output,
         })
     }
 
@@ -114,6 +152,7 @@ impl NativeState {
             external_display_count: external_display_count(),
             board: self.board_status.clone(),
             game,
+            projector_output: self.projector_output,
         }
     }
 
@@ -196,6 +235,15 @@ impl NativeState {
             return Err("companion grant state is inconsistent".into());
         }
         Ok(())
+    }
+
+    fn select_projector_output(&mut self, output: ProjectorOutput) -> Result<PublicState, String> {
+        self.runtime
+            .repository_mut()
+            .save_preference(PROJECTOR_OUTPUT_PREFERENCE, output.storage_value())
+            .map_err(|error| error.to_string())?;
+        self.projector_output = output;
+        Ok(self.public())
     }
 
     #[cfg(any(target_os = "ios", target_os = "macos", test))]
@@ -473,6 +521,20 @@ fn companion_revoke(
 }
 
 #[tauri::command]
+fn projector_output_select(
+    app: tauri::AppHandle,
+    state: State<'_, Mutex<NativeState>>,
+    output: String,
+) -> Result<PublicState, String> {
+    let public = state
+        .lock()
+        .map_err(|error| error.to_string())?
+        .select_projector_output(ProjectorOutput::parse(&output)?)?;
+    publish_public_state(&app, &public);
+    Ok(public)
+}
+
+#[tauri::command]
 fn runtime_dispatch(
     app: tauri::AppHandle,
     state: State<'_, Mutex<NativeState>>,
@@ -559,7 +621,8 @@ pub fn run() {
             runtime_dispatch,
             companion_pairing_open,
             companion_devices,
-            companion_revoke
+            companion_revoke,
+            projector_output_select
         ])
         .run(tauri::generate_context!())
         .expect("error while running Smart Dartboard native M0");
@@ -596,6 +659,9 @@ mod tests {
             let repository = SqliteRepository::open(&path).expect("first repository");
             let mut state = NativeState::restore(repository).expect("first state");
             state.ingest_test_hit().expect("committed hit");
+            state
+                .select_projector_output(ProjectorOutput::LocalPreview)
+                .expect("persist output");
             state.runtime.instance_id().to_owned()
         };
         let repository = SqliteRepository::open(&path).expect("reopened repository");
@@ -603,6 +669,7 @@ mod tests {
         assert_ne!(state.runtime.instance_id(), first_instance);
         assert_eq!(state.public().revision, 2);
         assert_eq!(state.public().counter, 60);
+        assert_eq!(state.public().projector_output, ProjectorOutput::LocalPreview);
         std::fs::remove_file(path).expect("remove test database");
     }
 

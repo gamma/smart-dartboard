@@ -20,6 +20,7 @@ fn main() {
             "companion_pairing_open",
             "companion_devices",
             "companion_revoke",
+            "projector_output_select",
         ]));
     tauri_build::try_build(attributes).expect("failed to build Tauri application");
 }

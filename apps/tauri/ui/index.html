@@ -18,8 +18,23 @@
     <p id="boardStatus" class="display-status board-status">Board: wird initialisiert …</p>
     <p id="displayStatus" class="display-status">Projector: nicht verbunden</p>
     <p id="status" class="status">Runtime wird verbunden …</p>
-    <section id="companionSetup" class="setup" aria-labelledby="companionTitle">
+    <section id="outputSetup" class="setup" aria-labelledby="outputTitle">
       <p class="eyebrow">BOARD SETUP</p>
+      <h2 id="outputTitle">Projector-Ausgabe</h2>
+      <p class="setup-copy">AirPlay oder HDMI ist der bevorzugte Weg. Der Spielstand und die Board-Verbindung laufen beim Wechsel unverändert weiter.</p>
+      <div class="output-options">
+        <button type="button" data-output="external_display"><strong>AirPlay / HDMI</strong><small>Eigenständiges externes Bild</small></button>
+        <button type="button" data-output="companion"><strong>Companion-iPad</strong><small>Gekoppelter Projector</small></button>
+        <button type="button" data-output="local_preview"><strong>Lokale Vorschau</strong><small>Fallback auf diesem Gerät</small></button>
+      </div>
+      <p id="outputHint" class="output-hint"></p>
+      <div id="localPreview" class="local-preview" hidden>
+        <span>PROJECTOR · VORSCHAU</span>
+        <strong id="previewCounter">0</strong>
+      </div>
+    </section>
+    <section id="companionSetup" class="setup" aria-labelledby="companionTitle">
+      <p class="eyebrow">COMPANION</p>
       <h2 id="companionTitle">Companion-iPad</h2>
       <p class="setup-copy">Öffne für fünf Minuten einen Einmalcode. Das zweite iPad erhält ausschließlich die Projector-Rolle.</p>
       <button id="openPairing" type="button">Companion koppeln</button>

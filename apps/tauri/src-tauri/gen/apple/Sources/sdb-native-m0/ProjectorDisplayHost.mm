@@ -124,7 +124,7 @@ extern "C" void sdb_external_display_changed(uint32_t display_count);
           "</style></head><body><main><div class='role'>PROJECTOR · AIRPLAY / HDMI</div>"
           "<h1>Eine Runtime.<br>Zwei Screens.</h1><div id='counter' class='counter'>0</div>"
           "<div id='status' class='status'>Runtime wird verbunden …</div></main>"
-          "<script>window.sdbApplyState=function(s){document.getElementById('counter').textContent=String(s.counter??0);"
+          "<script>window.sdbApplyState=function(s){document.body.style.visibility=s.projector_output==='external_display'?'visible':'hidden';document.getElementById('counter').textContent=String(s.counter??0);"
           "document.getElementById('status').textContent='Runtime '+s.runtime_instance_id+' · Revision '+s.revision;};"
           "</script></body></html>";
 }

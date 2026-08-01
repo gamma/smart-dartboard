@@ -144,8 +144,10 @@ Controller + BLE + Runtime + SQLite  →  Projector + Sound
 Beide Geräte verwenden dieselbe App. Beim Start wird die Rolle `Dieses Gerät`
 oder `Companion-Projektor` gewählt; ein bereits eingerichtetes Gerät merkt sich
 die Auswahl. Der Controller wird über Bonjour gefunden und per QR-Code oder
-kurzem Einmalcode gepaart. Es gibt niemals zwei autoritative Runtimes für
-dasselbe laufende Spiel.
+kurzem Einmalcode gepaart. QR bindet dabei den Fingerprint der lokalen
+TLS-Identität; bei manueller Eingabe wird derselbe kurze Fingerprint auf beiden
+Geräten bestätigt. Bonjour allein ist ausdrücklich kein Vertrauensanker. Es
+gibt niemals zwei autoritative Runtimes für dasselbe laufende Spiel.
 
 Die Ausgabeauswahl liegt im Board-Setup und bietet `AirPlay/externes Display`,
 `Companion-iPad` und `Vorschau auf diesem Gerät`. Die App stellt den zuletzt

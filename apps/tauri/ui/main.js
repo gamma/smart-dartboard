@@ -9,6 +9,7 @@ function render(payload){
   document.querySelector('#status').textContent=`Runtime ${payload.runtime_instance_id} · Revision ${payload.revision}`;
   renderBoardStatus(payload.board);
   renderDisplayStatus(payload.external_display_count ?? 0);
+  renderProjectorOutput(payload.projector_output ?? 'external_display',payload.external_display_count ?? 0,payload.counter ?? 0);
 }
 
 function renderBoardStatus(board={}){
@@ -31,6 +32,22 @@ function renderDisplayStatus(displayCount){
   status.textContent=connected
     ? `Projector: ${displayCount}× AirPlay / HDMI verbunden`
     : 'Projector: nicht verbunden';
+}
+
+function renderProjectorOutput(output,displayCount,counter){
+  document.body.dataset.output=output;
+  for(const button of document.querySelectorAll('[data-output]')){
+    button.setAttribute('aria-pressed',String(button.dataset.output===output));
+  }
+  const hints={
+    external_display:displayCount>0?'Externes Display aktiv':'Wartet auf AirPlay- oder HDMI-Display',
+    companion:'Wartet auf einen gekoppelten Companion-Projector',
+    local_preview:'Lokale Vorschau aktiv'
+  };
+  document.querySelector('#outputHint').textContent=hints[output] ?? '';
+  const preview=document.querySelector('#localPreview');
+  preview.hidden=output!=='local_preview';
+  document.querySelector('#previewCounter').textContent=String(counter);
 }
 
 let pairingTimer;
@@ -91,6 +108,14 @@ async function setupCompanions(){
   });
 }
 
+function setupProjectorOutput(){
+  for(const button of document.querySelectorAll('[data-output]')){
+    button.addEventListener('click',async()=>{
+      render(await tauri.core.invoke('projector_output_select',{output:button.dataset.output}));
+    });
+  }
+}
+
 async function start(){
   if(!tauri?.core?.invoke){
     document.querySelector('#status').textContent='Native Tauri Bridge fehlt';
@@ -102,7 +127,10 @@ async function start(){
   document.querySelector('#increment').addEventListener('click',async()=>{
     render(await tauri.core.invoke('runtime_dispatch',{action:'increment'}));
   });
-  if(role==='control') await setupCompanions();
+  if(role==='control'){
+    setupProjectorOutput();
+    await setupCompanions();
+  }
 }
 
 start().catch(error=>{

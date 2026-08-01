@@ -32,7 +32,7 @@ Umgesetzt und lokal verifiziert:
 - Spiel und Session werden in einem Runtime-Snapshot atomar committed. Undo
   eines Siegtreffers öffnet das Ergebnis wieder und entfernt auch die zuvor
   vergebene Sessionwertung; ein Commitfehler lässt beide Zustände unverändert.
-- SQLite-Schema 5 mit fortlaufender Migration, Downgrade-Sperre,
+- SQLite-Schema 6 mit fortlaufender Migration, Downgrade-Sperre,
   Post-Migration-Integritätsprüfung und append-only Runtime-Journal. Ein
   injizierter Fehler beim Journal-Insert rollt Snapshot und Deduplizierung mit
   zurück.
@@ -63,7 +63,7 @@ Umgesetzt und lokal verifiziert:
   Bundle und macOS-Release-Binary linken und starten erfolgreich; ein nativer
   Test verarbeitet D20 genau einmal, und die Control UI zeigt im BLE-losen
   Simulator verständlich `nicht verfügbar`.
-- dieselbe Schema-5-SQLite-Persistenz wie der Headless-Host im nativen
+- dieselbe Schema-6-SQLite-Persistenz wie der Headless-Host im nativen
   App-Datenverzeichnis. Jede Prozessausführung erhält eine neue Runtime-ID,
   stellt aber ausschließlich den letzten atomar committed Snapshot wieder her.
   Im iPad-Simulator blieben Score 60 und Revision 2 nach vollständigem
@@ -83,6 +83,11 @@ Umgesetzt und lokal verifiziert:
   diese Tauri-Rechte; das Einlösen bleibt der noch anzuschließenden nativen
   Netzwerkgrenze vorbehalten. Der iPad-Viewport wurde mit WebKit visuell
   geprüft.
+- persistente Projector-Auswahl im Board-Setup mit `AirPlay / HDMI` als
+  Standard, `Companion-iPad` und lokaler Vorschau. Der Wechsel schreibt nur die
+  Hostpräferenz in SQLite-Schema 6, erzeugt keine Runtime-Revision und lässt
+  Session, Spiel und BLE-Verbindung unberührt. Nicht ausgewählte lokale
+  Projector-Ausgänge werden neutral ausgeblendet.
 
 Noch nicht als produktionsreif nachgewiesen:
 

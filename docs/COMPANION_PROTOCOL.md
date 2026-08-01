@@ -29,8 +29,10 @@ HTTP oder ein global geöffnetes CORS ist kein zulässiger Produktpfad.
 Der Controller öffnet Pairing sichtbar im Board-Setup:
 
 1. Er erzeugt einen sechsstelligen Einmalcode für fünf Minuten.
-2. Das Companion-iPad wählt den gefundenen Controller und gibt Code oder
-   denselben Inhalt per QR ein.
+2. Das Companion-iPad wählt den gefundenen Controller. Der QR-Pfad überträgt
+   zusätzlich Host-ID und SHA-256-Fingerprint der lokalen TLS-Identität. Beim
+   manuellen Codepfad müssen beide Geräte vor dem Einlösen denselben kurzen
+   Zertifikat-Fingerprint anzeigen und der Nutzer bestätigt die Übereinstimmung.
 3. Nach höchstens fünf falschen Versuchen schließt das Fenster.
 4. Bei Erfolg erhält das iPad einmalig einen zufälligen 256-Bit-Token mit der
    festen Rolle `projector`.
@@ -41,6 +43,15 @@ Der Controller öffnet Pairing sichtbar im Board-Setup:
 
 Diese Regeln liegen plattformneutral in `sdb-companion`. Bonjour, TLS,
 QR-Erfassung und Keychain/Keystore sind austauschbare Hostadapter.
+
+Der Token darf niemals über eine lediglich selbstsignierte, ungeprüfte
+Verbindung übertragen werden. Ein Fingerprint aus dem ungeschützten Bonjour-
+TXT-Record genügt nicht, weil ein aktiver Angreifer Service und Fingerprint
+gemeinsam ersetzen könnte. Auf Apple-Geräten liegt die persistente lokale
+TLS-Identität im Keychain. Der QR-Code bindet diese Identität direkt; der
+manuelle Fallback benötigt den sichtbaren Vergleich auf beiden Geräten. Damit
+bleibt das Pairing ohne vorherige Installation einer privaten Root-CA
+point-and-click-tauglich.
 
 ## Replikation
 

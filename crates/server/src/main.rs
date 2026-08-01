@@ -1051,7 +1051,7 @@ mod tests {
         .expect("json");
         assert_eq!(value["status"], "ok");
         assert_eq!(value["protocol_version"], PROTOCOL_VERSION);
-        assert_eq!(value["schema_version"], 5);
+        assert_eq!(value["schema_version"], 6);
 
         let bootstrap = test_app()
             .oneshot(
