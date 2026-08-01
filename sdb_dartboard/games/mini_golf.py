@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict, List
 
 from .arcade import (
@@ -72,7 +71,7 @@ class MiniGolfMode:
         if not available:
             state.mode_state["used"] = []
             available = self._pool(state)
-        target = random.choice(available)  # nosec B311
+        target = available[state.random_index(len(available))]
         state.mode_state["target"] = target
         state.mode_state.setdefault("used", []).append(zone_id(target))
         state.mode_state["hole"] = state.round_number

@@ -93,7 +93,7 @@ pub(super) const fn ring_name(ring: Ring) -> &'static str {
     }
 }
 
-fn target_pool(difficulty: &str) -> Vec<Target> {
+pub(super) fn target_pool(difficulty: &str) -> Vec<Target> {
     let mut targets = Vec::new();
     if difficulty == "easy" || difficulty == "normal" {
         targets.extend((1..=20).map(|field| target_for(field, Ring::SingleOuter)));

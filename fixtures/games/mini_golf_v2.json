@@ -1,0 +1,15 @@
+{
+  "fixture_schema_version": 1, "ruleset_version": 2, "random_seed": 42,
+  "players": [{"id":"ada","name":"Ada"},{"id":"bob","name":"Bob"}],
+  "options": {"holes":6,"difficulty":"normal"},
+  "steps": [
+    {"command":{"type":"dart","event":{"type":"miss","seq":1,"label":"MISS","score":0}},"expected":{"scores":[0,0],"target":"S14","used":["S14"],"current_player_index":0,"darts_in_turn":1,"turn_score":0,"round_number":1,"status":"running","winner_id":null,"result_type":"","random_cursor":1}},
+    {"command":{"type":"dart","event":{"type":"hit","seq":2,"label":"S14","field":14,"ring":"single_outer","multiplier":1,"score":14}},"expected":{"scores":[2,0],"target":"S14","used":["S14"],"current_player_index":0,"darts_in_turn":2,"turn_score":2,"round_number":1,"status":"hold","winner_id":null,"result_type":"","random_cursor":1}},
+    {"command":{"type":"continue"},"expected":{"scores":[2,0],"target":"S14","used":["S14"],"current_player_index":1,"darts_in_turn":0,"turn_score":0,"round_number":1,"status":"running","winner_id":null,"result_type":"","random_cursor":1}},
+    {"command":{"type":"dart","event":{"type":"miss","seq":3,"label":"MISS","score":0}},"expected":{"scores":[2,0],"target":"S14","used":["S14"],"current_player_index":1,"darts_in_turn":1,"turn_score":0,"round_number":1,"status":"running","winner_id":null,"result_type":"","random_cursor":1}},
+    {"command":{"type":"dart","event":{"type":"miss","seq":4,"label":"MISS","score":0}},"expected":{"scores":[2,0],"target":"S14","used":["S14"],"current_player_index":1,"darts_in_turn":2,"turn_score":0,"round_number":1,"status":"running","winner_id":null,"result_type":"","random_cursor":1}},
+    {"command":{"type":"dart","event":{"type":"miss","seq":5,"label":"MISS","score":0}},"expected":{"scores":[2,4],"target":"S14","used":["S14"],"current_player_index":1,"darts_in_turn":3,"turn_score":4,"round_number":1,"status":"hold","winner_id":null,"result_type":"","random_cursor":1}},
+    {"command":{"type":"correct","action_id":1,"event":{"type":"hit","seq":999,"label":"S14","field":14,"ring":"single_outer","multiplier":1,"score":14}},"expected":{"scores":[1,4],"target":"S14","used":["S14"],"current_player_index":1,"darts_in_turn":3,"turn_score":4,"round_number":1,"status":"hold","winner_id":null,"result_type":"","random_cursor":1}},
+    {"command":{"type":"continue"},"expected":{"scores":[1,4],"target":"S2","used":["S14","S2"],"current_player_index":0,"darts_in_turn":0,"turn_score":0,"round_number":2,"status":"running","winner_id":null,"result_type":"","random_cursor":2}}
+  ]
+}
