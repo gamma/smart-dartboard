@@ -631,6 +631,7 @@ version = "0.1.0"
 dependencies = [
  "rusqlite",
  "sdb-contracts",
+ "sdb-game-core",
  "sdb-runtime",
  "sdb-session-core",
  "serde",

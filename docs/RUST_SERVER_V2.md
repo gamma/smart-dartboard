@@ -59,6 +59,9 @@ Fehlercodes und passende HTTP-Statuscodes.
   als Test und schließt es aus der Standardstatistik aus,
 - Turn fortsetzen und Undo; ein Undo des Siegtreffers öffnet zugleich das Spiel
   wieder und nimmt die Sessionwertung atomar zurück,
+- X01-Würfe über stabile Action-IDs korrigieren oder löschen. Der Core bewahrt
+  die ursprüngliche Sequenznummer, spielt alle späteren Aktionen neu ab und
+  veröffentlicht die letzten zwei editierbaren Aufnahmen im Game-State,
 - `command_id` deduplizieren,
 - Commit und Snapshot in einer SQLite-Transaktion sichern,
 - jedes akzeptierte Command mit Runtime-ID, Revision, kanonischem Action-JSON
@@ -75,7 +78,6 @@ Noch offen und daher ausdrücklich kein Produktionsersatz:
 - Teammodell sowie vollständige History-, Replay-, Heatmap-, Modusstatistik-
   und Exportabfragen,
 - restliche Spielmodi und deklarative Effects,
-- Wurfkorrektur und Löschen über den öffentlichen Contract,
 - Bleak-/BlueZ-Gateway und reale Boardqualifizierung,
 - Migration vorhandener Python-Datenbanken,
 - Umstellung der bestehenden UI auf API v2.
@@ -90,8 +92,14 @@ Schema 2 führt `runtime_journal` als append-only Auditspur ein. Schema 3 ergän
 die mit der bisherigen Python-Datenbank kompatiblen Profil-, Session-, Spiel-,
 Wurf- und Eventtabellen. Runtimezustand und diese fachliche Projektion werden
 atomar geschrieben. Eine vorhandene Python-Schema-2-Datenbank wird nur ergänzt;
-bestehende Profile und Historieneinträge bleiben erhalten. Migrationen
-laufen fortlaufend und transaktional; eine Datenbank mit neuerer unbekannter
-Schema-Version wird ohne Downgrade oder Schreibversuch abgelehnt. Nach jeder
-Migration läuft `PRAGMA quick_check`. Da 1 → 2 und 2 → 3 ausschließlich neue
-Tabellen ergänzen, ist hierfür kein destruktives Migrationsbackup erforderlich.
+bestehende Profile und Historieneinträge bleiben erhalten.
+Schema 4 ergänzt stabile Dart-Action-IDs in der schnellen Wurfprojektion.
+Korrektur und Löschen markieren das ersetzte Event als unwirksam, hängen ein
+neues Auditereignis an und schreiben alle betroffenen X01-Würfe aus dem
+deterministisch wiedergegebenen Core-Zustand neu.
+
+Migrationen laufen fortlaufend und transaktional; eine Datenbank mit neuerer
+unbekannter Schema-Version wird ohne Downgrade oder Schreibversuch abgelehnt. Nach jeder
+Migration läuft `PRAGMA quick_check`. Da 1 → 2, 2 → 3 und 3 → 4 ausschließlich
+Tabellen beziehungsweise eine Spalte ergänzen, ist hierfür kein destruktives
+Migrationsbackup erforderlich.

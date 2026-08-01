@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 rusqlite = { version = "0.38", features = ["bundled"] }
 sdb-contracts = { path = "../contracts" }
+sdb-game-core = { path = "../game-core" }
 sdb-runtime = { path = "../runtime" }
 sdb-session-core = { path = "../session-core" }
 serde.workspace = true

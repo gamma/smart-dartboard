@@ -32,7 +32,7 @@ Umgesetzt und lokal verifiziert:
 - Spiel und Session werden in einem Runtime-Snapshot atomar committed. Undo
   eines Siegtreffers öffnet das Ergebnis wieder und entfernt auch die zuvor
   vergebene Sessionwertung; ein Commitfehler lässt beide Zustände unverändert.
-- SQLite-Schema 3 mit fortlaufender Migration, Downgrade-Sperre,
+- SQLite-Schema 4 mit fortlaufender Migration, Downgrade-Sperre,
   Post-Migration-Integritätsprüfung und append-only Runtime-Journal. Ein
   injizierter Fehler beim Journal-Insert rollt Snapshot und Deduplizierung mit
   zurück.
@@ -44,6 +44,10 @@ Umgesetzt und lokal verifiziert:
 - Gemeinsamer Dart-Source-Contract für Board, Projektor-Test und manuelle
   Korrektur. Der Apple-Testtreffer ist als `projector_test` markiert; solche
   Spiele bleiben dauerhaft aus der normalen Statistik ausgeschlossen.
+- Öffentliche X01-Commands zum Korrigieren und Löschen über stabile Action-IDs.
+  Der gemeinsame State liefert die editierbaren Darts der aktuellen und
+  vorherigen Aufnahme. Replay, Sessionpunkte, Gewinner, kanonische `throws`
+  und append-only Korrekturevents werden atomar synchronisiert.
 
 Noch nicht als produktionsreif nachgewiesen:
 

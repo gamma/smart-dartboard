@@ -53,6 +53,14 @@ pub enum RuntimeAction {
         event: DartEvent,
         source: DartSource,
     },
+    CorrectDart {
+        action_id: u64,
+        replacement: DartEvent,
+        source: DartSource,
+    },
+    DeleteDart {
+        action_id: u64,
+    },
     Continue,
     Undo,
 }
@@ -69,7 +77,7 @@ pub struct RuntimeSnapshot {
 #[serde(tag = "game_type", content = "game", rename_all = "snake_case")]
 pub enum RuntimeGame {
     CountUp(CountUpGame),
-    X01(X01Game),
+    X01(Box<X01Game>),
 }
 
 impl RuntimeGame {
@@ -91,6 +99,20 @@ impl RuntimeGame {
         match self {
             Self::CountUp(game) => game.undo().map(|_| ()),
             Self::X01(game) => game.undo().map(|_| ()),
+        }
+    }
+
+    fn correct_dart(&mut self, action_id: u64, replacement: DartEvent) -> Result<(), GameError> {
+        match self {
+            Self::X01(game) => game.correct_throw(action_id, replacement).map(|_| ()),
+            Self::CountUp(_) => Err(GameError::ActionNotEditable),
+        }
+    }
+
+    fn delete_dart(&mut self, action_id: u64) -> Result<(), GameError> {
+        match self {
+            Self::X01(game) => game.delete_throw(action_id).map(|_| ()),
+            Self::CountUp(_) => Err(GameError::ActionNotEditable),
         }
     }
 
@@ -391,6 +413,16 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
         RuntimeCommand::EndSession => Ok(RuntimeAction::EndSession),
         RuntimeCommand::CloseSession => Ok(RuntimeAction::CloseSession),
         RuntimeCommand::IngestDart { event, source } => Ok(RuntimeAction::Dart { event, source }),
+        RuntimeCommand::CorrectDart {
+            action_id,
+            replacement,
+            source,
+        } => Ok(RuntimeAction::CorrectDart {
+            action_id,
+            replacement,
+            source,
+        }),
+        RuntimeCommand::DeleteDart { action_id } => Ok(RuntimeAction::DeleteDart { action_id }),
         RuntimeCommand::StartGame {
             game_type,
             player_ids,
@@ -525,11 +557,11 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
             start_score,
             out_rule,
         } => {
-            snapshot.game = Some(RuntimeGame::X01(X01Game::new(
+            snapshot.game = Some(RuntimeGame::X01(Box::new(X01Game::new(
                 players,
                 start_score,
                 out_rule,
-            )?));
+            )?)));
         }
         RuntimeAction::Dart { event, .. } => {
             snapshot
@@ -538,6 +570,20 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
                 .ok_or(RuntimeError::NoGame)?
                 .apply_throw(event)?;
             sync_finished_game(snapshot)?;
+        }
+        RuntimeAction::CorrectDart {
+            action_id,
+            replacement,
+            ..
+        } => {
+            let game = snapshot.game.as_mut().ok_or(RuntimeError::NoGame)?;
+            game.correct_dart(action_id, replacement)?;
+            sync_edited_game(snapshot)?;
+        }
+        RuntimeAction::DeleteDart { action_id } => {
+            let game = snapshot.game.as_mut().ok_or(RuntimeError::NoGame)?;
+            game.delete_dart(action_id)?;
+            sync_edited_game(snapshot)?;
         }
         RuntimeAction::Continue => {
             snapshot
@@ -627,11 +673,11 @@ fn game_from_options(
                     ));
                 }
             };
-            Ok(RuntimeGame::X01(X01Game::new(
+            Ok(RuntimeGame::X01(Box::new(X01Game::new(
                 players,
                 start_score,
                 out_rule,
-            )?))
+            )?)))
         }
         _ => Err(RuntimeError::InvalidGameOptions(format!(
             "unsupported game type: {game_type}"
@@ -652,6 +698,13 @@ fn sync_finished_game(snapshot: &mut RuntimeSnapshot) -> Result<(), RuntimeError
         snapshot.session.complete_game(game.winner_ids())?;
     }
     Ok(())
+}
+
+fn sync_edited_game(snapshot: &mut RuntimeSnapshot) -> Result<(), RuntimeError> {
+    if snapshot.session.state().screen == Screen::GameResult {
+        snapshot.session.reopen_game()?;
+    }
+    sync_finished_game(snapshot)
 }
 
 #[derive(Debug, Default)]
@@ -803,6 +856,140 @@ mod tests {
         assert_eq!(result.revision, 2);
         assert_eq!(state.winner_id.as_deref(), Some("ada"));
         assert_eq!(state.players[0].score, 0);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // Keeps the full win/correct/re-win/delete flow together.
+    fn correcting_and_deleting_checkout_synchronizes_session_points() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        runtime
+            .dispatch(
+                "runtime",
+                "session",
+                None,
+                RuntimeAction::StartSession {
+                    session_id: "session".into(),
+                    players: vec![session_players()[0].clone()],
+                },
+            )
+            .expect("session");
+        runtime
+            .dispatch(
+                "runtime",
+                "prepare",
+                None,
+                RuntimeAction::PrepareGame {
+                    game_type: "x01".into(),
+                    options: serde_json::json!({"start_score": 40, "out_rule": "double"}),
+                },
+            )
+            .expect("prepare");
+        runtime
+            .dispatch(
+                "runtime",
+                "start",
+                None,
+                RuntimeAction::StartPreparedGame {
+                    game_id: "game".into(),
+                },
+            )
+            .expect("start");
+        runtime
+            .dispatch("runtime", "playing", None, RuntimeAction::MarkGamePlaying)
+            .expect("playing");
+        runtime
+            .dispatch(
+                "runtime",
+                "checkout",
+                None,
+                RuntimeAction::Dart {
+                    event: DartEvent::Hit {
+                        seq: 1,
+                        field: 20,
+                        ring: Ring::Double,
+                        multiplier: 2,
+                        label: "D20".into(),
+                        score: 40,
+                    },
+                    source: DartSource::Board,
+                },
+            )
+            .expect("checkout");
+        assert_eq!(runtime.snapshot.session.state().screen, Screen::GameResult);
+        assert_eq!(
+            runtime.snapshot.session.state().standings[0].session_points,
+            3
+        );
+
+        runtime
+            .dispatch(
+                "runtime",
+                "correct",
+                None,
+                RuntimeAction::CorrectDart {
+                    action_id: 1,
+                    replacement: DartEvent::Hit {
+                        seq: 999,
+                        field: 20,
+                        ring: Ring::SingleInner,
+                        multiplier: 1,
+                        label: "S20".into(),
+                        score: 20,
+                    },
+                    source: DartSource::ManualCorrection,
+                },
+            )
+            .expect("correction");
+        assert_eq!(runtime.snapshot.session.state().screen, Screen::Playing);
+        assert_eq!(
+            runtime.snapshot.session.state().standings[0].session_points,
+            0
+        );
+        let Some(RuntimeGame::X01(game)) = &runtime.snapshot.game else {
+            panic!("wrong game");
+        };
+        assert_eq!(game.state().players[0].score, 20);
+        assert_eq!(game.dart_actions()[0].1.seq(), 1);
+
+        runtime
+            .dispatch(
+                "runtime",
+                "correct-back",
+                None,
+                RuntimeAction::CorrectDart {
+                    action_id: 1,
+                    replacement: DartEvent::Hit {
+                        seq: 1000,
+                        field: 20,
+                        ring: Ring::Double,
+                        multiplier: 2,
+                        label: "D20".into(),
+                        score: 40,
+                    },
+                    source: DartSource::ManualCorrection,
+                },
+            )
+            .expect("correction back");
+        assert_eq!(runtime.snapshot.session.state().screen, Screen::GameResult);
+        assert_eq!(
+            runtime.snapshot.session.state().standings[0].session_points,
+            3
+        );
+
+        runtime
+            .dispatch(
+                "runtime",
+                "delete",
+                None,
+                RuntimeAction::DeleteDart { action_id: 1 },
+            )
+            .expect("delete checkout");
+        assert_eq!(runtime.snapshot.session.state().screen, Screen::Playing);
+        assert_eq!(
+            runtime.snapshot.session.state().standings[0].session_points,
+            0
+        );
     }
 
     #[test]

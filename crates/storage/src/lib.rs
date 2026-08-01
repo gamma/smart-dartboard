@@ -1,15 +1,16 @@
 //! Transactional `SQLite` implementation of the runtime repository.
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use sdb_contracts::{DartEvent, DartSource};
 use sdb_runtime::{
     CommitOutcome, CommitRequest, Repository, RuntimeAction, RuntimeGame, RuntimeSnapshot,
 };
 use sdb_session_core::{Screen, SessionStatus};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
+use std::{collections::HashMap, path::Path};
 use thiserror::Error;
 
-const CURRENT_SCHEMA_VERSION: u32 = 3;
+const CURRENT_SCHEMA_VERSION: u32 = 4;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -496,6 +497,17 @@ fn migrate(connection: &Connection) -> Result<(), StorageError> {
             ",
         )?;
     }
+    if version < 4 {
+        connection.execute_batch(
+            "
+            BEGIN;
+            ALTER TABLE throws ADD COLUMN action_id INTEGER;
+            CREATE INDEX idx_throws_action ON throws(game_id, action_id);
+            PRAGMA user_version=4;
+            COMMIT;
+            ",
+        )?;
+    }
     Ok(())
 }
 
@@ -613,6 +625,36 @@ fn project_domain(
                     &next,
                     event,
                     *source,
+                    request.snapshot_json,
+                )?;
+            }
+        }
+        RuntimeAction::CorrectDart {
+            action_id,
+            replacement,
+            source,
+        } => {
+            if previous.session.state().game_id.is_some() {
+                project_dart_edit(
+                    transaction,
+                    &previous,
+                    &next,
+                    *action_id,
+                    Some(replacement),
+                    Some(*source),
+                    request.snapshot_json,
+                )?;
+            }
+        }
+        RuntimeAction::DeleteDart { action_id } => {
+            if previous.session.state().game_id.is_some() {
+                project_dart_edit(
+                    transaction,
+                    &previous,
+                    &next,
+                    *action_id,
+                    None,
+                    None,
                     request.snapshot_json,
                 )?;
             }
@@ -750,6 +792,7 @@ fn insert_game(
     Ok(())
 }
 
+#[allow(clippy::too_many_lines)] // Keeps one throw projection visibly atomic.
 fn record_dart(
     transaction: &Transaction<'_>,
     previous: &RuntimeSnapshot,
@@ -786,6 +829,15 @@ fn record_dart(
         .ok_or_else(|| "dart player is absent from resulting state".to_string())?;
     let event_value = serde_json::to_value(event).map_err(|error| error.to_string())?;
     let event_json = serde_json::to_string(&event_value).map_err(|error| error.to_string())?;
+    let action_id = match next.game.as_ref() {
+        Some(RuntimeGame::X01(game)) => game.dart_records().last().map(|record| record.action_id),
+        _ => None,
+    };
+    let audit_payload = serde_json::json!({
+        "action_id": action_id,
+        "event": &event_value,
+    })
+    .to_string();
     let source_name = dart_source_name(source);
     if source == sdb_contracts::DartSource::ProjectorTest {
         transaction
@@ -802,7 +854,7 @@ fn record_dart(
             event_type: "throw",
             player_id: Some(player_id),
             source: source_name,
-            payload_json: &event_json,
+            payload_json: &audit_payload,
             frame_json: Some(frame_json),
             corrects_event_id: None,
         },
@@ -831,8 +883,9 @@ fn record_dart(
         .execute(
             "INSERT INTO throws(
                game_id, seq, player_id, event_json, score_after, round_number,
-               dart_in_turn, field, ring, multiplier, dart_score, outcome, source, event_id
-             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)",
+               dart_in_turn, field, ring, multiplier, dart_score, outcome, source,
+               event_id, action_id
+             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
             params![
                 game_id,
                 to_sql_i64(seq, "dart sequence")?,
@@ -851,7 +904,10 @@ fn record_dart(
                 to_sql_i64(dart_score, "dart score")?,
                 outcome,
                 source_name,
-                event_id
+                event_id,
+                action_id
+                    .map(|value| to_sql_i64(value, "dart action ID"))
+                    .transpose()?
             ],
         )
         .map_err(|error| error.to_string())?;
@@ -864,6 +920,220 @@ const fn dart_source_name(source: sdb_contracts::DartSource) -> &'static str {
         sdb_contracts::DartSource::ProjectorTest => "projector_test",
         sdb_contracts::DartSource::ManualCorrection => "manual_correction",
     }
+}
+
+fn project_dart_edit(
+    transaction: &Transaction<'_>,
+    previous: &RuntimeSnapshot,
+    next: &RuntimeSnapshot,
+    action_id: u64,
+    replacement: Option<&DartEvent>,
+    source: Option<DartSource>,
+    frame_json: &str,
+) -> Result<(), String> {
+    let game_id = previous
+        .session
+        .state()
+        .game_id
+        .as_deref()
+        .ok_or_else(|| "dart edit has no game ID".to_string())?;
+    let sql_action_id = to_sql_i64(action_id, "dart action ID")?;
+    let target_event_id = transaction
+        .query_row(
+            "SELECT event_id FROM throws
+             WHERE game_id=?1 AND action_id=?2 LIMIT 1",
+            params![game_id, sql_action_id],
+            |row| row.get::<_, Option<i64>>(0),
+        )
+        .optional()
+        .map_err(|error| error.to_string())?
+        .flatten()
+        .ok_or_else(|| "dart edit target has no audit event".to_string())?;
+    transaction
+        .execute(
+            "UPDATE game_events SET effective=0 WHERE id=?1 AND effective=1",
+            [target_event_id],
+        )
+        .map_err(|error| error.to_string())?;
+
+    let event_type = if replacement.is_some() {
+        "throw_corrected"
+    } else {
+        "throw_deleted"
+    };
+    let source_name = source.map_or("control", dart_source_name);
+    let replacement_value = replacement
+        .map(serde_json::to_value)
+        .transpose()
+        .map_err(|error| error.to_string())?;
+    let payload = serde_json::json!({
+        "action_id": action_id,
+        "replacement": replacement_value,
+    })
+    .to_string();
+    let edit_event_id = insert_game_event(
+        transaction,
+        GameEventInsert {
+            game_id,
+            event_type,
+            player_id: None,
+            source: source_name,
+            payload_json: &payload,
+            frame_json: Some(frame_json),
+            corrects_event_id: Some(target_event_id),
+        },
+    )?;
+    if source == Some(sdb_contracts::DartSource::ProjectorTest) {
+        transaction
+            .execute("UPDATE games SET environment='test' WHERE id=?1", [game_id])
+            .map_err(|error| error.to_string())?;
+    }
+    rewrite_x01_throws(
+        transaction,
+        next,
+        game_id,
+        action_id,
+        replacement
+            .is_some()
+            .then_some((source_name, edit_event_id)),
+    )?;
+    if previous.session.state().screen == Screen::GameResult
+        && next.session.state().screen == Screen::GameResult
+    {
+        finish_game(transaction, next, frame_json)?;
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+struct StoredThrowMeta {
+    source: String,
+    event_id: Option<i64>,
+    created_at: String,
+}
+
+fn rewrite_x01_throws(
+    transaction: &Transaction<'_>,
+    snapshot: &RuntimeSnapshot,
+    game_id: &str,
+    edited_action_id: u64,
+    edit: Option<(&str, i64)>,
+) -> Result<(), String> {
+    let records = match snapshot.game.as_ref() {
+        Some(RuntimeGame::X01(game)) => game.dart_records(),
+        _ => return Err("dart edits are only supported for X01".into()),
+    };
+    let mut statement = transaction
+        .prepare(
+            "SELECT action_id, source, event_id, created_at FROM throws
+             WHERE game_id=?1 AND action_id IS NOT NULL",
+        )
+        .map_err(|error| error.to_string())?;
+    let rows = statement
+        .query_map([game_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                StoredThrowMeta {
+                    source: row.get(1)?,
+                    event_id: row.get(2)?,
+                    created_at: row.get(3)?,
+                },
+            ))
+        })
+        .map_err(|error| error.to_string())?;
+    let mut metadata = HashMap::new();
+    for row in rows {
+        let (action_id, stored) = row.map_err(|error| error.to_string())?;
+        let action_id = u64::try_from(action_id)
+            .map_err(|_| "stored dart action ID is negative".to_string())?;
+        metadata.insert(action_id, stored);
+    }
+    drop(statement);
+    transaction
+        .execute("DELETE FROM throws WHERE game_id=?1", [game_id])
+        .map_err(|error| error.to_string())?;
+    let now: String = transaction
+        .query_row("SELECT CURRENT_TIMESTAMP", [], |row| row.get(0))
+        .map_err(|error| error.to_string())?;
+    for record in records {
+        let stored = metadata.remove(&record.action_id);
+        let (source, event_id) = if record.action_id == edited_action_id {
+            edit.map_or_else(
+                || {
+                    stored.as_ref().map_or_else(
+                        || ("unknown".to_string(), None),
+                        |meta| (meta.source.clone(), meta.event_id),
+                    )
+                },
+                |(source, event_id)| (source.to_string(), Some(event_id)),
+            )
+        } else {
+            stored.as_ref().map_or_else(
+                || ("unknown".to_string(), None),
+                |meta| (meta.source.clone(), meta.event_id),
+            )
+        };
+        let created_at = stored.map_or_else(|| now.clone(), |meta| meta.created_at);
+        insert_replayed_throw(
+            transaction,
+            game_id,
+            &record,
+            &source,
+            event_id,
+            &created_at,
+        )?;
+    }
+    Ok(())
+}
+
+fn insert_replayed_throw(
+    transaction: &Transaction<'_>,
+    game_id: &str,
+    record: &sdb_game_core::X01DartRecord,
+    source: &str,
+    event_id: Option<i64>,
+    created_at: &str,
+) -> Result<(), String> {
+    let event_value = serde_json::to_value(&record.event).map_err(|error| error.to_string())?;
+    let event_json = serde_json::to_string(&event_value).map_err(|error| error.to_string())?;
+    let field = event_value.get("field").and_then(serde_json::Value::as_u64);
+    let ring = event_value.get("ring").and_then(serde_json::Value::as_str);
+    let multiplier = event_value
+        .get("multiplier")
+        .and_then(serde_json::Value::as_u64);
+    transaction
+        .execute(
+            "INSERT INTO throws(
+               game_id, seq, player_id, event_json, score_after, round_number,
+               dart_in_turn, field, ring, multiplier, dart_score, outcome,
+               source, event_id, action_id, created_at
+             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+                      ?13, ?14, ?15, ?16)",
+            params![
+                game_id,
+                to_sql_i64(record.event.seq(), "dart sequence")?,
+                record.player_id,
+                event_json,
+                i64::from(record.score_after),
+                i64::from(record.round_number),
+                i64::from(record.dart_in_turn),
+                field
+                    .map(|value| to_sql_i64(value, "dart field"))
+                    .transpose()?,
+                ring,
+                multiplier
+                    .map(|value| to_sql_i64(value, "dart multiplier"))
+                    .transpose()?,
+                i64::from(record.event.score()),
+                record.outcome,
+                source,
+                event_id,
+                to_sql_i64(record.action_id, "dart action ID")?,
+                created_at
+            ],
+        )
+        .map_err(|error| error.to_string())?;
+    Ok(())
 }
 
 fn record_simple_game_event(
@@ -1295,7 +1565,7 @@ mod tests {
                 .expect("legacy schema");
         }
         let repository = SqliteRepository::open(&temporary).expect("migrate");
-        assert_eq!(repository.schema_version().expect("version"), 3);
+        assert_eq!(repository.schema_version().expect("version"), 4);
         assert!(repository.journal(10).expect("journal").is_empty());
         std::fs::remove_file(temporary).expect("remove test database");
     }
@@ -1328,11 +1598,52 @@ mod tests {
                 .expect("legacy Python schema slice");
         }
         let repository = SqliteRepository::open(&temporary).expect("migrate Python database");
-        assert_eq!(repository.schema_version().expect("version"), 3);
+        assert_eq!(repository.schema_version().expect("version"), 4);
         let profiles = repository.players().expect("profiles");
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0].id, "legacy-ada");
         assert!(repository.load_snapshot().expect("runtime table").is_none());
+        std::fs::remove_file(temporary).expect("remove test database");
+    }
+
+    #[test]
+    fn schema_three_adds_dart_action_ids_without_losing_throws() {
+        let temporary = std::env::temp_dir().join(format!(
+            "sdb-action-id-migration-{}-{}.sqlite",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_file(&temporary);
+        {
+            let connection = Connection::open(&temporary).expect("schema three database");
+            connection
+                .execute_batch(
+                    "
+                    CREATE TABLE throws (
+                        id INTEGER PRIMARY KEY,
+                        game_id TEXT NOT NULL,
+                        source TEXT NOT NULL,
+                        event_id INTEGER,
+                        created_at TEXT NOT NULL
+                    );
+                    INSERT INTO throws(id, game_id, source, event_id, created_at)
+                    VALUES(1, 'legacy-game', 'board', 7, '2026-01-01T00:00:00Z');
+                    PRAGMA user_version=3;
+                    ",
+                )
+                .expect("schema three slice");
+        }
+        let repository = SqliteRepository::open(&temporary).expect("migrate action IDs");
+        assert_eq!(repository.schema_version().expect("version"), 4);
+        let row: (String, Option<i64>) = repository
+            .connection
+            .query_row(
+                "SELECT game_id, action_id FROM throws WHERE id=1",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("preserved throw");
+        assert_eq!(row, ("legacy-game".into(), None));
         std::fs::remove_file(temporary).expect("remove test database");
     }
 
@@ -1542,6 +1853,138 @@ mod tests {
             })
             .expect("game status");
         assert_eq!(game_status, "running");
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // End-to-end audit-chain scenario.
+    fn correction_and_deletion_rewrite_throws_but_preserve_the_audit_chain() {
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        for (command_id, action) in [
+            (
+                "session",
+                RuntimeAction::StartSession {
+                    session_id: "edit-session".into(),
+                    players: vec![PlayerRef {
+                        id: "ada".into(),
+                        name: "Ada".into(),
+                        avatar: "comet".into(),
+                        color: "#28e7ff".into(),
+                    }],
+                },
+            ),
+            (
+                "prepare",
+                RuntimeAction::PrepareGame {
+                    game_type: "x01".into(),
+                    options: serde_json::json!({"start_score": 301, "out_rule": "straight"}),
+                },
+            ),
+            (
+                "start",
+                RuntimeAction::StartPreparedGame {
+                    game_id: "edit-game".into(),
+                },
+            ),
+            ("playing", RuntimeAction::MarkGamePlaying),
+            (
+                "dart-1",
+                RuntimeAction::Dart {
+                    event: DartEvent::Hit {
+                        seq: 1,
+                        field: 20,
+                        ring: Ring::SingleInner,
+                        multiplier: 1,
+                        label: "S20".into(),
+                        score: 20,
+                    },
+                    source: DartSource::Board,
+                },
+            ),
+            (
+                "dart-2",
+                RuntimeAction::Dart {
+                    event: DartEvent::Hit {
+                        seq: 2,
+                        field: 20,
+                        ring: Ring::SingleInner,
+                        multiplier: 1,
+                        label: "S20".into(),
+                        score: 20,
+                    },
+                    source: DartSource::Board,
+                },
+            ),
+            (
+                "correct-1",
+                RuntimeAction::CorrectDart {
+                    action_id: 1,
+                    replacement: DartEvent::Hit {
+                        seq: 999,
+                        field: 20,
+                        ring: Ring::Triple,
+                        multiplier: 3,
+                        label: "T20".into(),
+                        score: 60,
+                    },
+                    source: DartSource::ManualCorrection,
+                },
+            ),
+            ("delete-2", RuntimeAction::DeleteDart { action_id: 2 }),
+        ] {
+            runtime
+                .dispatch("runtime", command_id, None, action)
+                .unwrap_or_else(|error| panic!("{command_id}: {error}"));
+        }
+        let RuntimeGame::X01(game) = runtime.snapshot().game.as_ref().expect("game") else {
+            panic!("wrong game");
+        };
+        assert_eq!(game.state().players[0].score, 241);
+        assert_eq!(game.state().darts_in_turn, 1);
+        let repository = runtime.into_repository();
+        let throws: Vec<(i64, i64, String, i64, String)> = {
+            let mut statement = repository
+                .connection
+                .prepare(
+                    "SELECT action_id, seq, json_extract(event_json, '$.label'),
+                            score_after, source
+                     FROM throws WHERE game_id='edit-game' ORDER BY id",
+                )
+                .expect("throws query");
+            statement
+                .query_map([], |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                    ))
+                })
+                .expect("throws")
+                .collect::<Result<_, _>>()
+                .expect("throw rows")
+        };
+        assert_eq!(
+            throws,
+            vec![(1, 1, "T20".into(), 241, "manual_correction".into())]
+        );
+        let audit: (i64, i64, i64, i64) = repository
+            .connection
+            .query_row(
+                "SELECT
+                   COUNT(*),
+                   SUM(CASE WHEN event_type='throw' AND effective=0 THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN event_type='throw_corrected' AND effective=1
+                             AND corrects_event_id IS NOT NULL THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN event_type='throw_deleted' AND effective=1
+                             AND corrects_event_id IS NOT NULL THEN 1 ELSE 0 END)
+                 FROM game_events WHERE game_id='edit-game'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .expect("audit");
+        assert_eq!(audit, (4, 2, 1, 1));
     }
 
     #[test]

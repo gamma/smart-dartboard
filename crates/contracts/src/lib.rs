@@ -174,6 +174,15 @@ pub enum RuntimeCommand {
         #[serde(default)]
         source: DartSource,
     },
+    CorrectDart {
+        action_id: u64,
+        replacement: DartEvent,
+        #[serde(default = "default_correction_source")]
+        source: DartSource,
+    },
+    DeleteDart {
+        action_id: u64,
+    },
     StartGame {
         game_type: String,
         player_ids: Vec<String>,
@@ -187,6 +196,10 @@ pub enum RuntimeCommand {
     NextPlayer,
     Undo,
     AbortGame,
+}
+
+const fn default_correction_source() -> DartSource {
+    DartSource::ManualCorrection
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -227,6 +227,19 @@ pub struct X01State {
     pub out_rule: OutRule,
     pub turn_start_score: u32,
     pub last_bust: bool,
+    #[serde(default)]
+    pub editable_darts: Vec<X01DartRecord>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct X01DartRecord {
+    pub action_id: u64,
+    pub event: DartEvent,
+    pub player_id: String,
+    pub score_after: u32,
+    pub round_number: u16,
+    pub dart_in_turn: u8,
+    pub outcome: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -292,6 +305,7 @@ impl X01Game {
             out_rule,
             turn_start_score: start_score,
             last_bust: false,
+            editable_darts: Vec::new(),
         };
         Ok(Self {
             initial_state: state.clone(),
@@ -321,6 +335,7 @@ impl X01Game {
             id: action_id,
             event,
         });
+        self.refresh_editable_darts();
         Ok(action_id)
     }
 
@@ -336,6 +351,7 @@ impl X01Game {
         let action_id = self.take_action_id();
         self.advance_player();
         self.actions.push(X01Action::Continue { id: action_id });
+        self.refresh_editable_darts();
         Ok(action_id)
     }
 
@@ -409,6 +425,68 @@ impl X01Game {
             .collect()
     }
 
+    /// Replays the canonical action timeline into storage-ready dart records.
+    ///
+    /// Corrected darts keep their original action ID and sequence number.
+    /// Deleted darts are absent. Player, turn and score metadata reflect the
+    /// fully replayed current timeline rather than the original input order.
+    #[must_use]
+    pub fn dart_records(&self) -> Vec<X01DartRecord> {
+        let mut replay = Self {
+            initial_state: self.initial_state.clone(),
+            state: self.initial_state.clone(),
+            actions: Vec::new(),
+            next_action_id: self.next_action_id,
+        };
+        replay.state.editable_darts.clear();
+        let mut records = Vec::new();
+        for action in &self.actions {
+            match action {
+                X01Action::Dart { id, event } if replay.state.status == GameStatus::Running => {
+                    let Some(player) = replay.state.players.get(replay.state.current_player_index)
+                    else {
+                        continue;
+                    };
+                    let player_id = player.id.clone();
+                    replay.apply_throw_internal(event);
+                    let Some(player) = replay
+                        .state
+                        .players
+                        .iter()
+                        .find(|player| player.id == player_id)
+                    else {
+                        continue;
+                    };
+                    let outcome = if replay.state.last_bust {
+                        "bust"
+                    } else if matches!(event, DartEvent::Miss { .. }) {
+                        "miss"
+                    } else if replay.state.status == GameStatus::Finished {
+                        "checkout"
+                    } else {
+                        "success"
+                    };
+                    records.push(X01DartRecord {
+                        action_id: *id,
+                        event: event.clone(),
+                        player_id,
+                        score_after: player.score,
+                        round_number: replay.state.round_number,
+                        dart_in_turn: replay.state.darts_in_turn,
+                        outcome: outcome.into(),
+                    });
+                }
+                X01Action::Continue { .. }
+                    if matches!(replay.state.status, GameStatus::Running | GameStatus::Hold) =>
+                {
+                    replay.advance_player();
+                }
+                X01Action::Dart { .. } | X01Action::Continue { .. } => {}
+            }
+        }
+        records
+    }
+
     fn apply_throw_internal(&mut self, event: &DartEvent) {
         let score = u32::from(event.score());
         let player = &mut self.state.players[self.state.current_player_index];
@@ -473,6 +551,7 @@ impl X01Game {
                 }
             }
         }
+        self.refresh_editable_darts();
     }
 
     fn editable_dart_ids(&self) -> Vec<u64> {
@@ -484,6 +563,15 @@ impl X01Game {
             }
         }
         turns.into_iter().rev().take(2).flatten().collect()
+    }
+
+    fn refresh_editable_darts(&mut self) {
+        let editable_ids = self.editable_dart_ids();
+        self.state.editable_darts = self
+            .dart_records()
+            .into_iter()
+            .filter(|record| editable_ids.contains(&record.action_id))
+            .collect();
     }
 
     fn take_action_id(&mut self) -> u64 {
@@ -622,11 +710,24 @@ mod tests {
         assert_eq!(game.state.players[0].score, 221);
         assert_eq!(game.state.turn_score, 80);
         assert_eq!(game.dart_actions()[0].1.seq(), 1);
+        let records = game.dart_records();
+        assert_eq!(records.len(), 2);
+        assert_eq!(records[0].action_id, first);
+        assert_eq!(records[0].event.label(), "T20");
+        assert_eq!(records[0].score_after, 241);
+        assert_eq!(records[1].score_after, 221);
+        assert_eq!(game.state.editable_darts.len(), 2);
+        assert_eq!(game.state.editable_darts[0].action_id, first);
 
         game.delete_throw(second).expect("deletion");
         assert_eq!(game.state.players[0].score, 241);
         assert_eq!(game.state.turn_score, 60);
         assert_eq!(game.state.darts_in_turn, 1);
+        let records = game.dart_records();
+        assert_eq!(records.len(), 1);
+        assert_eq!(records[0].action_id, first);
+        assert_eq!(records[0].dart_in_turn, 1);
+        assert_eq!(game.state.editable_darts.len(), 1);
 
         game.undo().expect("undo remaining dart");
         assert_eq!(game.state.players[0].score, 301);

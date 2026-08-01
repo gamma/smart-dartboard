@@ -361,6 +361,28 @@ mod tests {
         router(AppState::new(runtime, "disabled"))
     }
 
+    async fn post_command(app: &Router, envelope: Value) -> Value {
+        let response = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/v2/runtime/commands")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(envelope.to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+        serde_json::from_slice(
+            &to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("JSON response")
+    }
+
     #[tokio::test]
     async fn health_and_bootstrap_report_the_runtime() {
         let health = test_app()
@@ -380,7 +402,7 @@ mod tests {
         .expect("json");
         assert_eq!(value["status"], "ok");
         assert_eq!(value["protocol_version"], PROTOCOL_VERSION);
-        assert_eq!(value["schema_version"], 3);
+        assert_eq!(value["schema_version"], 4);
 
         let bootstrap = test_app()
             .oneshot(
@@ -482,6 +504,76 @@ mod tests {
         assert_eq!(value["revision"], 1);
         assert_eq!(value["session"]["screen"], "game_select");
         assert_eq!(value["session"]["players"][0]["id"], "ada");
+    }
+
+    #[tokio::test]
+    async fn correction_commands_replay_x01_through_the_public_contract() {
+        let app = test_app();
+        let commands = [
+            serde_json::json!({
+                "type": "start_session",
+                "session_id": "session-edit",
+                "players": [{
+                    "id": "ada", "name": "Ada", "avatar": "🦊", "color": "#ff00aa"
+                }]
+            }),
+            serde_json::json!({
+                "type": "prepare_game", "game_type": "x01",
+                "options": {"start_score": 40, "out_rule": "double"}
+            }),
+            serde_json::json!({"type": "start_prepared_game", "game_id": "game-edit"}),
+            serde_json::json!({"type": "mark_game_playing"}),
+            serde_json::json!({
+                "type": "ingest_dart",
+                "event": {
+                    "type": "hit", "seq": 1, "field": 20, "ring": "double",
+                    "multiplier": 2, "label": "D20", "score": 40
+                }
+            }),
+            serde_json::json!({
+                "type": "correct_dart", "action_id": 1,
+                "replacement": {
+                    "type": "hit", "seq": 999, "field": 20, "ring": "single_inner",
+                    "multiplier": 1, "label": "S20", "score": 20
+                }
+            }),
+            serde_json::json!({"type": "delete_dart", "action_id": 1}),
+        ];
+        let mut result = Value::Null;
+        for (revision, command) in commands.into_iter().enumerate() {
+            result = post_command(
+                &app,
+                serde_json::json!({
+                    "protocol_version": 1,
+                    "command_id": format!("edit-{revision}"),
+                    "runtime_instance_id": "test-runtime",
+                    "expected_revision": revision,
+                    "command": command
+                }),
+            )
+            .await;
+            if revision == 4 {
+                assert_eq!(
+                    result["state"]["state"]["editable_darts"][0]["action_id"],
+                    1
+                );
+            }
+            if revision == 5 {
+                assert_eq!(
+                    result["state"]["state"]["editable_darts"][0]["event"]["label"],
+                    "S20"
+                );
+                assert_eq!(
+                    result["state"]["state"]["editable_darts"][0]["event"]["seq"],
+                    1
+                );
+            }
+        }
+        assert_eq!(result["revision"], 7);
+        assert_eq!(result["session"]["screen"], "playing");
+        assert_eq!(result["session"]["standings"][0]["session_points"], 0);
+        assert_eq!(result["state"]["state"]["players"][0]["score"], 40);
+        assert_eq!(result["state"]["state"]["darts_in_turn"], 0);
     }
 
     #[test]
