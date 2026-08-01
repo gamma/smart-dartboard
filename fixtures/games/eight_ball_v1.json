@@ -1,0 +1,27 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 1,
+  "players": [
+    {"id": "player-ada", "name": "Ada"},
+    {"id": "player-bob", "name": "Bob"}
+  ],
+  "options": {},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 1, "ring": "triple", "multiplier": 3, "label": "T1", "score": 3}},
+      "expected": {"scores": [0, 0], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "remaining_balls": [1, 2, 3, 4, 5, 6, 7]}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [0, 0], "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "remaining_balls": [9, 10, 11, 12, 13, 14, 15]}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 25, "ring": "double_bull", "multiplier": 2, "label": "DBULL", "score": 50}},
+      "expected": {"scores": [0, 0], "current_player_index": 1, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "finished", "winner_id": "player-ada", "result_type": "individual_win", "remaining_balls": [9, 10, 11, 12, 13, 14, 15]}
+    },
+    {
+      "command": {"type": "correct", "action_id": 3, "event": {"type": "hit", "seq": 999, "field": 9, "ring": "single_inner", "multiplier": 1, "label": "S9", "score": 9}},
+      "expected": {"scores": [0, 20], "current_player_index": 1, "darts_in_turn": 1, "turn_score": 20, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "remaining_balls": [10, 11, 12, 13, 14, 15]}
+    }
+  ]
+}

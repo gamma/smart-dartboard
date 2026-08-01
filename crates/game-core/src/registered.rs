@@ -4,6 +4,10 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
+mod eight_ball;
+
+use eight_ball::EIGHT_BALL_MODE;
+
 const CRICKET_TARGETS: [u8; 7] = [20, 19, 18, 17, 16, 15, 25];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -919,7 +923,7 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 1] = [&CRICKET_MODE];
+static MODES: [&'static dyn GameMode; 2] = [&CRICKET_MODE, &EIGHT_BALL_MODE];
 
 fn mode(slug: &str) -> Result<&'static dyn GameMode, GameError> {
     MODES

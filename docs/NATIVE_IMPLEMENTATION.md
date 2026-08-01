@@ -10,16 +10,16 @@ Cross-Platform-Rewrites. Zielarchitektur und Abnahmekriterien stehen in
 
 Umgesetzt und lokal verifiziert:
 
-- Rust-Workspace mit Contracts, FFF1-Protokoll, CountUp-, X01- und
-  Cricket-Kern, atomarer Runtime und SQLite-Repository,
+- Rust-Workspace mit Contracts, FFF1-Protokoll, CountUp-, X01-, Cricket- und
+  8-Ball-Kern, atomarer Runtime und SQLite-Repository,
 - gemeinsame Golden Fixtures für Python und Rust; bei X01 einschließlich Bust,
   Double-out, Spielerwechsel, Wurfkorrektur, Löschen und Undo,
 - statische, zur Buildzeit typsicher registrierte Spielmodi mit versionierten
   Metadaten, validierten Optionen, Anleitungen, Artwork-/Sound-Referenzen und
-  Projector-Overlay. `GET /api/v2/modes` liefert derzeit CountUp, X01 und
-  Cricket. Cricket läuft bereits über den generischen Registry-Pfad und ist
-  durch eine gemeinsame Python-/Rust-Golden-Fixture sowie SQLite-Recovery
-  belegt,
+  Projector-Overlay. `GET /api/v2/modes` liefert derzeit CountUp, X01, Cricket
+  und 8-Ball. Cricket und 8-Ball laufen über denselben generischen
+  Registry-Pfad und sind durch gemeinsame Python-/Rust-Golden-Fixtures belegt;
+  Cricket zusätzlich durch den vollständigen SQLite-Recovery-Pfad,
 - Web-UI hinter `HostedRuntimeClient` und `TauriRuntimeClient`,
 - macOS-Tauri-App mit Control- und Projector-Fenster,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,
@@ -51,8 +51,9 @@ Umgesetzt und lokal verifiziert:
   Korrektur. Der Apple-Testtreffer ist als `projector_test` markiert; solche
   Spiele bleiben dauerhaft aus der normalen Statistik ausgeschlossen.
 - Öffentliche Commands zum Korrigieren und Löschen über stabile Action-IDs für
-  CountUp, X01 und alle Registry-Modi, derzeit Cricket. Der gemeinsame State
-  liefert die editierbaren Darts der aktuellen und vorherigen Aufnahme. Replay,
+  CountUp, X01 und alle Registry-Modi, derzeit Cricket und 8-Ball. Der
+  gemeinsame State liefert die editierbaren Darts der aktuellen und vorherigen
+  Aufnahme. Replay,
   Sessionpunkte, Gewinner, kanonische `throws` und append-only
   Korrekturevents werden atomar synchronisiert. Bereits mit den ersten
   CountUp-/Registry-Snapshotformaten gespeicherte Spiele bleiben lesbar und

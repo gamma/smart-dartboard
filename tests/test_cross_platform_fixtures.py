@@ -20,6 +20,9 @@ X01_FIXTURE = Path(__file__).parents[1] / "fixtures" / "games" / "x01_v1.json"
 CRICKET_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "cricket_v1.json"
 )
+EIGHT_BALL_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "eight_ball_v1.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -164,6 +167,40 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                         "remaining_fields": [item["field"] for item in remaining],
                     }
                     self.assertEqual(actual, step["expected"])
+
+    def test_python_eight_ball_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(EIGHT_BALL_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_schema_version"], 1)
+        self.assertEqual(fixture["ruleset_version"], 1)
+        engine = GameEngine()
+        engine.reset("eight_ball", fixture["players"], options=fixture["options"])
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]),
+                    dict(command["event"]),
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            player_id = state.players[state.current_player_index].id
+            actual = {
+                "scores": [player.score for player in state.players],
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_id": state.winner_id,
+                "result_type": state.result_type,
+                "remaining_balls": state.mode_state["balls"][player_id],
+            }
+            self.assertEqual(actual, step["expected"])
 
     def test_python_session_flow_matches_shared_rust_fixture(self) -> None:
         fixture = json.loads(SESSION_FIXTURE.read_text(encoding="utf-8"))
