@@ -97,6 +97,13 @@ pub enum DartEvent {
 
 impl DartEvent {
     #[must_use]
+    pub const fn seq(&self) -> u64 {
+        match self {
+            Self::Hit { seq, .. } | Self::Miss { seq, .. } => *seq,
+        }
+    }
+
+    #[must_use]
     pub const fn score(&self) -> u16 {
         match self {
             Self::Hit { score, .. } | Self::Miss { score, .. } => *score,
@@ -107,6 +114,14 @@ impl DartEvent {
     pub fn label(&self) -> &str {
         match self {
             Self::Hit { label, .. } | Self::Miss { label, .. } => label,
+        }
+    }
+
+    #[must_use]
+    pub const fn multiplier(&self) -> u8 {
+        match self {
+            Self::Hit { multiplier, .. } => *multiplier,
+            Self::Miss { .. } => 0,
         }
     }
 }

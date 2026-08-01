@@ -10,9 +10,10 @@ Cross-Platform-Rewrites. Zielarchitektur und Abnahmekriterien stehen in
 
 Umgesetzt und lokal verifiziert:
 
-- Rust-Workspace mit Contracts, FFF1-Protokoll, CountUp-Kern, atomarer Runtime
-  und SQLite-Repository,
-- gemeinsame Golden Fixtures für Python und Rust,
+- Rust-Workspace mit Contracts, FFF1-Protokoll, CountUp- und X01-Kern,
+  atomarer Runtime und SQLite-Repository,
+- gemeinsame Golden Fixtures für Python und Rust; bei X01 einschließlich Bust,
+  Double-out, Spielerwechsel, Wurfkorrektur, Löschen und Undo,
 - Web-UI hinter `HostedRuntimeClient` und `TauriRuntimeClient`,
 - macOS-Tauri-App mit Control- und Projector-Fenster,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,
