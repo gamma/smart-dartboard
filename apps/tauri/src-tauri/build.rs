@@ -4,14 +4,19 @@ fn main() {
         let header = "gen/apple/Sources/sdb-native-m0/BoardTransportHost.h";
         let keychain_source = "gen/apple/Sources/sdb-native-m0/CompanionKeychainHost.mm";
         let keychain_header = "gen/apple/Sources/sdb-native-m0/CompanionKeychainHost.h";
+        let bonjour_source = "gen/apple/Sources/sdb-native-m0/CompanionBonjourHost.mm";
+        let bonjour_header = "gen/apple/Sources/sdb-native-m0/CompanionBonjourHost.h";
         println!("cargo:rerun-if-changed={source}");
         println!("cargo:rerun-if-changed={header}");
         println!("cargo:rerun-if-changed={keychain_source}");
         println!("cargo:rerun-if-changed={keychain_header}");
+        println!("cargo:rerun-if-changed={bonjour_source}");
+        println!("cargo:rerun-if-changed={bonjour_header}");
         cc::Build::new()
             .cpp(true)
             .file(source)
             .file(keychain_source)
+            .file(bonjour_source)
             .flag("-fobjc-arc")
             .compile("sdb_apple_board_transport");
         println!("cargo:rustc-link-lib=framework=CoreBluetooth");

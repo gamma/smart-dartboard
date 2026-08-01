@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 rcgen = { version = "0.14.8", features = ["zeroize"] }
+rustls = { version = "0.23.37", default-features = false, features = ["ring", "std", "tls12"] }
 sha2 = "0.10"
 thiserror.workspace = true
 zeroize = "1.8"

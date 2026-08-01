@@ -74,8 +74,10 @@ Umgesetzt und lokal verifiziert:
   Widerruf und strikt revisionsgenaue Snapshot-Replikation. Der Headless-Host
   bietet den authentisierten Pairing-, Bootstrap- und WebSocket-Transport an
   und schließt aktive Verbindungen beim Widerruf oder einer Revisionslücke.
-  Native Discovery, eingehender TLS-Transport und die UI der Projector-Rolle
-  sind noch offen; Details:
+  Der native Apple-Host stellt denselben Projector-Stream inzwischen über
+  HTTPS/WSS mit der lokalen TLS-Identität bereit und veröffentlicht den nur bei
+  gewähltem Companion-Ausgang aktiven Port per Bonjour. Discovery-Client und
+  die UI der Projector-Rolle sind noch offen; Details:
   [COMPANION_PROTOCOL.md](COMPANION_PROTOCOL.md).
 - persistente lokale Apple-TLS-Identität für Companion-Pairing. Zertifikat und
   privater P-256-Schlüssel liegen als gebundener Datensatz im Keychain; SQLite
@@ -85,7 +87,18 @@ Umgesetzt und lokal verifiziert:
   `malloc`-Übergabepuffer mit Schlüsselmaterial werden beim Freigeben
   überschrieben. Der Pairing-Bootstrap verwendet den
   echten SHA-256-Zertifikat-Fingerprint. Identität und Fingerprint blieben bei
-  wiederholtem Start sowohl in der macOS-App als auch im iPad-Simulator stabil.
+  wiederholtem Start in der macOS-App stabil. Der lokal getestete nicht
+  signierte iOS-Simulator-Build erhielt keinen nutzbaren Keychain-Zugriff; die
+  App startet in diesem Fall weiter, markiert Companion als nicht verfügbar und lässt die
+  bevorzugte AirPlay-/HDMI-Ausgabe benutzbar. Keychain-Persistenz auf einem
+  signierten realen iPhone/iPad ist noch abzunehmen.
+- nativer, nur bei ausgewähltem Companion-Ausgang laufender HTTPS/WSS-Listener
+  mit tatsächlichem TLS-Handshake-Test, Bootstrap-Snapshot, lückenlosem
+  WebSocket-Stream, Origin-Ablehnung, Bearer-Authentisierung und sofortigem
+  Schließen nach Widerruf. Der Apple-Host veröffentlicht Port, Host-ID,
+  Protokollversion und TLS-Merkmal als `_sdb-darts._tcp` über Bonjour. Ein
+  Fehler in Keychain oder TLS deaktiviert ausschließlich Companion und darf
+  Controller, BLE, Runtime oder direkte Displayausgabe nicht verhindern.
 - natives Board-Setup für den Controller: Pairing-Fenster öffnen, gruppierten
   Einmalcode mit Live-Countdown anzeigen, persistierte Projector-Geräte ohne
   Token-Hash auflisten und Grants widerrufen. Nur das Control-Fenster besitzt
@@ -104,8 +117,9 @@ Noch nicht als produktionsreif nachgewiesen:
   implementiert, aber noch nicht mit der realen Scheibe qualifiziert,
 - reale AirPlay-, HDMI- und Audio-Hardware,
 - External-Display-Scene-Accessory ab iOS/iPadOS 27,
-- iPhone/iPad-zu-iPad-Companion mit Discovery, eingehendem Pairing-Transport,
-  Client-Token im Keychain und Projector-Client,
+- iPhone/iPad-zu-iPad-Companion mit Bonjour-Browser, Client-Token im Keychain,
+  Rollenwahl, Pairing-UI und Projector-Client; Host-Advertiser und eingehender
+  TLS-Transport sind implementiert,
 - vollständige Portierung aller Spielmodi sowie Heatmap, Modusstatistiken,
   Export und Trainingsempfehlungen,
 - vollständige Docker-Parität zur Python-Anwendung,

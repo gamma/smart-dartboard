@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		12E6FD74EB7C335FA3E1A749 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4BBB39A5278574C663F72A0A /* Assets.xcassets */; };
+		1A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = 2A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm */; };
+		1B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = 2B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm */; };
 		179125BCC41C2DD5409596E2 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 664DBB93EFBC8B306B3A8922 /* Metal.framework */; };
 		35F61D673558B421FC3D670C /* ProjectorDisplayHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = EA9BFC414BC28065A79C93A0 /* ProjectorDisplayHost.mm */; };
 		3B437BB1B33E4B19FAF6AEE6 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CB82108290AA99350E05CAD /* QuartzCore.framework */; };
@@ -32,6 +34,10 @@
 		10E6EDDDE86EA282DA5C8C80 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
 		203FF380527E4CB403054650 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		244093BCAD3DB7B9D9EA8B4C /* BoardTransportHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BoardTransportHost.h; sourceTree = "<group>"; };
+		2A0A0C0D0E0F101112131415 /* CompanionKeychainHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CompanionKeychainHost.h; sourceTree = "<group>"; };
+		2A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CompanionKeychainHost.mm; sourceTree = "<group>"; };
+		2B0A0C0D0E0F101112131415 /* CompanionBonjourHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CompanionBonjourHost.h; sourceTree = "<group>"; };
+		2B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CompanionBonjourHost.mm; sourceTree = "<group>"; };
 		4BBB39A5278574C663F72A0A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5B056CC525D69904F551CC56 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		62A18C92C1E928ECA55C7FDC /* BoardTransportHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = BoardTransportHost.mm; sourceTree = "<group>"; };
@@ -175,6 +181,10 @@
 			children = (
 				244093BCAD3DB7B9D9EA8B4C /* BoardTransportHost.h */,
 				62A18C92C1E928ECA55C7FDC /* BoardTransportHost.mm */,
+				2B0A0C0D0E0F101112131415 /* CompanionBonjourHost.h */,
+				2B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm */,
+				2A0A0C0D0E0F101112131415 /* CompanionKeychainHost.h */,
+				2A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm */,
 				7D40A1650231C610CD8C3C99 /* main.mm */,
 				B9CC417A162E3407588330FE /* ProjectorDisplayHost.h */,
 				EA9BFC414BC28065A79C93A0 /* ProjectorDisplayHost.mm */,
@@ -287,6 +297,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				D5898D485B2BC4F88031444E /* BoardTransportHost.mm in Sources */,
+				1B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm in Sources */,
+				1A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm in Sources */,
 				35F61D673558B421FC3D670C /* ProjectorDisplayHost.mm in Sources */,
 				D571B95AA1786C4A54511A0E /* main.mm in Sources */,
 			);

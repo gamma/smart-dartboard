@@ -108,14 +108,22 @@ Implementiert und automatisiert getestet:
   Pairing-, Geräte- und Projector-Routen mit `forbidden`. Bei externer
   TLS-Terminierung muss der Upstream ausschließlich auf Loopback lauschen; der
   kanonische Leaf-Fingerprint wird im Pairing-Bootstrap mitgeliefert.
+- nativer Apple-HTTPS/WSS-Host auf einem dynamischen Port mit derselben
+  Pairing-, Bootstrap- und Stream-Semantik. Er läuft nur bei aktiv gewähltem
+  Companion-Ausgang und veröffentlicht sich als `_sdb-darts._tcp` mit Host-ID,
+  Protokollversion und TLS-Merkmal. TLS-Handschlag, Authentisierung, Origin-
+  Ablehnung und Widerruf sind automatisiert getestet. Ist der sichere Store
+  oder TLS auf einem Gerät nicht verfügbar, bleibt die App mit deaktiviertem
+  Companion-Modus spielfähig.
 
 Noch offen:
 
 - Tokenablage des Companion-Clients im Apple Keychain beziehungsweise Android
   Keystore; die persistente lokale Apple-TLS-Identität des Controller-Hosts
   liegt bereits im Keychain,
-- Bonjour-Advertiser und -Browser,
-- native TLS-Terminierung beziehungsweise abgesicherte HTTPS/WSS-Auslieferung;
-  der Rust-WebSocket ist implementiert, Klartext-LAN bleibt gesperrt,
+- Bonjour-Browser und Auswahl eines gefundenen Controller-Hosts; der
+  Host-Advertiser ist implementiert,
+- signierte iOS-/iPadOS-Hardwareabnahme der nativen TLS-Identität; der
+  lokal getestete unsigned Simulator stellte keinen nutzbaren Keychain bereit,
 - Rollenwahl und Pairing-UI auf Controller und Companion,
 - echte iPhone/iPad-zu-iPad-Abnahme mit Disconnect, Resume und Widerruf.

@@ -5,7 +5,12 @@
 //! blob so no host needs to understand or log private-key material.
 
 use rcgen::{CertifiedKey, generate_simple_self_signed};
+use rustls::{
+    ServerConfig,
+    pki_types::{CertificateDer, PrivateKeyDer, PrivatePkcs8KeyDer},
+};
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
 use thiserror::Error;
 use zeroize::Zeroizing;
 
@@ -71,6 +76,29 @@ impl TlsIdentity {
     #[must_use]
     pub fn certificate_sha256(&self) -> &str {
         &self.certificate_sha256
+    }
+
+    /// Builds a server-only `rustls` configuration and verifies that the
+    /// persisted certificate and private key form a usable pair.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`IdentityError::Malformed`] when either DER value is invalid or
+    /// the private key does not match the certificate.
+    pub fn rustls_server_config(&self) -> Result<Arc<ServerConfig>, IdentityError> {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let certificate = CertificateDer::from(self.certificate_der.clone());
+        let private_key = PrivateKeyDer::Pkcs8(PrivatePkcs8KeyDer::from(
+            self.private_key_pkcs8_der.to_vec(),
+        ));
+        let mut config = ServerConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(|_| IdentityError::Malformed)?
+            .with_no_client_auth()
+            .with_single_cert(vec![certificate], private_key)
+            .map_err(|_| IdentityError::Malformed)?;
+        config.alpn_protocols = vec![b"h2".to_vec(), b"http/1.1".to_vec()];
+        Ok(Arc::new(config))
     }
 }
 
@@ -301,6 +329,7 @@ mod tests {
         assert_eq!(first.certificate_sha256(), second.certificate_sha256());
         assert_eq!(first.certificate_sha256().len(), 64);
         assert!(!format!("{first:?}").contains("PRIVATE KEY"));
+        first.rustls_server_config().expect("valid TLS pair");
     }
 
     #[test]
@@ -330,5 +359,26 @@ mod tests {
             .expect("stored identity");
         assert_eq!(restored.host_id(), "surviving-host");
         assert_eq!(restored.certificate_sha256(), created.certificate_sha256());
+    }
+
+    #[test]
+    fn tls_configuration_rejects_a_mismatched_private_key() {
+        let first_store = MemoryStore::default();
+        let second_store = MemoryStore::default();
+        let first = load_or_create_identity(&first_store, "first-host").expect("first identity");
+        let second =
+            load_or_create_identity(&second_store, "second-host").expect("second identity");
+        let mismatched = TlsIdentity {
+            host_id: first.host_id,
+            certificate_der: first.certificate_der,
+            private_key_pkcs8_der: second.private_key_pkcs8_der,
+            certificate_sha256: first.certificate_sha256,
+        };
+        assert_eq!(
+            mismatched
+                .rustls_server_config()
+                .expect_err("mismatched key"),
+            IdentityError::Malformed
+        );
     }
 }

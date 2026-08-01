@@ -15,6 +15,8 @@ cc = "1.2"
 tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
+axum = { version = "0.8", features = ["ws"] }
+axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sdb-board = { path = "../../../crates/board" }
@@ -24,10 +26,17 @@ sdb-contracts = { path = "../../../crates/contracts" }
 sdb-runtime = { path = "../../../crates/runtime" }
 sdb-storage = { path = "../../../crates/storage" }
 tauri = { version = "2.11.5", features = [] }
+tokio = { version = "1.47", features = ["sync"] }
+tower-http = { version = "0.6", features = ["set-header"] }
 uuid = { version = "1.24", features = ["v4"] }
 
 [target.'cfg(target_os = "ios")'.dependencies]
 libc = "0.2"
+
+[dev-dependencies]
+tokio = { version = "1.47", features = ["io-util", "macros", "net", "rt-multi-thread", "sync", "time"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+tower = { version = "0.5", features = ["util"] }
 
 [workspace]
 

@@ -9,7 +9,7 @@ function render(payload){
   document.querySelector('#status').textContent=`Runtime ${payload.runtime_instance_id} · Revision ${payload.revision}`;
   renderBoardStatus(payload.board);
   renderDisplayStatus(payload.external_display_count ?? 0);
-  renderProjectorOutput(payload.projector_output ?? 'external_display',payload.external_display_count ?? 0,payload.counter ?? 0);
+  renderProjectorOutput(payload.projector_output ?? 'external_display',payload.external_display_count ?? 0,payload.counter ?? 0,payload.companion_port ?? null,payload.companion_available ?? false);
 }
 
 function renderBoardStatus(board={}){
@@ -34,20 +34,23 @@ function renderDisplayStatus(displayCount){
     : 'Projector: nicht verbunden';
 }
 
-function renderProjectorOutput(output,displayCount,counter){
+function renderProjectorOutput(output,displayCount,counter,companionPort,companionAvailable){
   document.body.dataset.output=output;
   for(const button of document.querySelectorAll('[data-output]')){
     button.setAttribute('aria-pressed',String(button.dataset.output===output));
+    if(button.dataset.output==='companion') button.disabled=!companionAvailable;
   }
   const hints={
     external_display:displayCount>0?'Externes Display aktiv':'Wartet auf AirPlay- oder HDMI-Display',
-    companion:'Wartet auf einen gekoppelten Companion-Projector',
+    companion:!companionAvailable?'Companion ist auf diesem Gerät derzeit nicht verfügbar':companionPort?`Sicherer Companion-Dienst bereit · Port ${companionPort}`:'Sicherer Companion-Dienst startet …',
     local_preview:'Lokale Vorschau aktiv'
   };
   document.querySelector('#outputHint').textContent=hints[output] ?? '';
   const preview=document.querySelector('#localPreview');
   preview.hidden=output!=='local_preview';
   document.querySelector('#previewCounter').textContent=String(counter);
+  const pairingButton=document.querySelector('#openPairing');
+  if(pairingButton) pairingButton.disabled=output!=='companion'||!companionPort;
 }
 
 let pairingTimer;
