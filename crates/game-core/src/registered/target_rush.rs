@@ -231,6 +231,10 @@ impl GameMode for TargetRushMode {
             generate_round_targets(state)
         }
     }
+
+    fn fixed_round_winner_message(&self) -> Option<&'static str> {
+        Some("{winner} gewinnt den Target Rush!")
+    }
 }
 
 const fn choice_integer(value: i64, label: &'static str) -> GameOptionChoice {
@@ -373,5 +377,30 @@ mod tests {
         assert_eq!(game.state().result_type, "draw");
         assert_eq!(game.state().winner_id, None);
         assert!(game.state().winner_ids.is_empty());
+    }
+
+    #[test]
+    fn next_player_finishes_the_last_partial_round() {
+        let mut game = RegisteredGame::new_seeded(
+            "target_rush",
+            vec![("ada".into(), "Ada".into())],
+            &json!({"rounds": 3, "difficulty": "normal"}),
+            42,
+        )
+        .expect("game");
+
+        game.next_player().expect("skip round one");
+        game.next_player().expect("skip round two");
+        game.apply_throw(&DartEvent::Miss {
+            seq: 1,
+            label: "MISS".into(),
+            score: 0,
+        })
+        .expect("partial final visit");
+        game.next_player().expect("finish final partial visit");
+
+        assert_eq!(game.state().round_number, 3);
+        assert_eq!(game.state().status, GameStatus::Finished);
+        assert_eq!(game.state().winner_id.as_deref(), Some("ada"));
     }
 }

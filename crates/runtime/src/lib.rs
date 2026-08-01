@@ -75,6 +75,7 @@ pub enum RuntimeAction {
         payload: serde_json::Value,
     },
     Continue,
+    NextPlayer,
     Undo,
 }
 
@@ -108,6 +109,14 @@ impl RuntimeGame {
             Self::CountUp(game) => game.continue_turn().map(|_| ()),
             Self::X01(game) => game.continue_turn().map(|_| ()),
             Self::Registered(game) => game.continue_turn().map(|_| ()),
+        }
+    }
+
+    fn next_player(&mut self) -> Result<(), GameError> {
+        match self {
+            Self::CountUp(game) => game.next_player().map(|_| ()),
+            Self::X01(game) => game.next_player().map(|_| ()),
+            Self::Registered(game) => game.next_player().map(|_| ()),
         }
     }
 
@@ -511,7 +520,8 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
                 _ => Err(invalid_command("unsupported game type")),
             }
         }
-        RuntimeCommand::ContinueTurn | RuntimeCommand::NextPlayer => Ok(RuntimeAction::Continue),
+        RuntimeCommand::ContinueTurn => Ok(RuntimeAction::Continue),
+        RuntimeCommand::NextPlayer => Ok(RuntimeAction::NextPlayer),
         RuntimeCommand::Undo => Ok(RuntimeAction::Undo),
         RuntimeCommand::AbortGame => Ok(RuntimeAction::AbortGame),
         RuntimeCommand::GameAction { action, payload } => {
@@ -632,12 +642,10 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
             sync_finished_game(snapshot)?;
         }
         RuntimeAction::Continue => {
-            snapshot
-                .game
-                .as_mut()
-                .ok_or(RuntimeError::NoGame)?
-                .continue_turn()?;
-            sync_finished_game(snapshot)?;
+            apply_player_boundary(snapshot, false)?;
+        }
+        RuntimeAction::NextPlayer => {
+            apply_player_boundary(snapshot, true)?;
         }
         RuntimeAction::Undo => {
             let game = snapshot.game.as_mut().ok_or(RuntimeError::NoGame)?;
@@ -652,6 +660,19 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
         }
     }
     Ok(())
+}
+
+fn apply_player_boundary(
+    snapshot: &mut RuntimeSnapshot,
+    next_player: bool,
+) -> Result<(), RuntimeError> {
+    let game = snapshot.game.as_mut().ok_or(RuntimeError::NoGame)?;
+    if next_player {
+        game.next_player()?;
+    } else {
+        game.continue_turn()?;
+    }
+    sync_finished_game(snapshot)
 }
 
 fn start_direct_game(
@@ -1115,6 +1136,88 @@ mod tests {
     }
 
     #[test]
+    fn next_player_command_ends_a_running_partial_visit_and_is_undoable() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "start-countup".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(0),
+                command: RuntimeCommand::StartGame {
+                    game_type: "countup".into(),
+                    player_ids: vec!["ada".into(), "bob".into()],
+                    options: serde_json::json!({"rounds": 5}),
+                },
+            })
+            .expect("start CountUp");
+        runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "partial-dart".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(1),
+                command: RuntimeCommand::IngestDart {
+                    event: DartEvent::Hit {
+                        seq: 1,
+                        field: 20,
+                        ring: Ring::Triple,
+                        multiplier: 3,
+                        label: "T20".into(),
+                        score: 60,
+                    },
+                    source: DartSource::Board,
+                },
+            })
+            .expect("partial visit");
+
+        let continue_error = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "continue-running-visit".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(2),
+                command: RuntimeCommand::ContinueTurn,
+            })
+            .expect_err("continue must not skip a running visit");
+        assert_eq!(continue_error.code, ErrorCode::InvalidCommand);
+        assert_eq!(runtime.snapshot().revision, 2);
+
+        let skipped = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "next-player".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(2),
+                command: RuntimeCommand::NextPlayer,
+            })
+            .expect("next player");
+        let Some(RuntimeGameState::CountUp(state)) = skipped.state else {
+            panic!("wrong game type");
+        };
+        assert_eq!(state.current_player_index, 1);
+        assert_eq!(state.players[0].score, 60);
+        assert_eq!(state.darts_in_turn, 0);
+
+        let restored = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "undo-next-player".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(3),
+                command: RuntimeCommand::Undo,
+            })
+            .expect("undo next player");
+        let Some(RuntimeGameState::CountUp(state)) = restored.state else {
+            panic!("wrong game type");
+        };
+        assert_eq!(state.current_player_index, 0);
+        assert_eq!(state.darts_in_turn, 1);
+        assert_eq!(state.players[0].score, 60);
+    }
+
+    #[test]
     fn command_envelope_starts_a_registered_cricket_game() {
         let repository = MemoryRepository::default();
         let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
@@ -1216,6 +1319,93 @@ mod tests {
             })
             .expect_err("revision must be rejected");
         assert_eq!(stale.code, ErrorCode::StaleRevision);
+    }
+
+    #[test]
+    fn next_player_finishes_the_last_partial_visit_and_undoes_session_points() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        runtime
+            .dispatch(
+                "runtime",
+                "session",
+                None,
+                RuntimeAction::StartSession {
+                    session_id: "session-1".into(),
+                    players: session_players().into_iter().take(1).collect(),
+                },
+            )
+            .expect("session");
+        runtime
+            .dispatch(
+                "runtime",
+                "prepare",
+                None,
+                RuntimeAction::PrepareGame {
+                    game_type: "countup".into(),
+                    options: serde_json::json!({"rounds": 1}),
+                },
+            )
+            .expect("prepare");
+        runtime
+            .dispatch(
+                "runtime",
+                "start",
+                None,
+                RuntimeAction::StartPreparedGame {
+                    game_id: "game-1".into(),
+                },
+            )
+            .expect("start");
+        runtime
+            .dispatch("runtime", "playing", None, RuntimeAction::MarkGamePlaying)
+            .expect("playing");
+        runtime
+            .dispatch(
+                "runtime",
+                "partial-dart",
+                None,
+                RuntimeAction::Dart {
+                    event: DartEvent::Hit {
+                        seq: 1,
+                        field: 20,
+                        ring: Ring::Triple,
+                        multiplier: 3,
+                        label: "T20".into(),
+                        score: 60,
+                    },
+                    source: DartSource::Board,
+                },
+            )
+            .expect("partial visit");
+        runtime
+            .dispatch("runtime", "next-player", None, RuntimeAction::NextPlayer)
+            .expect("finish skipped visit");
+
+        assert_eq!(runtime.snapshot.session.state().screen, Screen::GameResult);
+        assert_eq!(
+            runtime.snapshot.session.state().standings[0].session_points,
+            3
+        );
+        let Some(RuntimeGame::CountUp(game)) = runtime.snapshot.game.as_ref() else {
+            panic!("wrong game type");
+        };
+        assert_eq!(game.state().status, GameStatus::Finished);
+
+        runtime
+            .dispatch("runtime", "undo-next-player", None, RuntimeAction::Undo)
+            .expect("undo next player");
+        assert_eq!(runtime.snapshot.session.state().screen, Screen::Playing);
+        assert_eq!(
+            runtime.snapshot.session.state().standings[0].session_points,
+            0
+        );
+        let Some(RuntimeGame::CountUp(game)) = runtime.snapshot.game.as_ref() else {
+            panic!("wrong game type");
+        };
+        assert_eq!(game.state().status, GameStatus::Running);
+        assert_eq!(game.state().darts_in_turn, 1);
+        assert_eq!(game.state().players[0].score, 60);
     }
 
     #[test]

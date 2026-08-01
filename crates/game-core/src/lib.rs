@@ -79,12 +79,13 @@ pub struct CountUpDartRecord {
 enum CountUpAction {
     Dart { id: u64, event: DartEvent },
     Continue { id: u64 },
+    NextPlayer { id: u64 },
 }
 
 impl CountUpAction {
     const fn id(&self) -> u64 {
         match self {
-            Self::Dart { id, .. } | Self::Continue { id } => *id,
+            Self::Dart { id, .. } | Self::Continue { id } | Self::NextPlayer { id } => *id,
         }
     }
 }
@@ -214,6 +215,30 @@ impl CountUpGame {
         Ok(&self.state)
     }
 
+    /// Ends the current visit early or advances an already held visit.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GameError::NotRunning`] after the game has finished.
+    pub fn next_player(&mut self) -> Result<&CountUpState, GameError> {
+        if self.state.status == GameStatus::Finished {
+            return Err(GameError::NotRunning);
+        }
+        self.ensure_timeline();
+        let final_visit = self.state.current_player_index + 1 == self.state.players.len()
+            && self.state.round_number >= self.state.rounds;
+        if final_visit {
+            Self::finish(&mut self.state);
+        } else {
+            Self::advance_player(&mut self.state);
+        }
+        let action_id = self.take_action_id();
+        self.actions
+            .push(CountUpAction::NextPlayer { id: action_id });
+        self.refresh_editable_darts();
+        Ok(&self.state)
+    }
+
     /// Reverts the last accepted throw or continue transition.
     ///
     /// # Errors
@@ -308,12 +333,23 @@ impl CountUpGame {
                         outcome: outcome.into(),
                     });
                 }
-                CountUpAction::Continue { .. }
+                CountUpAction::Continue { .. } | CountUpAction::NextPlayer { .. }
                     if matches!(state.status, GameStatus::Running | GameStatus::Hold) =>
                 {
-                    Self::advance_player(&mut state);
+                    let was_running = state.status == GameStatus::Running;
+                    let final_visit = state.current_player_index + 1 == state.players.len()
+                        && state.round_number >= state.rounds;
+                    if final_visit
+                        && (was_running || matches!(action, CountUpAction::NextPlayer { .. }))
+                    {
+                        Self::finish(&mut state);
+                    } else {
+                        Self::advance_player(&mut state);
+                    }
                 }
-                CountUpAction::Dart { .. } | CountUpAction::Continue { .. } => {}
+                CountUpAction::Dart { .. }
+                | CountUpAction::Continue { .. }
+                | CountUpAction::NextPlayer { .. } => {}
             }
         }
         records
@@ -360,12 +396,23 @@ impl CountUpGame {
                 CountUpAction::Dart { event, .. } if state.status == GameStatus::Running => {
                     Self::apply_throw_internal(&mut state, &event);
                 }
-                CountUpAction::Continue { .. }
+                CountUpAction::Continue { .. } | CountUpAction::NextPlayer { .. }
                     if matches!(state.status, GameStatus::Running | GameStatus::Hold) =>
                 {
-                    Self::advance_player(&mut state);
+                    let was_running = state.status == GameStatus::Running;
+                    let final_visit = state.current_player_index + 1 == state.players.len()
+                        && state.round_number >= state.rounds;
+                    if final_visit
+                        && (was_running || matches!(action, CountUpAction::NextPlayer { .. }))
+                    {
+                        Self::finish(&mut state);
+                    } else {
+                        Self::advance_player(&mut state);
+                    }
                 }
-                CountUpAction::Dart { .. } | CountUpAction::Continue { .. } => {}
+                CountUpAction::Dart { .. }
+                | CountUpAction::Continue { .. }
+                | CountUpAction::NextPlayer { .. } => {}
             }
         }
         self.state = state;
@@ -377,7 +424,9 @@ impl CountUpGame {
         for action in &self.actions {
             match action {
                 CountUpAction::Dart { id, .. } => turns.last_mut().expect("turn").push(*id),
-                CountUpAction::Continue { .. } => turns.push(Vec::new()),
+                CountUpAction::Continue { .. } | CountUpAction::NextPlayer { .. } => {
+                    turns.push(Vec::new());
+                }
             }
         }
         turns.into_iter().rev().take(2).flatten().collect()
@@ -478,12 +527,13 @@ pub struct X01DartRecord {
 enum X01Action {
     Dart { id: u64, event: DartEvent },
     Continue { id: u64 },
+    NextPlayer { id: u64 },
 }
 
 impl X01Action {
     const fn id(&self) -> u64 {
         match self {
-            Self::Dart { id, .. } | Self::Continue { id } => *id,
+            Self::Dart { id, .. } | Self::Continue { id } | Self::NextPlayer { id } => *id,
         }
     }
 }
@@ -586,6 +636,22 @@ impl X01Game {
         Ok(action_id)
     }
 
+    /// Ends the current visit early or advances an already held visit.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GameError::NotRunning`] after the game has finished.
+    pub fn next_player(&mut self) -> Result<u64, GameError> {
+        if self.state.status == GameStatus::Finished {
+            return Err(GameError::NotRunning);
+        }
+        let action_id = self.take_action_id();
+        self.advance_player();
+        self.actions.push(X01Action::NextPlayer { id: action_id });
+        self.refresh_editable_darts();
+        Ok(action_id)
+    }
+
     /// Reverts the most recent dart or continue action by deterministic replay.
     ///
     /// # Errors
@@ -651,7 +717,7 @@ impl X01Game {
             .iter()
             .filter_map(|action| match action {
                 X01Action::Dart { id, event } => Some((*id, event)),
-                X01Action::Continue { .. } => None,
+                X01Action::Continue { .. } | X01Action::NextPlayer { .. } => None,
             })
             .collect()
     }
@@ -707,12 +773,14 @@ impl X01Game {
                         outcome: outcome.into(),
                     });
                 }
-                X01Action::Continue { .. }
+                X01Action::Continue { .. } | X01Action::NextPlayer { .. }
                     if matches!(replay.state.status, GameStatus::Running | GameStatus::Hold) =>
                 {
                     replay.advance_player();
                 }
-                X01Action::Dart { .. } | X01Action::Continue { .. } => {}
+                X01Action::Dart { .. }
+                | X01Action::Continue { .. }
+                | X01Action::NextPlayer { .. } => {}
             }
         }
         records
@@ -775,7 +843,7 @@ impl X01Game {
                         self.apply_throw_internal(&event);
                     }
                 }
-                X01Action::Continue { .. } => {
+                X01Action::Continue { .. } | X01Action::NextPlayer { .. } => {
                     if matches!(self.state.status, GameStatus::Running | GameStatus::Hold) {
                         self.advance_player();
                     }
@@ -790,7 +858,9 @@ impl X01Game {
         for action in &self.actions {
             match action {
                 X01Action::Dart { id, .. } => turns.last_mut().expect("turn").push(*id),
-                X01Action::Continue { .. } => turns.push(Vec::new()),
+                X01Action::Continue { .. } | X01Action::NextPlayer { .. } => {
+                    turns.push(Vec::new());
+                }
             }
         }
         turns.into_iter().rev().take(2).flatten().collect()
@@ -888,6 +958,40 @@ mod tests {
     }
 
     #[test]
+    fn count_up_next_player_ends_a_partial_visit_and_replays_corrections() {
+        let mut game = CountUpGame::new(
+            vec![("ada".into(), "Ada".into()), ("bob".into(), "Bob".into())],
+            5,
+        )
+        .expect("game");
+        game.apply_throw(&t20(1)).expect("Ada dart");
+
+        game.next_player().expect("skip remaining darts");
+
+        assert_eq!(game.state.current_player_index, 1);
+        assert_eq!(game.state.players[0].score, 60);
+        assert_eq!(game.state.darts_in_turn, 0);
+        game.correct_throw(1, single(999, 20))
+            .expect("correct previous partial visit");
+        assert_eq!(game.state.players[0].score, 20);
+        assert_eq!(game.state.current_player_index, 1);
+        game.undo().expect("undo player boundary");
+        assert_eq!(game.state.current_player_index, 0);
+        assert_eq!(game.state.darts_in_turn, 1);
+    }
+
+    #[test]
+    fn count_up_next_player_finishes_the_last_partial_visit() {
+        let mut game = CountUpGame::new(vec![("ada".into(), "Ada".into())], 1).expect("game");
+        game.apply_throw(&single(1, 20)).expect("dart");
+
+        game.next_player().expect("finish final visit");
+
+        assert_eq!(game.state.status, GameStatus::Finished);
+        assert_eq!(game.state.winner_id.as_deref(), Some("ada"));
+    }
+
+    #[test]
     fn undo_reverts_continue_and_throw() {
         let mut game = CountUpGame::new(vec![("ada".into(), "Ada".into())], 5).expect("game");
         for seq in 1..=3 {
@@ -956,6 +1060,27 @@ mod tests {
         assert_eq!(valid.state.players[0].score, 0);
         assert_eq!(valid.state.status, GameStatus::Finished);
         assert_eq!(valid.state.winner_id.as_deref(), Some("ada"));
+    }
+
+    #[test]
+    fn x01_next_player_preserves_a_partial_visit_and_is_undoable() {
+        let mut game = X01Game::new(
+            vec![("ada".into(), "Ada".into()), ("bob".into(), "Bob".into())],
+            301,
+            OutRule::Straight,
+        )
+        .expect("game");
+        game.apply_throw(t20(1)).expect("Ada dart");
+
+        game.next_player().expect("skip remaining darts");
+
+        assert_eq!(game.state.current_player_index, 1);
+        assert_eq!(game.state.players[0].score, 241);
+        assert_eq!(game.state.turn_start_score, 301);
+        game.undo().expect("undo player boundary");
+        assert_eq!(game.state.current_player_index, 0);
+        assert_eq!(game.state.players[0].score, 241);
+        assert_eq!(game.state.darts_in_turn, 1);
     }
 
     #[test]

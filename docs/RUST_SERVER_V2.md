@@ -145,8 +145,11 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 - die Wurfquelle transportneutral als `board`, `projector_test` oder
   `manual_correction` führen; ein Projektor-Testwurf markiert das gesamte Spiel
   als Test und schließt es aus der Standardstatistik aus,
-- Turn fortsetzen und Undo; ein Undo des Siegtreffers öffnet zugleich das Spiel
-  wieder und nimmt die Sessionwertung atomar zurück,
+- abgeschlossene Aufnahme mit `ContinueTurn` bestätigen, einen laufenden
+  Teilzug mit `NextPlayer` bewusst beenden und beide Grenzen getrennt
+  wiedergeben; ein Skip bewahrt bereits geworfene Darts und führt
+  modusspezifische Abschlussregeln aus. Ein Undo des Siegtreffers öffnet zugleich
+  das Spiel wieder und nimmt die Sessionwertung atomar zurück,
 - CountUp-, X01- und Registry-Würfe über stabile Action-IDs korrigieren oder
   löschen. Der Core bewahrt die ursprüngliche Sequenznummer, spielt alle
   späteren Aktionen neu ab und veröffentlicht die letzten zwei editierbaren

@@ -1341,6 +1341,17 @@ fn project_domain(
                 )?;
             }
         }
+        RuntimeAction::NextPlayer => {
+            if previous.session.state().game_id.is_some() {
+                record_simple_game_event(
+                    transaction,
+                    &previous,
+                    "next_player",
+                    "operator",
+                    request.snapshot_json,
+                )?;
+            }
+        }
         RuntimeAction::Undo => {
             record_undo(transaction, &previous, request.snapshot_json)?;
         }
@@ -2199,6 +2210,93 @@ mod tests {
             serde_json::from_str(&journal[0].action_json).expect("action JSON");
         assert_eq!(action["type"], "start_count_up");
         std::fs::remove_file(temporary).expect("remove test database");
+    }
+
+    #[test]
+    fn next_player_is_a_distinct_audit_event_and_recovers_the_partial_visit() {
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        let players = vec![
+            PlayerRef {
+                id: "ada".into(),
+                name: "Ada".into(),
+                avatar: "comet".into(),
+                color: "#28e7ff".into(),
+            },
+            PlayerRef {
+                id: "bob".into(),
+                name: "Bob".into(),
+                avatar: "nova".into(),
+                color: "#ffd166".into(),
+            },
+        ];
+        for (command_id, action) in [
+            (
+                "session",
+                RuntimeAction::StartSession {
+                    session_id: "session-next-player".into(),
+                    players,
+                },
+            ),
+            (
+                "prepare",
+                RuntimeAction::PrepareGame {
+                    game_type: "countup".into(),
+                    options: serde_json::json!({"rounds": 5}),
+                },
+            ),
+            (
+                "start",
+                RuntimeAction::StartPreparedGame {
+                    game_id: "game-next-player".into(),
+                },
+            ),
+            ("playing", RuntimeAction::MarkGamePlaying),
+        ] {
+            runtime
+                .dispatch("runtime", command_id, None, action)
+                .unwrap_or_else(|error| panic!("{command_id}: {error}"));
+        }
+        runtime
+            .dispatch(
+                "runtime",
+                "dart",
+                None,
+                RuntimeAction::Dart {
+                    event: DartEvent::Hit {
+                        seq: 1,
+                        field: 20,
+                        ring: Ring::Triple,
+                        multiplier: 3,
+                        label: "T20".into(),
+                        score: 60,
+                    },
+                    source: sdb_contracts::DartSource::Board,
+                },
+            )
+            .expect("partial visit");
+        runtime
+            .dispatch("runtime", "next", None, RuntimeAction::NextPlayer)
+            .expect("next player");
+
+        let repository = runtime.into_repository();
+        let event_count: i64 = repository
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM game_events
+                 WHERE game_id='game-next-player' AND event_type='next_player'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("next-player event");
+        assert_eq!(event_count, 1);
+        let restored = Runtime::restore("restored", repository).expect("restore");
+        let Some(sdb_runtime::RuntimeGame::CountUp(game)) = &restored.snapshot().game else {
+            panic!("wrong restored game");
+        };
+        assert_eq!(game.state().current_player_index, 1);
+        assert_eq!(game.state().players[0].score, 60);
+        assert_eq!(game.state().darts_in_turn, 0);
     }
 
     #[test]

@@ -226,6 +226,10 @@ impl GameMode for GhostChaseMode {
         set_counter(state, "escape", &player_id, 0)?;
         set_counter(state, "path_index", &player_id, 0)
     }
+
+    fn fixed_round_winner_message(&self) -> Option<&'static str> {
+        Some("{winner} ist der beste Geisterjäger!")
+    }
 }
 
 const fn choice_integer(value: i64, label: &'static str) -> GameOptionChoice {

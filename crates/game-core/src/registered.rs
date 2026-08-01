@@ -175,6 +175,9 @@ enum RegisteredAction {
     Continue {
         id: u64,
     },
+    NextPlayer {
+        id: u64,
+    },
     Mode {
         id: u64,
         action: String,
@@ -185,7 +188,10 @@ enum RegisteredAction {
 impl RegisteredAction {
     const fn id(&self) -> u64 {
         match self {
-            Self::Dart { id, .. } | Self::Continue { id } | Self::Mode { id, .. } => *id,
+            Self::Dart { id, .. }
+            | Self::Continue { id }
+            | Self::NextPlayer { id }
+            | Self::Mode { id, .. } => *id,
         }
     }
 }
@@ -327,6 +333,26 @@ impl RegisteredGame {
         let action_id = self.take_action_id();
         self.actions
             .push(RegisteredAction::Continue { id: action_id });
+        self.refresh_editable_darts()?;
+        Ok(&self.state)
+    }
+
+    /// Ends the current visit early or advances an already held visit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error after the game has finished or when the ruleset cannot
+    /// complete its skipped-turn transition.
+    pub fn next_player(&mut self) -> Result<&RegisteredGameState, GameError> {
+        if self.state.status == GameStatus::Finished {
+            return Err(GameError::NotRunning);
+        }
+        let mode = self.resolve_mode()?;
+        self.ensure_timeline();
+        apply_player_boundary(mode, &mut self.state, true)?;
+        let action_id = self.take_action_id();
+        self.actions
+            .push(RegisteredAction::NextPlayer { id: action_id });
         self.refresh_editable_darts()?;
         Ok(&self.state)
     }
@@ -475,10 +501,11 @@ impl RegisteredGame {
                         outcome: outcome.into(),
                     });
                 }
-                RegisteredAction::Continue { .. }
+                RegisteredAction::Continue { .. } | RegisteredAction::NextPlayer { .. }
                     if matches!(state.status, GameStatus::Running | GameStatus::Hold) =>
                 {
-                    if advance_player(mode, &mut state).is_err() {
+                    let force_skip = matches!(action, RegisteredAction::NextPlayer { .. });
+                    if apply_player_boundary(mode, &mut state, force_skip).is_err() {
                         break;
                     }
                 }
@@ -489,7 +516,9 @@ impl RegisteredGame {
                         state.overlay = mode.overlay(&state);
                     }
                 }
-                RegisteredAction::Dart { .. } | RegisteredAction::Continue { .. } => {}
+                RegisteredAction::Dart { .. }
+                | RegisteredAction::Continue { .. }
+                | RegisteredAction::NextPlayer { .. } => {}
             }
         }
         records
@@ -507,10 +536,11 @@ impl RegisteredGame {
                 RegisteredAction::Dart { event, .. } if state.status == GameStatus::Running => {
                     apply_throw_to_state(mode, &mut state, &event)?;
                 }
-                RegisteredAction::Continue { .. }
+                RegisteredAction::Continue { .. } | RegisteredAction::NextPlayer { .. }
                     if matches!(state.status, GameStatus::Running | GameStatus::Hold) =>
                 {
-                    advance_player(mode, &mut state)?;
+                    let force_skip = matches!(action, RegisteredAction::NextPlayer { .. });
+                    apply_player_boundary(mode, &mut state, force_skip)?;
                 }
                 RegisteredAction::Mode {
                     action, payload, ..
@@ -518,7 +548,9 @@ impl RegisteredGame {
                     mode.handle_action(&mut state, &action, &payload)?;
                     state.overlay = mode.overlay(&state);
                 }
-                RegisteredAction::Dart { .. } | RegisteredAction::Continue { .. } => {}
+                RegisteredAction::Dart { .. }
+                | RegisteredAction::Continue { .. }
+                | RegisteredAction::NextPlayer { .. } => {}
             }
         }
         self.state = state;
@@ -533,7 +565,9 @@ impl RegisteredGame {
                 RegisteredAction::Dart { id, .. } => {
                     turns.last_mut().expect("turn").push(*id);
                 }
-                RegisteredAction::Continue { .. } => turns.push(Vec::new()),
+                RegisteredAction::Continue { .. } | RegisteredAction::NextPlayer { .. } => {
+                    turns.push(Vec::new());
+                }
                 RegisteredAction::Mode { .. } => {}
             }
         }
@@ -653,6 +687,14 @@ trait GameMode: Sync {
         Ok(())
     }
 
+    fn on_turn_skipped(&self, _state: &mut RegisteredGameState) -> Result<(), GameError> {
+        Ok(())
+    }
+
+    fn fixed_round_winner_message(&self) -> Option<&'static str> {
+        None
+    }
+
     fn handle_action(
         &self,
         _state: &mut RegisteredGameState,
@@ -668,6 +710,16 @@ fn finish_fixed_round_game(
     winner_message: &str,
 ) -> Result<(), GameError> {
     let is_turn_end = state.darts_in_turn.saturating_add(1) >= 3;
+    if !is_turn_end {
+        return Ok(());
+    }
+    finish_action_round_game(state, winner_message)
+}
+
+fn finish_action_round_game(
+    state: &mut RegisteredGameState,
+    winner_message: &str,
+) -> Result<(), GameError> {
     let is_last_player = state.current_player_index.saturating_add(1) == state.players.len();
     let rounds = state
         .options
@@ -675,7 +727,7 @@ fn finish_fixed_round_game(
         .and_then(Value::as_u64)
         .and_then(|value| u16::try_from(value).ok())
         .ok_or_else(|| GameError::RulesetUnavailable("invalid round count".into()))?;
-    if !is_turn_end || !is_last_player || state.round_number < rounds {
+    if !is_last_player || state.round_number < rounds {
         return Ok(());
     }
 
@@ -709,6 +761,27 @@ fn finish_fixed_round_game(
                 .collect::<Vec<_>>()
                 .join(" · ")
         );
+    }
+    Ok(())
+}
+
+fn apply_player_boundary(
+    mode: &'static dyn GameMode,
+    state: &mut RegisteredGameState,
+    force_skip: bool,
+) -> Result<(), GameError> {
+    if state.status == GameStatus::Running {
+        mode.on_turn_skipped(state)?;
+        if state.status == GameStatus::Running
+            && let Some(message) = mode.fixed_round_winner_message()
+        {
+            finish_action_round_game(state, message)?;
+        }
+    } else if force_skip && state.status != GameStatus::Hold {
+        return Err(GameError::NotRunning);
+    }
+    if state.status != GameStatus::Finished {
+        advance_player(mode, state)?;
     }
     Ok(())
 }

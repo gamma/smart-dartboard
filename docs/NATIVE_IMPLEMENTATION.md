@@ -65,6 +65,12 @@ Umgesetzt und lokal verifiziert:
   Korrekturevents werden atomar synchronisiert. Bereits mit den ersten
   CountUp-/Registry-Snapshotformaten gespeicherte Spiele bleiben lesbar und
   wechseln bei der nächsten Aktion auf die neue Timeline.
+- `ContinueTurn` bestätigt ausschließlich eine bereits abgeschlossene Aufnahme;
+  `NextPlayer` beendet dagegen einen laufenden Teilzug bewusst. Beide Grenzen
+  sind in CountUp, X01 und Registry-Modi getrennt replaybar. Ein Skip bewahrt
+  bereits geworfene Darts, führt modusspezifische Skip-Regeln aus und kann die
+  letzte Aufnahme eines rundenbasierten Spiels regulär werten. SQLite führt ihn
+  als eigenes digitales `next_player`-Ereignis.
 - API-v2-Details für Sessions und Spiele sowie ein vollständiges Replay-Envelope
   mit Initialzustand, Finalzustand, Frames, unwirksam gemachten Originalevents
   und Korrekturverkettung. Unbekannte IDs liefern stabil `not_found`/HTTP 404.
