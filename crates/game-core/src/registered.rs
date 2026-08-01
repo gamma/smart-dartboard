@@ -6,9 +6,11 @@ use std::collections::BTreeMap;
 
 mod eight_ball;
 mod heart_chase;
+mod target_rush;
 
 use eight_ball::EIGHT_BALL_MODE;
 use heart_chase::HEART_CHASE_MODE;
+use target_rush::TARGET_RUSH_MODE;
 
 const CRICKET_TARGETS: [u8; 7] = [20, 19, 18, 17, 16, 15, 25];
 
@@ -658,6 +660,56 @@ trait GameMode: Sync {
     }
 }
 
+fn finish_fixed_round_game(
+    state: &mut RegisteredGameState,
+    winner_message: &str,
+) -> Result<(), GameError> {
+    let is_turn_end = state.darts_in_turn.saturating_add(1) >= 3;
+    let is_last_player = state.current_player_index.saturating_add(1) == state.players.len();
+    let rounds = state
+        .options
+        .get("rounds")
+        .and_then(Value::as_u64)
+        .and_then(|value| u16::try_from(value).ok())
+        .ok_or_else(|| GameError::RulesetUnavailable("invalid round count".into()))?;
+    if !is_turn_end || !is_last_player || state.round_number < rounds {
+        return Ok(());
+    }
+
+    let best_score = state
+        .players
+        .iter()
+        .map(|player| player.score)
+        .max()
+        .ok_or(GameError::NoPlayers)?;
+    let leaders = state
+        .players
+        .iter()
+        .filter(|player| player.score == best_score)
+        .collect::<Vec<_>>();
+    state.status = GameStatus::Finished;
+    if leaders.len() == 1 {
+        let winner = leaders[0];
+        state.winner_id = Some(winner.id.clone());
+        state.winner_ids = vec![winner.id.clone()];
+        state.result_type = "individual_win".into();
+        state.message = winner_message.replace("{winner}", &winner.name);
+    } else {
+        state.winner_id = None;
+        state.winner_ids.clear();
+        state.result_type = "draw".into();
+        state.message = format!(
+            "Unentschieden: {}",
+            leaders
+                .iter()
+                .map(|player| player.name.as_str())
+                .collect::<Vec<_>>()
+                .join(" · ")
+        );
+    }
+    Ok(())
+}
+
 struct CricketMode;
 
 static CRICKET_INSTRUCTIONS: [GameInstruction; 4] = [
@@ -993,7 +1045,12 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 3] = [&CRICKET_MODE, &EIGHT_BALL_MODE, &HEART_CHASE_MODE];
+static MODES: [&'static dyn GameMode; 4] = [
+    &CRICKET_MODE,
+    &EIGHT_BALL_MODE,
+    &HEART_CHASE_MODE,
+    &TARGET_RUSH_MODE,
+];
 
 fn mode(slug: &str) -> Result<&'static dyn GameMode, GameError> {
     MODES

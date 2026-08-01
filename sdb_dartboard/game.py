@@ -58,11 +58,32 @@ class GameState:
     turn_start_values: Dict[str, int] = field(default_factory=dict)
     round_number: int = 1
     mode_state: Dict[str, Any] = field(default_factory=dict)
+    random_seed: int = 0
+    random_cursor: int = 0
 
     def current_player(self) -> Optional[Player]:
         if not self.players:
             return None
         return self.players[self.current_player_index % len(self.players)]
+
+    def random_index(self, upper_bound: int) -> int:
+        """Return the next deterministic gameplay index.
+
+        The persisted SplitMix64 stream intentionally matches the Rust core.
+        It is gameplay randomness, not a cryptographic primitive.
+        """
+        if upper_bound <= 0:
+            raise ValueError("random upper bound must be greater than zero")
+        mask = (1 << 64) - 1
+        self.random_cursor = (self.random_cursor + 1) & mask
+        value = (
+            self.random_seed
+            + 0x9E3779B97F4A7C15 * self.random_cursor
+        ) & mask
+        value = ((value ^ (value >> 30)) * 0xBF58476D1CE4E5B9) & mask
+        value = ((value ^ (value >> 27)) * 0x94D049BB133111EB) & mask
+        value ^= value >> 31
+        return value % upper_bound
 
     def snapshot(self) -> Dict[str, Any]:
         return {
@@ -88,6 +109,8 @@ class GameState:
             "turn_start_values": dict(self.turn_start_values),
             "round_number": self.round_number,
             "mode_state": copy.deepcopy(self.mode_state),
+            "random_seed": self.random_seed,
+            "random_cursor": self.random_cursor,
         }
 
     def restore_snapshot(self, snap: Dict[str, Any]) -> None:
@@ -118,6 +141,8 @@ class GameState:
         self.turn_start_values = dict(snap.get("turn_start_values", {}))
         self.round_number = int(snap.get("round_number", 1))
         self.mode_state = copy.deepcopy(snap.get("mode_state", {}))
+        self.random_seed = int(snap.get("random_seed", 0))
+        self.random_cursor = int(snap.get("random_cursor", 0))
 
     def advice(self) -> Optional[Dict[str, Any]]:
         if self.game_type != "x01" or self.status not in ("running", "hold"):
@@ -223,6 +248,8 @@ class GameState:
             "result_type": self.result_type,
             "message": self.message,
             "options": self.options,
+            "random_seed": self.random_seed,
+            "random_cursor": self.random_cursor,
             "last_event": self.last_event,
             "overlay": self.overlay(),
         }
@@ -247,6 +274,8 @@ class GameState:
             "darts_in_turn": self.darts_in_turn,
             "turn_score": self.turn_score,
             "round_number": self.round_number,
+            "random_seed": self.random_seed,
+            "random_cursor": self.random_cursor,
             "status": self.status,
             "winner_id": self.winner_id,
             "winner_ids": self.winner_ids,
@@ -298,6 +327,7 @@ class GameEngine:
         players: Optional[List[Any]] = None,
         x01_start_score: int = 501,
         options: Optional[Dict[str, Any]] = None,
+        random_seed: Optional[int] = None,
     ) -> GameState:
         game_type = game_type.lower()
         mode = registry.get(game_type)
@@ -341,6 +371,11 @@ class GameEngine:
             message="Game started",
             options=resolved_options,
             turn_start_values={player.id: player.score for player in resolved_players},
+            random_seed=(
+                int(random_seed) & ((1 << 64) - 1)
+                if random_seed is not None
+                else random.getrandbits(64)  # nosec B311 - gameplay seed
+            ),
         )
         initializer = getattr(mode, "initialize_state", None)
         if initializer is not None:

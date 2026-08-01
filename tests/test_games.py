@@ -355,6 +355,35 @@ class GameEngineTests(unittest.TestCase):
         self.assertEqual(80, restored.state.players[0].score)
         self.assertEqual("Bob", restored.state.current_player().name)
 
+    def test_seeded_target_rush_survives_checkpoint_and_correction(self):
+        engine = GameEngine()
+        engine.reset(
+            "target_rush",
+            [{"id": "ada", "name": "Ada"}],
+            options={"rounds": 3, "difficulty": "normal"},
+            random_seed=42,
+        )
+        target = dict(engine.state.mode_state["target"])
+        engine.handle_event({"type": "hit", "seq": 1, **target})
+
+        restored = GameEngine()
+        restored.import_state(json.loads(json.dumps(engine.export_state())))
+        self.assertEqual(42, restored.state.random_seed)
+        self.assertEqual(3, restored.state.random_cursor)
+        self.assertEqual(
+            ["D4", "D13", "T6"],
+            [item["label"] for item in restored.state.mode_state["round_targets"]],
+        )
+
+        restored.correct_throw(
+            1,
+            {"type": "miss", "seq": 999, "label": "MISS", "score": 0},
+        )
+
+        self.assertEqual(0, restored.state.players[0].score)
+        self.assertEqual(3, restored.state.random_cursor)
+        self.assertEqual("D13", restored.state.mode_state["target"]["label"])
+
     def test_target_rush_exposes_overlay(self):
         engine = GameEngine()
         engine.reset("target_rush", ["Ada"], options={"difficulty": "easy"})

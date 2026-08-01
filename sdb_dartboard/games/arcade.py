@@ -70,6 +70,28 @@ def choose_targets(count: int, difficulty: str = "normal", exclude: Iterable[str
     return random.sample(available, min(count, len(available)))  # nosec B311
 
 
+def choose_targets_for_state(
+    state: Any,
+    count: int,
+    difficulty: str = "normal",
+    exclude: Iterable[str] = (),
+) -> List[Dict[str, Any]]:
+    """Choose targets without replacement from the persisted game RNG."""
+    pool = {
+        "easy": TARGET_POOL_BASIC,
+        "normal": TARGET_POOL_NORMAL,
+        "hard": TARGET_POOL_HARD,
+    }.get(difficulty, TARGET_POOL_NORMAL)
+    excluded = set(exclude)
+    available = [d for d in pool if zone_id(d) not in excluded]
+    if len(available) < count:
+        available = [d for d in TARGET_POOL_NORMAL if zone_id(d) not in excluded]
+    chosen: List[Dict[str, Any]] = []
+    for _ in range(min(count, len(available))):
+        chosen.append(available.pop(state.random_index(len(available))))
+    return chosen
+
+
 def overlay_item(dart: Dict[str, Any], color: str, label: str = "", pulse: bool = True) -> Dict[str, Any]:
     return {"id": zone_id(dart), "field": dart["field"], "ring": dart["ring"], "color": color, "label": label, "pulse": pulse}
 

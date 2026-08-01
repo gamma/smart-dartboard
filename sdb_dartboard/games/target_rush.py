@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from .arcade import (
-    choose_targets,
+    choose_targets_for_state,
     finish_round_game,
     number_overlay_items,
     overlay_item,
@@ -50,7 +50,8 @@ class TargetRushMode:
 
     def _generate_round_targets(self, state: Any) -> None:
         difficulty = str(state.options.get("difficulty", "normal"))
-        targets = choose_targets(
+        targets = choose_targets_for_state(
+            state,
             1 if difficulty == "easy" else 3,
             difficulty,
         )
@@ -79,7 +80,9 @@ class TargetRushMode:
             self._select_target(state, 0)
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
-        target = state.mode_state.get("target") or choose_targets(1)[0]
+        target = state.mode_state.get("target")
+        if not target:
+            raise ValueError("Target Rush has no active target")
         combo = int(state.mode_state.setdefault("combo", {}).get(player.id, 0))
         if event.get("type") == "miss":
             state.mode_state["combo"][player.id] = 0
