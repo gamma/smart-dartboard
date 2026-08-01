@@ -373,10 +373,12 @@ werden und ein widerrufbares Token erhalten.
 - Eine iPad-App mit externem Bildschirm ist möglich, aber deutlich anfälliger
   für Lifecycle-, AirPlay- und Displaywechsel als ein fester macOS-Host.
 
-Der bevorzugte mobile Arcade-Modus ist dennoch ein einzelnes iPhone oder iPad,
-das Board, Runtime, SQLite und Control UI besitzt und eine separate Projector UI
-über AirPlay oder HDMI ausgibt. System-Mirroring der Control UI reicht dafür
-nicht aus. Bis iOS/iPadOS 26 wird die nichtinteraktive externe Scene über
+Der bevorzugte mobile Arcade-Modus ist dennoch ein einzelnes unterstütztes
+iPhone oder iPad, das Board, Runtime, SQLite und Control UI besitzt und eine
+separate Projector UI über AirPlay oder HDMI ausgibt. Der Controller muss also
+kein iPad sein. System-Mirroring der Control UI reicht dafür nicht aus; ein
+AirPlay-Ziel ohne erweiterte externe Anzeige führt kontrolliert zum HDMI- oder
+Companion-Fallback. Bis iOS/iPadOS 26 wird die nichtinteraktive externe Scene über
 `windowExternalDisplayNonInteractive` angebunden; ab Version 27 muss die App
 dafür ein External-Display-Scene-Accessory registrieren. Beide Implementierungen
 liegen hinter demselben `DisplayHost`-Vertrag.
@@ -394,6 +396,12 @@ Das Companion-iPad ist kein zweiter Host. Es entdeckt die Controller-Runtime
 bezieht nach jeder Unterbrechung zuerst einen vollständigen Snapshot. Es darf
 weder BLE übernehmen noch Commands für Spiel oder Setup senden. Die
 Controller-Runtime bleibt bei Display- oder Netzwerkverlust spielfähig.
+
+AirPlay/HDMI, Companion und lokale Vorschau werden im Board-Setup gewählt. Die
+App merkt sich den zuletzt erfolgreichen Ausgabepfad, stellt ihn beim nächsten
+Arcade-Start nach Möglichkeit automatisch wieder her und zeigt aktiven Pfad,
+Audioziel sowie Verbindungsstatus ausschließlich auf der Control UI. Der
+Wechsel des Ausgabepfads darf keine neue Runtime oder Session erzeugen.
 
 Für AirPlay, HDMI und Companion werden getrennte Hardwarematrizen geführt, weil
 Displayausgabe, Audio-Routing und Laden über einen Adapter modellabhängig sind.

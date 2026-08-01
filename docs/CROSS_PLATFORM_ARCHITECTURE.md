@@ -126,11 +126,13 @@ fachlichen Tests.
 
 ### 2.3 Bevorzugte iOS-/iPadOS-Anzeigemodi
 
-Die primäre Apple-Mobile-Konfiguration ist ein einzelnes iPhone oder iPad als
-Controller und Runtime. Es verbindet das Board direkt per CoreBluetooth und
-gibt eine eigenständige Projector-Ansicht über AirPlay oder einen kabelgebundenen
-HDMI-/USB-C-Displayadapter aus. Das externe Display zeigt nicht die gespiegelte
-Control UI, sondern ausschließlich die nichtinteraktive Projector-Rolle.
+Die primäre Apple-Mobile-Konfiguration ist ein einzelnes unterstütztes iPhone
+oder iPad als Controller und Runtime; der Controller ist ausdrücklich nicht an
+ein iPad gebunden. Er verbindet das Board direkt per CoreBluetooth und gibt
+eine eigenständige Projector-Ansicht über AirPlay oder einen kabelgebundenen
+HDMI-/USB-C-Displayadapter aus. Das interne Display bleibt dabei immer die
+interaktive Control UI. Das externe Display zeigt nicht deren Spiegelung,
+sondern ausschließlich die nichtinteraktive Projector-Rolle.
 
 Als sekundärer Modus wird Companion unterstützt:
 
@@ -145,6 +147,13 @@ die Auswahl. Der Controller wird über Bonjour gefunden und per QR-Code oder
 kurzem Einmalcode gepaart. Es gibt niemals zwei autoritative Runtimes für
 dasselbe laufende Spiel.
 
+Die Ausgabeauswahl liegt im Board-Setup und bietet `AirPlay/externes Display`,
+`Companion-iPad` und `Vorschau auf diesem Gerät`. Die App stellt den zuletzt
+erfolgreichen Pfad beim nächsten Arcade-Start automatisch wieder her und zeigt
+Verbindung, Audioziel und Fallback eindeutig auf dem Controller. Ein AirPlay-
+Empfänger, der nur Systemspiegelung zulässt, erfüllt den Projector-Modus nicht;
+in diesem Fall verweist die App auf HDMI oder das Companion-iPad.
+
 Reihenfolge der Produktpräferenz:
 
 1. iPhone/iPad als Controller mit AirPlay oder HDMI als Projector,
@@ -154,7 +163,8 @@ Reihenfolge der Produktpräferenz:
 Der Spielbetrieb muss beim Trennen eines externen Displays oder Companion-
 Geräts auf dem Controller weiterlaufen. Nach Wiederverbindung erhält der
 Projector zuerst einen vollständigen Snapshot und danach nur lückenlose
-Revisionen.
+Revisionen. Ein Wechsel zwischen AirPlay, HDMI und Companion verändert weder
+die autoritative Runtime noch Session, Spielstand oder Board-Verbindung.
 
 ## 3. Warum Rust für den gemeinsamen Kern
 
