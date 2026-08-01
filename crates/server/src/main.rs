@@ -1159,7 +1159,10 @@ mod tests {
                 .expect("response");
             assert_eq!(response.status(), StatusCode::OK, "{path}");
         }
+    }
 
+    #[tokio::test]
+    async fn mode_metadata_exposes_all_native_registry_modes() {
         let response = test_app()
             .oneshot(
                 Request::get("/api/v2/modes")
@@ -1174,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(7));
+        assert_eq!(modes.as_array().map(Vec::len), Some(8));
         assert!(
             modes
                 .as_array()
@@ -1215,6 +1218,15 @@ mod tests {
                 mode["slug"] == "ghost_chase"
                     && mode["ruleset_version"] == 2
                     && mode["artwork"] == "/static/assets/modes/ghost_chase.webp"
+            })
+        }));
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "robin_hood"
+                    && mode["ruleset_version"] == 2
+                    && mode["min_players"] == 2
+                    && mode["options"][1]["default"] == "exact"
+                    && mode["artwork"] == "/static/assets/modes/robin_hood.webp"
             })
         }));
     }

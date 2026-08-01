@@ -1,0 +1,44 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 2,
+  "random_seed": 42,
+  "players": [
+    {"id": "player-ada", "name": "Ada"},
+    {"id": "player-bob", "name": "Bob"}
+  ],
+  "options": {"rounds": 5, "matching": "exact"},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 4, "ring": "double", "multiplier": 2, "label": "D4", "score": 8}},
+      "expected": {"scores": [38, 0], "splits": [1, 0], "sheriff_targets": ["D4", "D13", "T6"], "remaining_targets": ["D13", "T6"], "current_arrows": ["D4"], "shown_targets": ["D13", "T6"], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 38, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 3}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 20, "ring": "single_outer", "multiplier": 1, "label": "S20", "score": 20}},
+      "expected": {"scores": [38, 0], "splits": [1, 0], "sheriff_targets": ["D4", "D13", "T6"], "remaining_targets": ["D13", "T6"], "current_arrows": ["D4", "S20"], "shown_targets": ["D13", "T6"], "current_player_index": 0, "darts_in_turn": 2, "turn_score": 38, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 3}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 3, "field": 6, "ring": "triple", "multiplier": 3, "label": "T6", "score": 18}},
+      "expected": {"scores": [86, 0], "splits": [2, 0], "sheriff_targets": ["D4", "S20", "T6"], "remaining_targets": ["D13"], "current_arrows": ["D4", "S20", "T6"], "shown_targets": ["D4", "S20", "T6"], "current_player_index": 0, "darts_in_turn": 3, "turn_score": 86, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 3}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [86, 0], "splits": [2, 0], "sheriff_targets": ["D4", "S20", "T6"], "remaining_targets": ["D4", "S20", "T6"], "current_arrows": [], "shown_targets": ["D4", "S20", "T6"], "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 3}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 4, "field": 4, "ring": "double", "multiplier": 2, "label": "D4", "score": 8}},
+      "expected": {"scores": [86, 38], "splits": [2, 1], "sheriff_targets": ["D4", "S20", "T6"], "remaining_targets": ["S20", "T6"], "current_arrows": ["D4"], "shown_targets": ["S20", "T6"], "current_player_index": 1, "darts_in_turn": 1, "turn_score": 38, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 3}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 5, "label": "MISS", "score": 0}},
+      "expected": {"scores": [86, 38], "splits": [2, 1], "sheriff_targets": ["D4", "S20", "T6"], "remaining_targets": ["S20", "T6"], "current_arrows": ["D4"], "shown_targets": ["S20", "T6"], "current_player_index": 1, "darts_in_turn": 2, "turn_score": 38, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 3}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 6, "label": "MISS", "score": 0}},
+      "expected": {"scores": [86, 38], "splits": [2, 1], "sheriff_targets": ["D4"], "remaining_targets": ["S20", "T6"], "current_arrows": ["D4"], "shown_targets": ["D4"], "current_player_index": 1, "darts_in_turn": 3, "turn_score": 38, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 3}
+    },
+    {
+      "command": {"type": "correct", "action_id": 1, "event": {"type": "miss", "seq": 999, "label": "MISS", "score": 0}},
+      "expected": {"scores": [48, 0], "splits": [1, 0], "sheriff_targets": ["D4"], "remaining_targets": ["S20", "T6"], "current_arrows": ["D4"], "shown_targets": ["D4"], "current_player_index": 1, "darts_in_turn": 3, "turn_score": 0, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 3}
+    }
+  ]
+}

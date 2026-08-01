@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any, Dict, List
 
 from .arcade import (
-    choose_targets,
+    choose_targets_for_state,
     finish_round_game,
     number_overlay_items,
     overlay_item,
@@ -58,7 +58,7 @@ class RobinHoodMode:
         player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        targets = choose_targets(3, "normal")
+        targets = choose_targets_for_state(state, 3, "normal")
         state.mode_state = {
             "sheriff_targets": targets,
             "remaining_targets": list(targets),

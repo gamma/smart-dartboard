@@ -8,11 +8,13 @@ mod arcade;
 mod eight_ball;
 mod ghost_chase;
 mod heart_chase;
+mod robin_hood;
 mod target_rush;
 
 use eight_ball::EIGHT_BALL_MODE;
 use ghost_chase::GHOST_CHASE_MODE;
 use heart_chase::HEART_CHASE_MODE;
+use robin_hood::ROBIN_HOOD_MODE;
 use target_rush::TARGET_RUSH_MODE;
 
 const CRICKET_TARGETS: [u8; 7] = [20, 19, 18, 17, 16, 15, 25];
@@ -1121,11 +1123,12 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 5] = [
+static MODES: [&'static dyn GameMode; 6] = [
     &CRICKET_MODE,
     &EIGHT_BALL_MODE,
     &GHOST_CHASE_MODE,
     &HEART_CHASE_MODE,
+    &ROBIN_HOOD_MODE,
     &TARGET_RUSH_MODE,
 ];
 
