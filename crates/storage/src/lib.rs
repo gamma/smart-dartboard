@@ -165,17 +165,11 @@ mod tests {
         let repository = SqliteRepository::open(&temporary).expect("reopen");
         let mut runtime = Runtime::restore("second", repository).expect("restore");
         assert_eq!(runtime.snapshot().revision, 1);
-        assert_eq!(
-            runtime
-                .snapshot()
-                .game
-                .as_ref()
-                .expect("game")
-                .state()
-                .players[0]
-                .name,
-            "Ada"
-        );
+        let game = runtime.snapshot().game.as_ref().expect("game");
+        let sdb_runtime::RuntimeGame::CountUp(game) = game else {
+            panic!("restored wrong game type");
+        };
+        assert_eq!(game.state().players[0].name, "Ada");
         let duplicate = runtime
             .dispatch("second", "start", None, RuntimeAction::Undo)
             .expect("deduplicated");

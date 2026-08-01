@@ -5,7 +5,7 @@
 //! product's state when persistence fails between a dart and its broadcast.
 
 use sdb_contracts::DartEvent;
-use sdb_game_core::{CountUpGame, CountUpState, GameError};
+use sdb_game_core::{CountUpGame, CountUpState, GameError, OutRule, X01Game, X01State};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -17,6 +17,11 @@ pub enum RuntimeAction {
         players: Vec<(String, String)>,
         rounds: u16,
     },
+    StartX01 {
+        players: Vec<(String, String)>,
+        start_score: u32,
+        out_rule: OutRule,
+    },
     Dart {
         event: DartEvent,
     },
@@ -27,7 +32,52 @@ pub enum RuntimeAction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RuntimeSnapshot {
     pub revision: u64,
-    pub game: Option<CountUpGame>,
+    pub game: Option<RuntimeGame>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "game_type", content = "game", rename_all = "snake_case")]
+pub enum RuntimeGame {
+    CountUp(CountUpGame),
+    X01(X01Game),
+}
+
+impl RuntimeGame {
+    fn apply_throw(&mut self, event: DartEvent) -> Result<(), GameError> {
+        match self {
+            Self::CountUp(game) => game.apply_throw(&event).map(|_| ()),
+            Self::X01(game) => game.apply_throw(event).map(|_| ()),
+        }
+    }
+
+    fn continue_turn(&mut self) -> Result<(), GameError> {
+        match self {
+            Self::CountUp(game) => game.continue_turn().map(|_| ()),
+            Self::X01(game) => game.continue_turn().map(|_| ()),
+        }
+    }
+
+    fn undo(&mut self) -> Result<(), GameError> {
+        match self {
+            Self::CountUp(game) => game.undo().map(|_| ()),
+            Self::X01(game) => game.undo().map(|_| ()),
+        }
+    }
+
+    #[must_use]
+    pub fn state(&self) -> RuntimeGameState {
+        match self {
+            Self::CountUp(game) => RuntimeGameState::CountUp(game.state().clone()),
+            Self::X01(game) => RuntimeGameState::X01(game.state().clone()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "game_type", content = "state", rename_all = "snake_case")]
+pub enum RuntimeGameState {
+    CountUp(CountUpState),
+    X01(X01State),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,7 +85,7 @@ pub struct CommandResult {
     pub command_id: String,
     pub revision: u64,
     pub duplicate: bool,
-    pub state: Option<CountUpState>,
+    pub state: Option<RuntimeGameState>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -178,7 +228,7 @@ impl<R: Repository> Runtime<R> {
             command_id: command_id.into(),
             revision: next.revision,
             duplicate: false,
-            state: next.game.as_ref().map(|game| game.state().clone()),
+            state: next.game.as_ref().map(RuntimeGame::state),
         };
         let snapshot_json = serde_json::to_string(&next)
             .map_err(|error| RuntimeError::InvalidPersistedData(error.to_string()))?;
@@ -218,14 +268,25 @@ impl<R: Repository> Runtime<R> {
 fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result<(), RuntimeError> {
     match action {
         RuntimeAction::StartCountUp { players, rounds } => {
-            snapshot.game = Some(CountUpGame::new(players, rounds)?);
+            snapshot.game = Some(RuntimeGame::CountUp(CountUpGame::new(players, rounds)?));
+        }
+        RuntimeAction::StartX01 {
+            players,
+            start_score,
+            out_rule,
+        } => {
+            snapshot.game = Some(RuntimeGame::X01(X01Game::new(
+                players,
+                start_score,
+                out_rule,
+            )?));
         }
         RuntimeAction::Dart { event } => {
             snapshot
                 .game
                 .as_mut()
                 .ok_or(RuntimeError::NoGame)?
-                .apply_throw(&event)?;
+                .apply_throw(event)?;
         }
         RuntimeAction::Continue => {
             snapshot
@@ -281,6 +342,7 @@ impl Repository for MemoryRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sdb_contracts::Ring;
 
     fn players() -> Vec<(String, String)> {
         vec![("ada".into(), "Ada".into())]
@@ -329,5 +391,47 @@ mod tests {
         assert_eq!(duplicate.revision, 1);
         assert!(duplicate.duplicate);
         assert_eq!(runtime.snapshot.revision, 1);
+    }
+
+    #[test]
+    fn x01_uses_the_same_atomic_runtime_boundary() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        runtime
+            .dispatch(
+                "runtime",
+                "start-x01",
+                Some(0),
+                RuntimeAction::StartX01 {
+                    players: players(),
+                    start_score: 40,
+                    out_rule: OutRule::Double,
+                },
+            )
+            .expect("start X01");
+        let result = runtime
+            .dispatch(
+                "runtime",
+                "checkout",
+                Some(1),
+                RuntimeAction::Dart {
+                    event: DartEvent::Hit {
+                        seq: 1,
+                        field: 20,
+                        ring: Ring::Double,
+                        multiplier: 2,
+                        label: "D20".into(),
+                        score: 40,
+                    },
+                },
+            )
+            .expect("checkout");
+
+        let RuntimeGameState::X01(state) = result.state.expect("state") else {
+            panic!("wrong game type");
+        };
+        assert_eq!(result.revision, 2);
+        assert_eq!(state.winner_id.as_deref(), Some("ada"));
+        assert_eq!(state.players[0].score, 0);
     }
 }
