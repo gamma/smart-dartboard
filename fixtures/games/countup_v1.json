@@ -38,7 +38,14 @@
     {
       "command": {"type": "continue"},
       "expected": {"scores": [180, 40], "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "correct", "action_id": 5, "event": {"type": "hit", "seq": 999, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+      "expected": {"scores": [180, 100], "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "delete", "action_id": 7},
+      "expected": {"scores": [180, 80], "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
     }
   ]
 }
-

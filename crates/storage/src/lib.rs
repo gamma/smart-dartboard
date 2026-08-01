@@ -1503,6 +1503,9 @@ fn record_dart(
     let event_value = serde_json::to_value(event).map_err(|error| error.to_string())?;
     let event_json = serde_json::to_string(&event_value).map_err(|error| error.to_string())?;
     let action_id = match next.game.as_ref() {
+        Some(RuntimeGame::CountUp(game)) => {
+            game.dart_records().last().map(|record| record.action_id)
+        }
         Some(RuntimeGame::X01(game)) => game.dart_records().last().map(|record| record.action_id),
         Some(RuntimeGame::Registered(game)) => {
             game.dart_records().last().map(|record| record.action_id)
@@ -1713,6 +1716,20 @@ impl From<sdb_game_core::X01DartRecord> for ReplayedDartRecord {
     }
 }
 
+impl From<sdb_game_core::CountUpDartRecord> for ReplayedDartRecord {
+    fn from(record: sdb_game_core::CountUpDartRecord) -> Self {
+        Self {
+            action_id: record.action_id,
+            event: record.event,
+            player_id: record.player_id,
+            score_after: record.score_after,
+            round_number: record.round_number,
+            dart_in_turn: record.dart_in_turn,
+            outcome: record.outcome,
+        }
+    }
+}
+
 impl From<sdb_game_core::RegisteredDartRecord> for ReplayedDartRecord {
     fn from(record: sdb_game_core::RegisteredDartRecord) -> Self {
         Self {
@@ -1735,6 +1752,9 @@ fn rewrite_dart_throws(
     edit: Option<(&str, i64)>,
 ) -> Result<(), String> {
     let records: Vec<ReplayedDartRecord> = match snapshot.game.as_ref() {
+        Some(RuntimeGame::CountUp(game)) => {
+            game.dart_records().into_iter().map(Into::into).collect()
+        }
         Some(RuntimeGame::X01(game)) => game.dart_records().into_iter().map(Into::into).collect(),
         Some(RuntimeGame::Registered(game)) => {
             game.dart_records().into_iter().map(Into::into).collect()
@@ -2732,6 +2752,150 @@ mod tests {
         };
         assert_eq!(game.state().status, GameStatus::Finished);
         assert_eq!(game.state().winner_ids, vec!["ada"]);
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // Verifies winner replacement across runtime and SQLite.
+    fn count_up_correction_replaces_the_finished_winner_atomically() {
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        let players = [("ada", "Ada"), ("bob", "Bob")]
+            .into_iter()
+            .map(|(id, name)| PlayerRef {
+                id: id.into(),
+                name: name.into(),
+                avatar: "comet".into(),
+                color: "#28e7ff".into(),
+            })
+            .collect();
+        for (command_id, action) in [
+            (
+                "countup-session",
+                RuntimeAction::StartSession {
+                    session_id: "session-countup-edit".into(),
+                    players,
+                },
+            ),
+            (
+                "countup-prepare",
+                RuntimeAction::PrepareGame {
+                    game_type: "countup".into(),
+                    options: serde_json::json!({"rounds": 1}),
+                },
+            ),
+            (
+                "countup-start",
+                RuntimeAction::StartPreparedGame {
+                    game_id: "game-countup-edit".into(),
+                },
+            ),
+            ("countup-playing", RuntimeAction::MarkGamePlaying),
+        ] {
+            runtime
+                .dispatch("runtime", command_id, None, action)
+                .unwrap_or_else(|error| panic!("{command_id}: {error}"));
+        }
+        let darts = [
+            DartEvent::Hit {
+                seq: 1,
+                field: 20,
+                ring: Ring::Triple,
+                multiplier: 3,
+                label: "T20".into(),
+                score: 60,
+            },
+            DartEvent::Miss {
+                seq: 2,
+                label: "MISS".into(),
+                score: 0,
+            },
+            DartEvent::Miss {
+                seq: 3,
+                label: "MISS".into(),
+                score: 0,
+            },
+            DartEvent::Hit {
+                seq: 4,
+                field: 20,
+                ring: Ring::SingleInner,
+                multiplier: 1,
+                label: "S20".into(),
+                score: 20,
+            },
+            DartEvent::Miss {
+                seq: 5,
+                label: "MISS".into(),
+                score: 0,
+            },
+            DartEvent::Miss {
+                seq: 6,
+                label: "MISS".into(),
+                score: 0,
+            },
+        ];
+        for (index, event) in darts.into_iter().enumerate() {
+            if index == 3 {
+                runtime
+                    .dispatch("runtime", "countup-continue", None, RuntimeAction::Continue)
+                    .expect("continue CountUp");
+            }
+            runtime
+                .dispatch(
+                    "runtime",
+                    &format!("countup-dart-{index}"),
+                    None,
+                    RuntimeAction::Dart {
+                        event,
+                        source: sdb_contracts::DartSource::Board,
+                    },
+                )
+                .expect("CountUp dart");
+        }
+        assert_eq!(
+            runtime.snapshot().session.state().standings[0].session_points,
+            3
+        );
+        assert_eq!(
+            runtime.snapshot().session.state().standings[1].session_points,
+            0
+        );
+
+        runtime
+            .dispatch(
+                "runtime",
+                "countup-correct-winner",
+                None,
+                RuntimeAction::CorrectDart {
+                    action_id: 1,
+                    replacement: DartEvent::Miss {
+                        seq: 999,
+                        label: "MISS".into(),
+                        score: 0,
+                    },
+                    source: sdb_contracts::DartSource::ManualCorrection,
+                },
+            )
+            .expect("correct CountUp winner");
+        assert_eq!(
+            runtime.snapshot().session.state().standings[0].session_points,
+            0
+        );
+        assert_eq!(
+            runtime.snapshot().session.state().standings[1].session_points,
+            3
+        );
+
+        let repository = runtime.into_repository();
+        let detail = repository
+            .game_detail("game-countup-edit")
+            .expect("detail")
+            .expect("game");
+        assert_eq!(detail.game.winner_ids, vec!["bob"]);
+        assert_eq!(detail.throws.len(), 6);
+        assert_eq!(detail.throws[0].action_id, Some(1));
+        assert_eq!(detail.throws[0].seq, 1);
+        assert_eq!(detail.throws[0].source, "manual_correction");
+        assert_eq!(detail.throws[0].outcome, "miss");
     }
 
     #[test]

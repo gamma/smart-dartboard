@@ -88,7 +88,7 @@ pub struct RuntimeSnapshot {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "game_type", content = "game", rename_all = "snake_case")]
 pub enum RuntimeGame {
-    CountUp(CountUpGame),
+    CountUp(Box<CountUpGame>),
     X01(Box<X01Game>),
     Registered(Box<RegisteredGame>),
 }
@@ -122,7 +122,7 @@ impl RuntimeGame {
         match self {
             Self::X01(game) => game.correct_throw(action_id, replacement).map(|_| ()),
             Self::Registered(game) => game.correct_throw(action_id, replacement).map(|_| ()),
-            Self::CountUp(_) => Err(GameError::ActionNotEditable),
+            Self::CountUp(game) => game.correct_throw(action_id, replacement).map(|_| ()),
         }
     }
 
@@ -130,7 +130,7 @@ impl RuntimeGame {
         match self {
             Self::X01(game) => game.delete_throw(action_id).map(|_| ()),
             Self::Registered(game) => game.delete_throw(action_id).map(|_| ()),
-            Self::CountUp(_) => Err(GameError::ActionNotEditable),
+            Self::CountUp(game) => game.delete_throw(action_id).map(|_| ()),
         }
     }
 
@@ -654,7 +654,7 @@ fn start_direct_game(
 ) -> Result<(), RuntimeError> {
     snapshot.game = Some(match action {
         RuntimeAction::StartCountUp { players, rounds } => {
-            RuntimeGame::CountUp(CountUpGame::new(players, rounds)?)
+            RuntimeGame::CountUp(Box::new(CountUpGame::new(players, rounds)?))
         }
         RuntimeAction::StartX01 {
             players,
@@ -715,7 +715,9 @@ fn game_from_options(
             let rounds = u16::try_from(rounds).map_err(|_| {
                 RuntimeError::InvalidGameOptions("countup rounds are out of range".into())
             })?;
-            Ok(RuntimeGame::CountUp(CountUpGame::new(players, rounds)?))
+            Ok(RuntimeGame::CountUp(Box::new(CountUpGame::new(
+                players, rounds,
+            )?)))
         }
         "x01" => {
             let start_score = options

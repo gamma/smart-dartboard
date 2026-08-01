@@ -142,10 +142,10 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
   als Test und schließt es aus der Standardstatistik aus,
 - Turn fortsetzen und Undo; ein Undo des Siegtreffers öffnet zugleich das Spiel
   wieder und nimmt die Sessionwertung atomar zurück,
-- X01- und Registry-Würfe über stabile Action-IDs korrigieren oder löschen.
-  Der Core bewahrt die ursprüngliche Sequenznummer, spielt alle späteren
-  Aktionen neu ab und veröffentlicht die letzten zwei editierbaren Aufnahmen
-  im Game-State,
+- CountUp-, X01- und Registry-Würfe über stabile Action-IDs korrigieren oder
+  löschen. Der Core bewahrt die ursprüngliche Sequenznummer, spielt alle
+  späteren Aktionen neu ab und veröffentlicht die letzten zwei editierbaren
+  Aufnahmen im Game-State,
 - `command_id` deduplizieren,
 - Commit und Snapshot in einer SQLite-Transaktion sichern,
 - jedes akzeptierte Command mit Runtime-ID, Revision, kanonischem Action-JSON
@@ -164,7 +164,6 @@ Noch offen und daher ausdrücklich kein Produktionsersatz:
 
 - Teammodell sowie Heatmap-, Modusstatistik-, Export- und Trainingsabfragen,
 - restliche Spielmodi und deklarative Effects,
-- Action-ID-Korrektur für den noch separaten CountUp-Kern,
 - reale BlueZ-/Boardqualifizierung mit schneller Trefferfolge, Reconnect,
   Adapterausfall und Langzeittest,
 - Migration vorhandener Python-Datenbanken,
@@ -185,7 +184,7 @@ bestehende Profile und Historieneinträge bleiben erhalten.
 Schema 4 ergänzt stabile Dart-Action-IDs in der schnellen Wurfprojektion.
 Korrektur und Löschen markieren das ersetzte Event als unwirksam, hängen ein
 neues Auditereignis an und schreiben alle betroffenen Würfe aus dem
-deterministisch wiedergegebenen X01- oder Registry-Core-Zustand neu.
+deterministisch wiedergegebenen CountUp-, X01- oder Registry-Core-Zustand neu.
 Schema 5 ergänzt widerrufbare Companion-Geräte. Gespeichert werden Geräte-ID,
 Anzeigename, feste Projector-Rolle, Pairing- und Widerrufszeit sowie
 ausschließlich der SHA-256-Token-Hash; ein Klartext-Token gelangt nie in SQLite.

@@ -44,6 +44,8 @@ pub struct CountUpState {
     pub winner_ids: Vec<String>,
     pub result_type: String,
     pub message: String,
+    #[serde(default)]
+    pub editable_darts: Vec<CountUpDartRecord>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,9 +54,46 @@ struct CountUpSnapshot {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CountUpDartRecord {
+    pub action_id: u64,
+    pub event: DartEvent,
+    pub player_id: String,
+    pub score_after: u32,
+    pub round_number: u16,
+    pub dart_in_turn: u8,
+    pub outcome: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum CountUpAction {
+    Dart { id: u64, event: DartEvent },
+    Continue { id: u64 },
+}
+
+impl CountUpAction {
+    const fn id(&self) -> u64 {
+        match self {
+            Self::Dart { id, .. } | Self::Continue { id } => *id,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CountUpGame {
     state: CountUpState,
+    #[serde(default)]
     history: Vec<CountUpSnapshot>,
+    #[serde(default)]
+    initial_state: Option<CountUpState>,
+    #[serde(default)]
+    actions: Vec<CountUpAction>,
+    #[serde(default = "first_action_id")]
+    next_action_id: u64,
+}
+
+const fn first_action_id() -> u64 {
+    1
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -97,24 +136,29 @@ impl CountUpGame {
         if rounds == 0 {
             return Err(GameError::InvalidRounds);
         }
+        let state = CountUpState {
+            players: players
+                .into_iter()
+                .map(|(id, name)| Player { id, name, score: 0 })
+                .collect(),
+            current_player_index: 0,
+            darts_in_turn: 0,
+            turn_score: 0,
+            round_number: 1,
+            rounds,
+            status: GameStatus::Running,
+            winner_id: None,
+            winner_ids: Vec::new(),
+            result_type: String::new(),
+            message: "Game started".into(),
+            editable_darts: Vec::new(),
+        };
         Ok(Self {
-            state: CountUpState {
-                players: players
-                    .into_iter()
-                    .map(|(id, name)| Player { id, name, score: 0 })
-                    .collect(),
-                current_player_index: 0,
-                darts_in_turn: 0,
-                turn_score: 0,
-                round_number: 1,
-                rounds,
-                status: GameStatus::Running,
-                winner_id: None,
-                winner_ids: Vec::new(),
-                result_type: String::new(),
-                message: "Game started".into(),
-            },
+            initial_state: Some(state.clone()),
+            state,
             history: Vec::new(),
+            actions: Vec::new(),
+            next_action_id: first_action_id(),
         })
     }
 
@@ -132,23 +176,14 @@ impl CountUpGame {
         if self.state.status != GameStatus::Running {
             return Err(GameError::NotRunning);
         }
-        self.remember();
-        let score = u32::from(event.score());
-        let player = &mut self.state.players[self.state.current_player_index];
-        player.score += score;
-        let player_name = player.name.clone();
-        self.state.darts_in_turn += 1;
-        self.state.turn_score += score;
-        self.state.message = format!("{player_name}: {}", event.label());
-
-        let last_dart = self.state.darts_in_turn == 3;
-        let last_player = self.state.current_player_index + 1 == self.state.players.len();
-        if last_dart && last_player && self.state.round_number >= self.state.rounds {
-            self.finish();
-        } else if last_dart {
-            self.state.status = GameStatus::Hold;
-            self.state.message = "Turn complete. Press continue.".into();
-        }
+        self.ensure_timeline();
+        Self::apply_throw_internal(&mut self.state, event);
+        let action_id = self.take_action_id();
+        self.actions.push(CountUpAction::Dart {
+            id: action_id,
+            event: event.clone(),
+        });
+        self.refresh_editable_darts();
         Ok(&self.state)
     }
 
@@ -161,17 +196,11 @@ impl CountUpGame {
         if self.state.status != GameStatus::Hold {
             return Err(GameError::NotHolding);
         }
-        self.remember();
-        let last_player = self.state.current_player_index + 1 == self.state.players.len();
-        self.state.current_player_index =
-            (self.state.current_player_index + 1) % self.state.players.len();
-        if last_player {
-            self.state.round_number += 1;
-        }
-        self.state.darts_in_turn = 0;
-        self.state.turn_score = 0;
-        self.state.status = GameStatus::Running;
-        self.state.message = "Next player".into();
+        self.ensure_timeline();
+        Self::advance_player(&mut self.state);
+        let action_id = self.take_action_id();
+        self.actions.push(CountUpAction::Continue { id: action_id });
+        self.refresh_editable_darts();
         Ok(&self.state)
     }
 
@@ -181,42 +210,217 @@ impl CountUpGame {
     ///
     /// Returns [`GameError::NothingToUndo`] when no transition exists.
     pub fn undo(&mut self) -> Result<&CountUpState, GameError> {
-        let snapshot = self.history.pop().ok_or(GameError::NothingToUndo)?;
-        self.state = snapshot.state;
+        if self.initial_state.is_none() {
+            let snapshot = self.history.pop().ok_or(GameError::NothingToUndo)?;
+            self.state = snapshot.state;
+            return Ok(&self.state);
+        }
+        self.actions.pop().ok_or(GameError::NothingToUndo)?;
+        self.replay();
         Ok(&self.state)
     }
 
-    fn remember(&mut self) {
-        self.history.push(CountUpSnapshot {
-            state: self.state.clone(),
-        });
+    /// Replaces a dart in the current or immediately previous turn.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GameError::ActionNotEditable`] for unknown or older darts.
+    pub fn correct_throw(
+        &mut self,
+        action_id: u64,
+        replacement: DartEvent,
+    ) -> Result<&CountUpState, GameError> {
+        if !self.editable_dart_ids().contains(&action_id) {
+            return Err(GameError::ActionNotEditable);
+        }
+        let action = self
+            .actions
+            .iter_mut()
+            .find(|action| action.id() == action_id)
+            .ok_or(GameError::ActionNotEditable)?;
+        let CountUpAction::Dart { event, .. } = action else {
+            return Err(GameError::ActionNotEditable);
+        };
+        *event = with_seq(replacement, event.seq());
+        self.replay();
+        Ok(&self.state)
     }
 
-    fn finish(&mut self) {
-        self.state.status = GameStatus::Finished;
-        let high_score = self
-            .state
+    /// Deletes a dart in the current or immediately previous turn.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GameError::ActionNotEditable`] for unknown or older darts.
+    pub fn delete_throw(&mut self, action_id: u64) -> Result<&CountUpState, GameError> {
+        if !self.editable_dart_ids().contains(&action_id) {
+            return Err(GameError::ActionNotEditable);
+        }
+        let before = self.actions.len();
+        self.actions
+            .retain(|action| !matches!(action, CountUpAction::Dart { id, .. } if *id == action_id));
+        if self.actions.len() == before {
+            return Err(GameError::ActionNotEditable);
+        }
+        self.replay();
+        Ok(&self.state)
+    }
+
+    #[must_use]
+    pub fn dart_records(&self) -> Vec<CountUpDartRecord> {
+        let Some(mut state) = self.initial_state.clone() else {
+            return Vec::new();
+        };
+        state.editable_darts.clear();
+        let mut records = Vec::new();
+        for action in &self.actions {
+            match action {
+                CountUpAction::Dart { id, event } if state.status == GameStatus::Running => {
+                    let player_id = state.players[state.current_player_index].id.clone();
+                    Self::apply_throw_internal(&mut state, event);
+                    let Some(player) = state.players.iter().find(|player| player.id == player_id)
+                    else {
+                        continue;
+                    };
+                    let outcome = if matches!(event, DartEvent::Miss { .. }) {
+                        "miss"
+                    } else if state.status == GameStatus::Finished {
+                        "win"
+                    } else {
+                        "success"
+                    };
+                    records.push(CountUpDartRecord {
+                        action_id: *id,
+                        event: event.clone(),
+                        player_id,
+                        score_after: player.score,
+                        round_number: state.round_number,
+                        dart_in_turn: state.darts_in_turn,
+                        outcome: outcome.into(),
+                    });
+                }
+                CountUpAction::Continue { .. }
+                    if matches!(state.status, GameStatus::Running | GameStatus::Hold) =>
+                {
+                    Self::advance_player(&mut state);
+                }
+                CountUpAction::Dart { .. } | CountUpAction::Continue { .. } => {}
+            }
+        }
+        records
+    }
+
+    fn apply_throw_internal(state: &mut CountUpState, event: &DartEvent) {
+        let score = u32::from(event.score());
+        let player = &mut state.players[state.current_player_index];
+        player.score = player.score.saturating_add(score);
+        let player_name = player.name.clone();
+        state.darts_in_turn = state.darts_in_turn.saturating_add(1);
+        state.turn_score = state.turn_score.saturating_add(score);
+        state.message = format!("{player_name}: {}", event.label());
+
+        let last_dart = state.darts_in_turn == 3;
+        let last_player = state.current_player_index + 1 == state.players.len();
+        if last_dart && last_player && state.round_number >= state.rounds {
+            Self::finish(state);
+        } else if last_dart {
+            state.status = GameStatus::Hold;
+            state.message = "Turn complete. Press continue.".into();
+        }
+    }
+
+    fn advance_player(state: &mut CountUpState) {
+        let last_player = state.current_player_index + 1 == state.players.len();
+        state.current_player_index = (state.current_player_index + 1) % state.players.len();
+        if last_player {
+            state.round_number = state.round_number.saturating_add(1);
+        }
+        state.darts_in_turn = 0;
+        state.turn_score = 0;
+        state.status = GameStatus::Running;
+        state.message = "Next player".into();
+    }
+
+    fn replay(&mut self) {
+        let Some(mut state) = self.initial_state.clone() else {
+            return;
+        };
+        state.editable_darts.clear();
+        for action in self.actions.clone() {
+            match action {
+                CountUpAction::Dart { event, .. } if state.status == GameStatus::Running => {
+                    Self::apply_throw_internal(&mut state, &event);
+                }
+                CountUpAction::Continue { .. }
+                    if matches!(state.status, GameStatus::Running | GameStatus::Hold) =>
+                {
+                    Self::advance_player(&mut state);
+                }
+                CountUpAction::Dart { .. } | CountUpAction::Continue { .. } => {}
+            }
+        }
+        self.state = state;
+        self.refresh_editable_darts();
+    }
+
+    fn editable_dart_ids(&self) -> Vec<u64> {
+        let mut turns = vec![Vec::new()];
+        for action in &self.actions {
+            match action {
+                CountUpAction::Dart { id, .. } => turns.last_mut().expect("turn").push(*id),
+                CountUpAction::Continue { .. } => turns.push(Vec::new()),
+            }
+        }
+        turns.into_iter().rev().take(2).flatten().collect()
+    }
+
+    fn refresh_editable_darts(&mut self) {
+        let editable_ids = self.editable_dart_ids();
+        self.state.editable_darts = self
+            .dart_records()
+            .into_iter()
+            .filter(|record| editable_ids.contains(&record.action_id))
+            .collect();
+    }
+
+    fn take_action_id(&mut self) -> u64 {
+        let action_id = self.next_action_id;
+        self.next_action_id = self.next_action_id.saturating_add(1);
+        action_id
+    }
+
+    fn ensure_timeline(&mut self) {
+        if self.initial_state.is_none() {
+            self.initial_state = Some(self.state.clone());
+            self.state.editable_darts.clear();
+            self.history.clear();
+            self.actions.clear();
+            self.next_action_id = first_action_id();
+        }
+    }
+
+    fn finish(state: &mut CountUpState) {
+        state.status = GameStatus::Finished;
+        let high_score = state
             .players
             .iter()
             .map(|player| player.score)
             .max()
             .unwrap_or_default();
-        let winners: Vec<&Player> = self
-            .state
+        let winners: Vec<&Player> = state
             .players
             .iter()
             .filter(|player| player.score == high_score)
             .collect();
         if winners.len() == 1 {
-            self.state.winner_id = Some(winners[0].id.clone());
-            self.state.winner_ids = vec![winners[0].id.clone()];
-            self.state.result_type = "individual_win".into();
-            self.state.message = format!("{} gewinnt Count Up!", winners[0].name);
+            state.winner_id = Some(winners[0].id.clone());
+            state.winner_ids = vec![winners[0].id.clone()];
+            state.result_type = "individual_win".into();
+            state.message = format!("{} gewinnt Count Up!", winners[0].name);
         } else {
-            self.state.winner_id = None;
-            self.state.winner_ids.clear();
-            self.state.result_type = "draw".into();
-            self.state.message = "Unentschieden bei Count Up!".into();
+            state.winner_id = None;
+            state.winner_ids.clear();
+            state.result_type = "draw".into();
+            state.message = "Unentschieden bei Count Up!".into();
         }
     }
 }
@@ -685,6 +889,47 @@ mod tests {
         game.undo().expect("undo third dart");
         assert_eq!(game.state.darts_in_turn, 2);
         assert_eq!(game.state.players[0].score, 120);
+    }
+
+    #[test]
+    fn count_up_correction_and_deletion_replay_player_transitions() {
+        let mut game = CountUpGame::new(
+            vec![("ada".into(), "Ada".into()), ("bob".into(), "Bob".into())],
+            5,
+        )
+        .expect("game");
+        for seq in 1..=3 {
+            game.apply_throw(&single(seq, 20)).expect("Ada dart");
+        }
+        game.continue_turn().expect("continue");
+        game.apply_throw(&single(4, 10)).expect("Bob dart");
+
+        game.correct_throw(1, t20(999)).expect("correct Ada dart");
+        assert_eq!(game.state.players[0].score, 100);
+        assert_eq!(game.state.current_player_index, 1);
+        assert_eq!(game.dart_records()[0].event.seq(), 1);
+        game.delete_throw(3).expect("delete Ada dart");
+        assert_eq!(game.state.players[0].score, 80);
+        assert_eq!(game.state.players[1].score, 10);
+        assert_eq!(game.state.current_player_index, 1);
+    }
+
+    #[test]
+    fn first_count_up_snapshot_format_remains_restorable() {
+        let mut game = CountUpGame::new(vec![("ada".into(), "Ada".into())], 5).expect("game");
+        let initial = game.state().clone();
+        game.apply_throw(&single(1, 20)).expect("throw");
+        let legacy = serde_json::json!({
+            "state": game.state(),
+            "history": [{"state": initial}],
+        });
+        let mut restored: CountUpGame =
+            serde_json::from_value(legacy).expect("legacy CountUp snapshot");
+
+        restored.undo().expect("legacy undo");
+        assert_eq!(restored.state().players[0].score, 0);
+        restored.apply_throw(&t20(2)).expect("new timeline action");
+        assert_eq!(restored.state().editable_darts[0].action_id, 1);
     }
 
     #[test]

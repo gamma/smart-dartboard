@@ -1326,6 +1326,53 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn public_commands_correct_count_up_by_action_id() {
+        let app = test_app();
+        let commands = [
+            serde_json::json!({
+                "type": "start_game", "game_type": "countup",
+                "player_ids": ["Ada"], "options": {"rounds": 5}
+            }),
+            serde_json::json!({
+                "type": "ingest_dart",
+                "event": {
+                    "type": "hit", "seq": 1, "field": 20, "ring": "triple",
+                    "multiplier": 3, "label": "T20", "score": 60
+                }
+            }),
+            serde_json::json!({
+                "type": "correct_dart", "action_id": 1,
+                "replacement": {"type": "miss", "seq": 999, "label": "MISS", "score": 0}
+            }),
+        ];
+        let mut result = Value::Null;
+        for (revision, command) in commands.into_iter().enumerate() {
+            result = post_command(
+                &app,
+                serde_json::json!({
+                    "protocol_version": 1,
+                    "command_id": format!("countup-edit-{revision}"),
+                    "runtime_instance_id": "test-runtime",
+                    "expected_revision": revision,
+                    "command": command
+                }),
+            )
+            .await;
+        }
+
+        assert_eq!(result["revision"], 3);
+        assert_eq!(result["state"]["state"]["players"][0]["score"], 0);
+        assert_eq!(
+            result["state"]["state"]["editable_darts"][0]["event"]["seq"],
+            1
+        );
+        assert_eq!(
+            result["state"]["state"]["editable_darts"][0]["event"]["type"],
+            "miss"
+        );
+    }
+
+    #[tokio::test]
     async fn authenticated_board_packet_is_applied_once() {
         let app = board_test_app();
         let commands = [
