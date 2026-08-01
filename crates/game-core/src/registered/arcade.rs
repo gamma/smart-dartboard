@@ -106,6 +106,23 @@ pub(super) fn target_pool(difficulty: &str) -> Vec<Target> {
     targets
 }
 
+pub(super) fn physical_target_pool() -> Vec<Target> {
+    let mut targets = Vec::with_capacity(82);
+    for field in 1..=20 {
+        for ring in [
+            Ring::SingleInner,
+            Ring::Triple,
+            Ring::SingleOuter,
+            Ring::Double,
+        ] {
+            targets.push(target_for(field, ring));
+        }
+    }
+    targets.push(target_for(25, Ring::SingleBull));
+    targets.push(target_for(25, Ring::DoubleBull));
+    targets
+}
+
 fn target_for(field: u8, ring: Ring) -> Target {
     let (prefix, multiplier) = match ring {
         Ring::Double => ("D", 2),
@@ -114,10 +131,10 @@ fn target_for(field: u8, ring: Ring) -> Target {
         _ => ("S", 1),
     };
     Target {
-        label: if field == 25 {
-            prefix.into()
-        } else {
-            format!("{prefix}{field}")
+        label: match (field, ring) {
+            (25, Ring::SingleBull) => "SBull".into(),
+            (25, Ring::DoubleBull) => "DBull".into(),
+            _ => format!("{prefix}{field}"),
         },
         field,
         ring,

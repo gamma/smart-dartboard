@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict, List
 
 from .arcade import (
@@ -37,7 +36,7 @@ class ColorClashMode:
             InstructionStep("Gleiche Chancen", "Alle spielen pro Runde dieselben Farben – fest oder als gleiche Drei-Dart-Folge.", "shuffle"),
         ],
         sound_theme="arcade",
-        ruleset_version=2,
+        ruleset_version=3,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -49,7 +48,7 @@ class ColorClashMode:
         self._generate_round_layouts(state)
         state.message = "Gold zählt am meisten!"
 
-    def _generate_colors(self) -> Dict[str, str]:
+    def _generate_colors(self, state: Any) -> Dict[str, str]:
         pool = list(PHYSICAL_TARGET_POOL)
         colors: Dict[str, str] = {}
         distribution = (
@@ -58,15 +57,19 @@ class ColorClashMode:
             + ["green"] * 36
             + ["red"] * 16
         )
-        # Gameplay variety only; not used for a security decision.
-        random.shuffle(distribution)
+        for index in range(len(distribution) - 1, 0, -1):
+            swap_index = state.random_index(index + 1)
+            distribution[index], distribution[swap_index] = (
+                distribution[swap_index],
+                distribution[index],
+            )
         for dart, color in zip(pool, distribution):
             colors[physical_zone_id(dart)] = color
         return colors
 
     def _generate_round_layouts(self, state: Any) -> None:
         layout_count = 3 if state.options.get("shuffle", "turn") == "dart" else 1
-        layouts = [self._generate_colors() for _ in range(layout_count)]
+        layouts = [self._generate_colors(state) for _ in range(layout_count)]
         state.mode_state.update({
             "layout_round": state.round_number,
             "layouts": layouts,

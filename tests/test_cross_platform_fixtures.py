@@ -54,6 +54,9 @@ TREASURE_HUNT_FIXTURE = (
 AVOID_BOMB_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "avoid_bomb_v4.json"
 )
+COLOR_CLASH_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "color_clash_v3.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -614,6 +617,52 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                 ],
                 "hidden_bomb_ids": state.mode_state["hidden_bomb_ids"],
                 "last_effect": state.mode_state["last_effect"],
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_id": state.winner_id,
+                "result_type": state.result_type,
+                "random_cursor": state.random_cursor,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_color_clash_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(COLOR_CLASH_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_schema_version"], 1)
+        self.assertEqual(
+            fixture["ruleset_version"],
+            registry.get("color_clash").metadata.ruleset_version,
+        )
+        engine = GameEngine()
+        engine.reset(
+            "color_clash",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]), dict(command["event"])
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            colors = state.mode_state["colors"]
+            actual = {
+                "scores": [player.score for player in state.players],
+                "layout_index": state.mode_state["layout_index"],
+                "current_colors": {
+                    zone_id: colors[zone_id]
+                    for zone_id in fixture["sample_zone_ids"]
+                },
                 "current_player_index": state.current_player_index,
                 "darts_in_turn": state.darts_in_turn,
                 "turn_score": state.turn_score,

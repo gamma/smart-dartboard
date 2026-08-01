@@ -1,0 +1,46 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 3,
+  "random_seed": 42,
+  "sample_zone_ids": ["single_inner:1", "triple:1", "single_outer:1", "double:3", "single_bull:25", "double_bull:25"],
+  "players": [{"id": "ada", "name": "Ada"}, {"id": "bob", "name": "Bob"}],
+  "options": {"rounds": 3, "shuffle": "dart"},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 1, "ring": "single_inner", "multiplier": 1, "label": "S1", "score": 1}},
+      "expected": {"scores": [-25, 0], "layout_index": 1, "current_colors": {"single_inner:1": "green", "triple:1": "red", "single_outer:1": "green", "double:3": "gold", "single_bull:25": "green", "double_bull:25": "red"}, "current_player_index": 0, "darts_in_turn": 1, "turn_score": -25, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 243}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 3, "ring": "double", "multiplier": 2, "label": "D3", "score": 6}},
+      "expected": {"scores": [25, 0], "layout_index": 2, "current_colors": {"single_inner:1": "green", "triple:1": "green", "single_outer:1": "red", "double:3": "gold", "single_bull:25": "green", "double_bull:25": "green"}, "current_player_index": 0, "darts_in_turn": 2, "turn_score": 25, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 243}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 3, "field": 1, "ring": "single_outer", "multiplier": 1, "label": "S1", "score": 1}},
+      "expected": {"scores": [0, 0], "layout_index": 2, "current_colors": {"single_inner:1": "green", "triple:1": "green", "single_outer:1": "red", "double:3": "gold", "single_bull:25": "green", "double_bull:25": "green"}, "current_player_index": 0, "darts_in_turn": 3, "turn_score": 0, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 243}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [0, 0], "layout_index": 0, "current_colors": {"single_inner:1": "red", "triple:1": "green", "single_outer:1": "gold", "double:3": "cyan", "single_bull:25": "green", "double_bull:25": "green"}, "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 243}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 4, "field": 1, "ring": "single_outer", "multiplier": 1, "label": "S1", "score": 1}},
+      "expected": {"scores": [0, 50], "layout_index": 1, "current_colors": {"single_inner:1": "green", "triple:1": "red", "single_outer:1": "green", "double:3": "gold", "single_bull:25": "green", "double_bull:25": "red"}, "current_player_index": 1, "darts_in_turn": 1, "turn_score": 50, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 243}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 5, "field": 1, "ring": "triple", "multiplier": 3, "label": "T1", "score": 3}},
+      "expected": {"scores": [0, 25], "layout_index": 2, "current_colors": {"single_inner:1": "green", "triple:1": "green", "single_outer:1": "red", "double:3": "gold", "single_bull:25": "green", "double_bull:25": "green"}, "current_player_index": 1, "darts_in_turn": 2, "turn_score": 25, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 243}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 6, "field": 3, "ring": "double", "multiplier": 2, "label": "D3", "score": 6}},
+      "expected": {"scores": [0, 75], "layout_index": 2, "current_colors": {"single_inner:1": "green", "triple:1": "green", "single_outer:1": "red", "double:3": "gold", "single_bull:25": "green", "double_bull:25": "green"}, "current_player_index": 1, "darts_in_turn": 3, "turn_score": 75, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 243}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [0, 75], "layout_index": 0, "current_colors": {"single_inner:1": "cyan", "triple:1": "green", "single_outer:1": "gold", "double:3": "cyan", "single_bull:25": "green", "double_bull:25": "gold"}, "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 486}
+    },
+    {
+      "command": {"type": "correct", "action_id": 5, "event": {"type": "hit", "seq": 999, "field": 1, "ring": "single_inner", "multiplier": 1, "label": "S1", "score": 1}},
+      "expected": {"scores": [0, 0], "layout_index": 0, "current_colors": {"single_inner:1": "cyan", "triple:1": "green", "single_outer:1": "gold", "double:3": "cyan", "single_bull:25": "green", "double_bull:25": "gold"}, "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 486}
+    }
+  ]
+}
