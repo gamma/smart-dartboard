@@ -1177,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(8));
+        assert_eq!(modes.as_array().map(Vec::len), Some(9));
         assert!(
             modes
                 .as_array()
@@ -1218,6 +1218,13 @@ mod tests {
                 mode["slug"] == "ghost_chase"
                     && mode["ruleset_version"] == 2
                     && mode["artwork"] == "/static/assets/modes/ghost_chase.webp"
+            })
+        }));
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "candy_cannon"
+                    && mode["min_players"] == 2
+                    && mode["artwork"] == "/static/assets/modes/candy_cannon.webp"
             })
         }));
         assert!(modes.as_array().is_some_and(|items| {

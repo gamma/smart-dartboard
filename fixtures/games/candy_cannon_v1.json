@@ -1,0 +1,52 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 1,
+  "players": [{"id": "ada", "name": "Ada"}, {"id": "bob", "name": "Bob"}],
+  "options": {"rounds": 5},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+      "expected": {"scores": [0, 0], "charges": [3, 0], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+      "expected": {"scores": [0, 0], "charges": [6, 0], "current_player_index": 0, "darts_in_turn": 2, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 3, "label": "MISS", "score": 0}},
+      "expected": {"scores": [0, 0], "charges": [6, 0], "current_player_index": 0, "darts_in_turn": 3, "turn_score": 0, "round_number": 1, "status": "hold", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [0, 0], "charges": [6, 0], "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 4, "label": "MISS", "score": 0}},
+      "expected": {"scores": [0, 0], "charges": [6, 0], "current_player_index": 1, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 5, "label": "MISS", "score": 0}},
+      "expected": {"scores": [0, 0], "charges": [6, 0], "current_player_index": 1, "darts_in_turn": 2, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 6, "label": "MISS", "score": 0}},
+      "expected": {"scores": [0, 0], "charges": [6, 0], "current_player_index": 1, "darts_in_turn": 3, "turn_score": 0, "round_number": 1, "status": "hold", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [0, 0], "charges": [6, 0], "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 7, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+      "expected": {"scores": [0, 0], "charges": [9, 0], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 8, "field": 25, "ring": "single_bull", "multiplier": 1, "label": "SBull", "score": 25}},
+      "expected": {"scores": [50, 0], "charges": [0, 0], "current_player_index": 0, "darts_in_turn": 2, "turn_score": 50, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    },
+    {
+      "command": {"type": "correct", "action_id": 9, "event": {"type": "miss", "seq": 999, "label": "MISS", "score": 0}},
+      "expected": {"scores": [0, 0], "charges": [10, 0], "current_player_index": 0, "darts_in_turn": 2, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": ""}
+    }
+  ]
+}

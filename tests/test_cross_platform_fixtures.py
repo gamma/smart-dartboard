@@ -35,6 +35,9 @@ GHOST_CHASE_FIXTURE = (
 ROBIN_HOOD_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "robin_hood_v2.json"
 )
+CANDY_CANNON_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "candy_cannon_v1.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -392,6 +395,39 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                 "winner_id": state.winner_id,
                 "result_type": state.result_type,
                 "random_cursor": state.random_cursor,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_candy_cannon_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(CANDY_CANNON_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_schema_version"], 1)
+        self.assertEqual(fixture["ruleset_version"], 1)
+        engine = GameEngine()
+        engine.reset("candy_cannon", fixture["players"], options=fixture["options"])
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(int(command["action_id"]), dict(command["event"]))
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            actual = {
+                "scores": [player.score for player in state.players],
+                "charges": [
+                    state.mode_state["charge"].get(player.id, 0)
+                    for player in state.players
+                ],
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_id": state.winner_id,
+                "result_type": state.result_type,
             }
             self.assertEqual(actual, step["expected"])
 

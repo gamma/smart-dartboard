@@ -5,12 +5,14 @@ use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
 mod arcade;
+mod candy_cannon;
 mod eight_ball;
 mod ghost_chase;
 mod heart_chase;
 mod robin_hood;
 mod target_rush;
 
+use candy_cannon::CANDY_CANNON_MODE;
 use eight_ball::EIGHT_BALL_MODE;
 use ghost_chase::GHOST_CHASE_MODE;
 use heart_chase::HEART_CHASE_MODE;
@@ -1123,8 +1125,9 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 6] = [
+static MODES: [&'static dyn GameMode; 7] = [
     &CRICKET_MODE,
+    &CANDY_CANNON_MODE,
     &EIGHT_BALL_MODE,
     &GHOST_CHASE_MODE,
     &HEART_CHASE_MODE,
