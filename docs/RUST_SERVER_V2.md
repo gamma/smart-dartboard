@@ -26,6 +26,27 @@ curl http://127.0.0.1:8001/api/v2/health
 Der Container läuft ohne Root, ohne `privileged` und ohne Linux-Capabilities.
 `/data` enthält `runtime.sqlite`.
 
+Mit echter BLE-Scheibe unter Linux läuft Bleak als separater, unprivilegierter
+Adapter. Zuerst ein zufälliges gemeinsames Secret in `.env` eintragen:
+
+```dotenv
+SDB_BOARD_TOKEN=<Ausgabe von: openssl rand -hex 32>
+SDB_DEVICE_NAME=SDB-BT
+SDB_DEVICE_ADDRESS=
+```
+
+Dann Runtime und Gateway gemeinsam starten:
+
+```bash
+docker compose -f compose.rust.yml -f compose.rust.ble.yml up --build
+```
+
+Das Overlay bindet ausschließlich den Linux-Systembus `/run/dbus` read-only
+ein. Es benötigt weder `privileged` noch zusätzliche Linux-Capabilities. Docker
+Desktop auf macOS reicht echte CoreBluetooth-Geräte nicht an Linux-Container
+durch; dort bleibt das Overlay aus und der spätere native Apple-Adapter ist der
+Produktionspfad.
+
 ## Endpunkte
 
 | Methode | Pfad | Zweck |
@@ -35,6 +56,8 @@ Der Container läuft ohne Root, ohne `privileged` und ohne Linux-Capabilities.
 | `GET` | `/api/v2/runtime/snapshot` | erneuter Snapshot nach Lücke oder Reconnect |
 | `POST` | `/api/v2/runtime/commands` | ein `CommandEnvelope` atomar anwenden |
 | `GET` | `/api/v2/runtime/events` | WebSocket mit initialem und folgenden Snapshots |
+| `POST` | `/api/v2/board/status` | interner, authentisierter Gateway-Status |
+| `POST` | `/api/v2/board/packets` | interner, authentisierter FFF1-Rohpaket-Ingress |
 | `GET` | `/api/v2/players` | persistente Spielerprofile |
 | `GET` | `/api/v2/history/sessions` | Sessionhistorie; optional `?limit=` |
 | `GET` | `/api/v2/history/sessions/{session_id}` | Session, Teilnehmer und enthaltene Spiele |
@@ -47,6 +70,12 @@ Browser-POSTs und WebSockets akzeptieren nur dieselbe Origin. Clients ohne
 Protokollversionen, falsche Runtime-IDs und veraltete Revisionen liefern stabile
 Fehlercodes und passende HTTP-Statuscodes.
 
+Die beiden Board-Endpunkte sind keine Browser-API. Sie verlangen
+`Authorization: Bearer <SDB_BOARD_TOKEN>`. Bei aktiviertem BLE startet der
+Server ohne Token nicht. `connection_id` bindet Pakete an genau eine
+Transportverbindung; veraltete Links, falsche Paketlänge und ungültige
+Checksummen ändern den Spielzustand nicht.
+
 ## Aktueller Funktionsumfang
 
 - CountUp und X01 starten,
@@ -57,6 +86,8 @@ Fehlercodes und passende HTTP-Statuscodes.
 - Einzel- und Koop-Siege mit drei Sessionpunkten je Gewinner werten;
   Unentschieden und Abbrüche bleiben punktlos,
 - kanonische Dart-Events übernehmen,
+- rohe FFF1-Notifications über den Linux-Bleak-Sidecar begrenzt puffern, im
+  gemeinsamen Rust-Ingress decodieren und pro Verbindung deduplizieren,
 - die Wurfquelle transportneutral als `board`, `projector_test` oder
   `manual_correction` führen; ein Projektor-Testwurf markiert das gesamte Spiel
   als Test und schließt es aus der Standardstatistik aus,
@@ -80,13 +111,15 @@ Noch offen und daher ausdrücklich kein Produktionsersatz:
 
 - Teammodell sowie Heatmap-, Modusstatistik-, Export- und Trainingsabfragen,
 - restliche Spielmodi und deklarative Effects,
-- Bleak-/BlueZ-Gateway und reale Boardqualifizierung,
+- reale BlueZ-/Boardqualifizierung mit schneller Trefferfolge, Reconnect,
+  Adapterausfall und Langzeittest,
 - Migration vorhandener Python-Datenbanken,
 - Umstellung der bestehenden UI auf API v2.
 
-Wenn `SDB_ENABLE_BLE=1` gesetzt ist, meldet Health derzeit `degraded` und Board
-`unavailable`. Das verhindert, dass ein Container ohne implementierten
-Boardadapter fälschlich als produktionsbereit erscheint.
+Wenn `SDB_ENABLE_BLE=1` gesetzt ist, meldet Health bis zum erfolgreichen
+Gateway-Handshake `degraded` und Board `unavailable`. Erst nach Discovery,
+Verbindung, Serviceprüfung und Notification-Subscription wechselt es zu
+`ok`/`ready`. Bei deaktiviertem BLE bleibt Health `ok`/`disabled`.
 
 ## Datenbankschema
 

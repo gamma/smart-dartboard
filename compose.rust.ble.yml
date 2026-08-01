@@ -1,0 +1,30 @@
+services:
+  dartboard:
+    environment:
+      SDB_ENABLE_BLE: "1"
+      SDB_BOARD_TOKEN: ${SDB_BOARD_TOKEN:?Set SDB_BOARD_TOKEN to a random secret}
+
+  ble-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.ble
+    image: smart-dartboard:ble-gateway
+    depends_on:
+      dartboard:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    volumes:
+      - /run/dbus:/run/dbus:ro
+    environment:
+      SDB_RUNTIME_URL: http://dartboard:8000
+      SDB_BOARD_TOKEN: ${SDB_BOARD_TOKEN:?Set SDB_BOARD_TOKEN to a random secret}
+      SDB_DEVICE_NAME: ${SDB_DEVICE_NAME:-SDB-BT}
+      SDB_DEVICE_ADDRESS: ${SDB_DEVICE_ADDRESS:-}
+      SDB_BLE_QUEUE_SIZE: ${SDB_BLE_QUEUE_SIZE:-256}
+    restart: unless-stopped

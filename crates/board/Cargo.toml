@@ -1,0 +1,16 @@
+[package]
+name = "sdb-board"
+description = "Transport-neutral smart dartboard ingress and connection state"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+sdb-contracts = { path = "../contracts" }
+sdb-protocol = { path = "../protocol" }
+serde.workspace = true
+
+[lints]
+workspace = true

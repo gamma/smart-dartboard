@@ -224,6 +224,17 @@ jobs:
           cache-from: type=gha,scope=rust-preview
           cache-to: type=gha,mode=max,scope=rust-preview
 
+      - name: Build Linux BLE gateway image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.ble
+          load: true
+          push: false
+          tags: smart-dartboard:ble-gateway-ci
+          cache-from: type=gha,scope=ble-gateway
+          cache-to: type=gha,mode=max,scope=ble-gateway
+
       - name: Smoke-test recovery and container isolation
         shell: bash
         run: |
@@ -242,6 +253,8 @@ jobs:
             --security-opt no-new-privileges:true \
             --mount "source=$volume_name,target=/data" \
             --publish 127.0.0.1:18081:8000 \
+            --env SDB_ENABLE_BLE=1 \
+            --env SDB_BOARD_TOKEN=ci-board-secret \
             smart-dartboard:rust-preview-ci
 
           ready=0
@@ -261,15 +274,16 @@ jobs:
           python - <<'PY'
           import json
           health = json.load(open('/tmp/rust-health.json'))
-          assert health['status'] == 'ok', health
+          assert health['status'] == 'degraded', health
           assert health['schema_version'] == 4, health
           assert health['database'] == 'ok', health
-          assert health['board'] == 'disabled', health
+          assert health['board'] == 'unavailable', health
           PY
           test "$(docker inspect "$container_name" --format '{{.Config.User}}')" = dartboard
           test "$(docker inspect "$container_name" --format '{{.HostConfig.Privileged}}')" = false
           python - <<'PY'
           import json
+          import urllib.error
           import urllib.request
           base = 'http://127.0.0.1:18081'
           bootstrap = json.load(urllib.request.urlopen(base + '/api/v2/runtime/bootstrap'))
@@ -288,13 +302,6 @@ jobs:
               }),
               ('start', {'type': 'start_prepared_game', 'game_id': 'ci-game'}),
               ('playing', {'type': 'mark_game_playing'}),
-              ('checkout', {
-                  'type': 'ingest_dart',
-                  'event': {
-                      'type': 'hit', 'seq': 1, 'field': 20, 'ring': 'double',
-                      'multiplier': 2, 'label': 'D20', 'score': 40,
-                  },
-              }),
           ]
           revision = 0
           for command_id, command in commands:
@@ -312,6 +319,36 @@ jobs:
               )
               result = json.load(urllib.request.urlopen(request))
               revision = result['revision']
+          assert revision == 4, result
+
+          def board_post(path, payload, authenticated=True):
+              headers = {'content-type': 'application/json'}
+              if authenticated:
+                  headers['authorization'] = 'Bearer ci-board-secret'
+              request = urllib.request.Request(
+                  base + path,
+                  data=json.dumps(payload).encode(),
+                  headers=headers,
+              )
+              return json.load(urllib.request.urlopen(request))
+
+          try:
+              board_post('/api/v2/board/status', {'phase': 'scanning'}, False)
+              raise AssertionError('unauthenticated board status was accepted')
+          except urllib.error.HTTPError as error:
+              assert error.code == 403, error
+          board_post('/api/v2/board/status', {
+              'phase': 'ready', 'connection_id': 'ci-link',
+          })
+          packet = {
+              'connection_id': 'ci-link',
+              'raw_hex': '0100000005000d00020f',
+          }
+          result = board_post('/api/v2/board/packets', packet)
+          assert result['disposition'] == 'applied', result
+          duplicate = board_post('/api/v2/board/packets', packet)
+          assert duplicate['disposition'] == 'duplicate', duplicate
+          revision = result['result']['revision']
           assert revision == 5, result
           open('/tmp/rust-instance-before', 'w').write(bootstrap['runtime_instance_id'])
           PY

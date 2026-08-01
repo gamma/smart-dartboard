@@ -51,6 +51,11 @@ Umgesetzt und lokal verifiziert:
 - API-v2-Details für Sessions und Spiele sowie ein vollständiges Replay-Envelope
   mit Initialzustand, Finalzustand, Frames, unwirksam gemachten Originalevents
   und Korrekturverkettung. Unbekannte IDs liefern stabil `not_found`/HTTP 404.
+- Transportneutraler Rust-Board-Ingress für rohe FFF1-Pakete mit gemeinsamer
+  Interpretation, begrenzter Deduplizierung und stabilen Fehlerzuständen. Ein
+  unprivilegierter Linux-Bleak-Sidecar liefert nur Notifications und Status
+  über token-authentisierte interne Endpunkte; der reale Containervertrag ist
+  ohne Hardware per D20-Rohpaket verifiziert.
 
 Noch nicht als produktionsreif nachgewiesen:
 
@@ -60,7 +65,8 @@ Noch nicht als produktionsreif nachgewiesen:
 - iPhone/iPad-zu-iPad-Companion mit Pairing,
 - vollständige Portierung aller Spielmodi sowie Heatmap, Modusstatistiken,
   Export und Trainingsempfehlungen,
-- vollständige Docker-Parität zur Python-Anwendung.
+- vollständige Docker-Parität zur Python-Anwendung,
+- reale Linux-BlueZ-/Board-Abnahme des neuen Sidecars.
 
 ## Lokale Befehle
 

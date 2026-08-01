@@ -560,6 +560,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
 
 [[package]]
+name = "sdb-board"
+version = "0.1.0"
+dependencies = [
+ "sdb-contracts",
+ "sdb-protocol",
+ "serde",
+]
+
+[[package]]
 name = "sdb-contracts"
 version = "0.1.0"
 dependencies = [
@@ -604,6 +613,7 @@ name = "sdb-server"
 version = "0.1.0"
 dependencies = [
  "axum",
+ "sdb-board",
  "sdb-contracts",
  "sdb-runtime",
  "sdb-storage",

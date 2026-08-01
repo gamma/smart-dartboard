@@ -9,6 +9,7 @@ repository.workspace = true
 
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
+sdb-board = { path = "../board" }
 sdb-contracts = { path = "../contracts" }
 sdb-runtime = { path = "../runtime" }
 sdb-storage = { path = "../storage" }

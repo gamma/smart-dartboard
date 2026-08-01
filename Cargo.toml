@@ -2,6 +2,7 @@
 resolver = "2"
 exclude = ["apps/tauri/src-tauri"]
 members = [
+  "crates/board",
   "crates/contracts",
   "crates/game-core",
   "crates/protocol",

@@ -1,0 +1,14 @@
+FROM python:3.14-slim
+
+ENV PYTHONUNBUFFERED=1
+WORKDIR /app
+
+RUN useradd --system --uid 10001 --home-dir /nonexistent --shell /usr/sbin/nologin dartboard
+
+COPY requirements.ble.txt ./
+RUN pip install --no-cache-dir -r requirements.ble.txt
+
+COPY --chown=dartboard:dartboard sdb_dartboard/__init__.py sdb_dartboard/ble_gateway.py ./sdb_dartboard/
+
+USER dartboard
+ENTRYPOINT ["python", "-m", "sdb_dartboard.ble_gateway"]

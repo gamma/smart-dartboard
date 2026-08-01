@@ -62,6 +62,12 @@ Der Release-Workflow veröffentlicht ein Multi-Arch-Image für
 `linux/amd64` und `linux/arm64`. Damit läuft dasselbe Release auf einem
 üblichen Mini-PC und auf einem 64-Bit-Raspberry-Pi.
 
+Der Rust-Migrationspfad besitzt zusätzlich ein minimales Linux-BLE-Sidecar.
+Solange API v2 noch nicht alle Spielmodi und Oberflächen ersetzt, wird es nur
+lokal aus `Dockerfile.ble` gebaut und nicht als produktives Release-Image
+beworben. Sein Container-Build und der authentisierte Rohpaket-Ingress laufen
+bereits in CI.
+
 Nach dem ersten Release die Paketseite unter GitHub öffnen und die Sichtbarkeit
 des Containerpakets prüfen. Für ein öffentliches Repository sollte das Image
 öffentlich lesbar sein. Bei einem privaten Paket benötigt das Zielgerät einen
