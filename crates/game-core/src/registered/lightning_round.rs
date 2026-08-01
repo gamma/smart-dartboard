@@ -104,7 +104,7 @@ impl GameMode for LightningRoundMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         let task = task(state)?;
         let success = matches!(event, DartEvent::Hit { .. }) && accepts(task.id, event);
         let points = if success { 25 } else { 0 };

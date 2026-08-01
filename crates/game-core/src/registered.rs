@@ -106,7 +106,7 @@ pub struct GameMetadata {
 pub struct RegisteredPlayer {
     pub id: String,
     pub name: String,
-    pub score: u32,
+    pub score: i64,
     #[serde(default)]
     pub marks: BTreeMap<String, u8>,
 }
@@ -118,7 +118,7 @@ pub struct RegisteredGameState {
     pub players: Vec<RegisteredPlayer>,
     pub current_player_index: usize,
     pub darts_in_turn: u8,
-    pub turn_score: u32,
+    pub turn_score: i64,
     pub round_number: u16,
     pub status: GameStatus,
     pub winner_id: Option<String>,
@@ -169,7 +169,7 @@ pub struct RegisteredDartRecord {
     pub action_id: u64,
     pub event: DartEvent,
     pub player_id: String,
-    pub score_after: u32,
+    pub score_after: i64,
     pub round_number: u16,
     pub dart_in_turn: u8,
     pub outcome: String,
@@ -686,7 +686,7 @@ trait GameMode: Sync {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError>;
+    ) -> Result<i64, GameError>;
     fn overlay(&self, state: &RegisteredGameState) -> Value;
 
     fn is_player_active(&self, _state: &RegisteredGameState, _player_index: usize) -> bool {
@@ -1013,7 +1013,7 @@ impl GameMode for CricketMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         let DartEvent::Hit {
             field,
             multiplier,
@@ -1046,7 +1046,7 @@ impl GameMode for CricketMode {
             player.id != player_id && player.marks.get(&key).copied().unwrap_or_default() < 3
         });
         let scored = if opponents_open {
-            u32::from(overflow) * u32::from(*field)
+            i64::from(overflow) * i64::from(*field)
         } else {
             0
         };
@@ -1374,5 +1374,26 @@ mod tests {
                 .expect("restore");
         assert_eq!(restored.state().random_seed, 42);
         assert_eq!(restored.state().random_cursor, 8);
+    }
+
+    #[test]
+    fn signed_arcade_scores_survive_snapshot_round_trips() {
+        let mut game = RegisteredGame::new_seeded(
+            "target_rush",
+            vec![("ada".into(), "Ada".into())],
+            &json!({"rounds": 3, "difficulty": "normal"}),
+            42,
+        )
+        .expect("game");
+        game.state.players[0].score = -40;
+        game.state.turn_score = -40;
+
+        let restored: RegisteredGame = serde_json::from_str(
+            &serde_json::to_string(&game).expect("serialize signed registry state"),
+        )
+        .expect("restore signed registry state");
+
+        assert_eq!(restored.state().players[0].score, -40);
+        assert_eq!(restored.state().turn_score, -40);
     }
 }

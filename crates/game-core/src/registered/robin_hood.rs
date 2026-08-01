@@ -108,7 +108,7 @@ impl GameMode for RobinHoodMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         if let Some(arrow) = event_target(event) {
             state
                 .mode_state
@@ -146,7 +146,7 @@ impl GameMode for RobinHoodMode {
                 .and_then(|targets| (index < targets.len()).then(|| targets.remove(index)))
                 .ok_or_else(invalid_state)
                 .and_then(|target| parse_target(&target))?;
-            let points = 30_u32.saturating_add(u32::from(target.score));
+            let points = 30_i64.saturating_add(i64::from(target.score));
             state.players[player_index].score =
                 state.players[player_index].score.saturating_add(points);
             increment_split(state, &player_id)?;

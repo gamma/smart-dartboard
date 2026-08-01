@@ -133,7 +133,7 @@ struct PublicState {
     app_role: NativeAppRole,
     runtime_instance_id: String,
     revision: u64,
-    counter: u64,
+    counter: i64,
     external_display_count: u32,
     board: BoardStatus,
     game: Option<RuntimeGameState>,
@@ -297,9 +297,9 @@ impl NativeState {
             .as_ref()
             .map(|game| game.state());
         let counter = game.as_ref().map_or(0, |state| match state {
-            RuntimeGameState::CountUp(state) => state.players[0].score.into(),
-            RuntimeGameState::X01(state) => state.players[0].score.into(),
-            RuntimeGameState::Registered(state) => state.players[0].score.into(),
+            RuntimeGameState::CountUp(state) => i64::from(state.players[0].score),
+            RuntimeGameState::X01(state) => i64::from(state.players[0].score),
+            RuntimeGameState::Registered(state) => state.players[0].score,
         });
         PublicState {
             app_role: self.app_role,

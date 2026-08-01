@@ -117,7 +117,7 @@ impl GameMode for GhostChaseMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         let player_index = state.current_player_index;
         let player_id = state.players[player_index].id.clone();
         let target = current_target(state, &player_id)?;
@@ -130,7 +130,7 @@ impl GameMode for GhostChaseMode {
                     if *field == target.field
             );
         let points = if easy_single || same_target(event, &target) {
-            let points = 40_u32.saturating_add(u32::from(combo.min(2)) * 10);
+            let points = 40_i64.saturating_add(i64::from(combo.min(2)) * 10);
             state.players[player_index].score =
                 state.players[player_index].score.saturating_add(points);
             set_counter(state, "combo", &player_id, combo.saturating_add(1))?;

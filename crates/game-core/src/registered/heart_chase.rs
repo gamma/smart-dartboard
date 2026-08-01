@@ -100,16 +100,16 @@ impl GameMode for HeartChaseMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         let value = match event {
-            DartEvent::Hit { score, .. } => u32::from(*score),
+            DartEvent::Hit { score, .. } => i64::from(*score),
             DartEvent::Miss { .. } => 0,
         };
         let player_index = state.current_player_index;
         let player_id = state.players[player_index].id.clone();
         state.players[player_index].score = state.players[player_index].score.saturating_add(value);
         let turn_total = state.turn_score.saturating_add(value);
-        let challenge = challenge_score(state)?;
+        let challenge = i64::from(challenge_score(state)?);
         if state.darts_in_turn < 2 {
             state.message = format!("{turn_total} · Jagd {challenge}");
             return Ok(value);

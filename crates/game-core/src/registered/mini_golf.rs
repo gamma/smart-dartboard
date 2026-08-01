@@ -106,7 +106,7 @@ impl GameMode for MiniGolfMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         let target = target(state)?;
         let hit = matches!(event, DartEvent::Hit { .. })
             && if difficulty(state)? == "easy" {
@@ -116,7 +116,7 @@ impl GameMode for MiniGolfMode {
             };
         let player_index = state.current_player_index;
         let (strokes, ends_turn) = if hit {
-            let strokes = u32::from(state.darts_in_turn.saturating_add(1));
+            let strokes = i64::from(state.darts_in_turn.saturating_add(1));
             state.message = format!(
                 "{}! {strokes} Schlag",
                 match strokes {

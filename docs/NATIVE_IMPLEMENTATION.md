@@ -30,6 +30,9 @@ Umgesetzt und lokal verifiziert:
   Cursor gehören zum Runtime-Snapshot. Damit reproduzieren Recovery, Undo und
   Wurfkorrektur dieselbe Arcade-Zielsequenz. Golden-Fixtures können einen Seed
   direkt vorgeben,
+- vorzeichenbehaftete Arcade-Scores in Registry-State, Dart-Replay und
+  SQLite-Historie. Dadurch bleiben Modusregeln mit echten Minuspunkten über
+  Snapshot, Korrektur, Recovery und API unverändert erhalten,
 - Web-UI hinter `HostedRuntimeClient` und `TauriRuntimeClient`,
 - macOS-Tauri-App mit Control- und Projector-Fenster,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,

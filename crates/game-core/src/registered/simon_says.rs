@@ -134,7 +134,7 @@ impl GameMode for SimonSaysMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         let sequence = sequence(state)?;
         let position = position(state)?;
         let Some(target) = sequence.get(position) else {
@@ -147,7 +147,7 @@ impl GameMode for SimonSaysMode {
         let next_position = position.saturating_add(1);
         state.mode_state["position"] = Value::from(next_position);
         if next_position >= sequence.len() {
-            let points = u32::try_from(25_usize.saturating_mul(sequence.len()))
+            let points = i64::try_from(25_usize.saturating_mul(sequence.len()))
                 .map_err(|_| invalid_state())?;
             let player = state
                 .players
@@ -226,7 +226,7 @@ impl GameMode for SimonSaysMode {
     }
 }
 
-fn wrong_target(state: &mut RegisteredGameState) -> Result<u32, GameError> {
+fn wrong_target(state: &mut RegisteredGameState) -> Result<i64, GameError> {
     state.mode_state["position"] = Value::from(0);
     state.message = "Falsches Feld – Sequenz reset".into();
     finish_action_round_game(state, "{winner} gewinnt Simon Says!")?;

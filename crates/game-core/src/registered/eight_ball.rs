@@ -64,7 +64,7 @@ impl GameMode for EightBallMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         let player_index = state.current_player_index;
         let opponent_index = 1_usize.saturating_sub(player_index);
         let player_id = state.players[player_index].id.clone();

@@ -76,7 +76,7 @@ impl GameMode for CandyCannonMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         clear_effect(state);
         let player_index = state.current_player_index;
         let player_id = state.players[player_index].id.clone();
@@ -223,7 +223,7 @@ fn target_index(state: &RegisteredGameState, player_index: usize) -> Result<usiz
         .ok_or_else(invalid_state)
 }
 
-fn fire(state: &mut RegisteredGameState, player_index: usize) -> Result<u32, GameError> {
+fn fire(state: &mut RegisteredGameState, player_index: usize) -> Result<i64, GameError> {
     let target_index = target_index(state, player_index)?;
     let player_id = state.players[player_index].id.clone();
     let player_name = state.players[player_index].name.clone();
@@ -231,7 +231,7 @@ fn fire(state: &mut RegisteredGameState, player_index: usize) -> Result<u32, Gam
     let target_name = state.players[target_index].name.clone();
     let previous_score = state.players[target_index].score;
     state.players[player_index].score = state.players[player_index].score.saturating_add(50);
-    state.players[target_index].score = previous_score.saturating_sub(25);
+    state.players[target_index].score = previous_score.saturating_sub(25).max(0);
     let score_loss = previous_score.saturating_sub(state.players[target_index].score);
     set_charge(state, &player_id, 0)?;
     state.mode_state["last_effect"] = Value::from("candy_fire");

@@ -126,7 +126,7 @@ impl GameMode for TargetRushMode {
         &self,
         state: &mut RegisteredGameState,
         event: &DartEvent,
-    ) -> Result<u32, GameError> {
+    ) -> Result<i64, GameError> {
         let target = target(state)?;
         let player_index = state.current_player_index;
         let player_id = state.players[player_index].id.clone();
@@ -137,7 +137,7 @@ impl GameMode for TargetRushMode {
             state.message = "Miss – Combo reset".into();
             0
         } else if (easy && same_field(event, &target)) || same_target(event, &target) {
-            let points = 50_u32.saturating_add(u32::from(combo).saturating_mul(10));
+            let points = 50_i64.saturating_add(i64::from(combo).saturating_mul(10));
             state.players[player_index].score =
                 state.players[player_index].score.saturating_add(points);
             set_combo(state, &player_id, combo.saturating_add(1))?;

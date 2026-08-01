@@ -77,7 +77,7 @@ pub struct GamePlayerHistory {
     pub avatar: String,
     pub color: String,
     pub position: u64,
-    pub final_score: Option<u64>,
+    pub final_score: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -114,7 +114,7 @@ pub struct ThrowHistory {
     pub seq: u64,
     pub player_id: Option<String>,
     pub event: serde_json::Value,
-    pub score_after: u64,
+    pub score_after: i64,
     pub round_number: u64,
     pub dart_in_turn: u64,
     pub outcome: String,
@@ -781,9 +781,7 @@ fn load_game_players(
             avatar,
             color,
             position: nonnegative(position, "game player position")?,
-            final_score: final_score
-                .map(|score| nonnegative(score, "game final score"))
-                .transpose()?,
+            final_score,
         })
     })
     .collect()
@@ -833,7 +831,7 @@ fn load_throws(connection: &Connection, game_id: &str) -> Result<Vec<ThrowHistor
             seq: nonnegative(seq, "dart sequence")?,
             player_id,
             event: parse_json(&event, "dart event")?,
-            score_after: nonnegative(score, "score after dart")?,
+            score_after: score,
             round_number: nonnegative(round, "dart round")?,
             dart_in_turn: nonnegative(dart, "dart in turn")?,
             outcome,
@@ -1177,7 +1175,7 @@ fn verify_integrity(connection: &Connection) -> Result<(), StorageError> {
 
 #[derive(Debug)]
 struct GameProjection {
-    players: Vec<(String, u32)>,
+    players: Vec<(String, i64)>,
     current_player_index: usize,
     round_number: u16,
     darts_in_turn: u8,
@@ -1194,7 +1192,7 @@ fn game_projection(game: &RuntimeGame) -> GameProjection {
                 players: state
                     .players
                     .iter()
-                    .map(|player| (player.id.clone(), player.score))
+                    .map(|player| (player.id.clone(), i64::from(player.score)))
                     .collect(),
                 current_player_index: state.current_player_index,
                 round_number: state.round_number,
@@ -1210,7 +1208,7 @@ fn game_projection(game: &RuntimeGame) -> GameProjection {
                 players: state
                     .players
                     .iter()
-                    .map(|player| (player.id.clone(), player.score))
+                    .map(|player| (player.id.clone(), i64::from(player.score)))
                     .collect(),
                 current_player_index: state.current_player_index,
                 round_number: state.round_number,
@@ -1581,7 +1579,7 @@ fn record_dart(
                 to_sql_i64(seq, "dart sequence")?,
                 player_id,
                 event_json,
-                i64::from(score_after),
+                score_after,
                 i64::from(after.round_number),
                 i64::from(after.darts_in_turn),
                 field
@@ -1707,7 +1705,7 @@ struct ReplayedDartRecord {
     action_id: u64,
     event: DartEvent,
     player_id: String,
-    score_after: u32,
+    score_after: i64,
     round_number: u16,
     dart_in_turn: u8,
     outcome: String,
@@ -1719,7 +1717,7 @@ impl From<sdb_game_core::X01DartRecord> for ReplayedDartRecord {
             action_id: record.action_id,
             event: record.event,
             player_id: record.player_id,
-            score_after: record.score_after,
+            score_after: i64::from(record.score_after),
             round_number: record.round_number,
             dart_in_turn: record.dart_in_turn,
             outcome: record.outcome,
@@ -1733,7 +1731,7 @@ impl From<sdb_game_core::CountUpDartRecord> for ReplayedDartRecord {
             action_id: record.action_id,
             event: record.event,
             player_id: record.player_id,
-            score_after: record.score_after,
+            score_after: i64::from(record.score_after),
             round_number: record.round_number,
             dart_in_turn: record.dart_in_turn,
             outcome: record.outcome,
@@ -1863,7 +1861,7 @@ fn insert_replayed_throw(
                 to_sql_i64(record.event.seq(), "dart sequence")?,
                 record.player_id,
                 event_json,
-                i64::from(record.score_after),
+                record.score_after,
                 i64::from(record.round_number),
                 i64::from(record.dart_in_turn),
                 field
@@ -2050,7 +2048,7 @@ fn finish_game(
         transaction
             .execute(
                 "UPDATE game_players SET final_score=?1 WHERE game_id=?2 AND player_id=?3",
-                params![i64::from(score), game_id, player_id],
+                params![score, game_id, player_id],
             )
             .map_err(|error| error.to_string())?;
     }
@@ -2851,6 +2849,82 @@ mod tests {
         assert_eq!(game.state().status, GameStatus::Finished);
         assert_eq!(game.state().winner_ids, vec!["ada"]);
         assert_eq!(game.state().random_seed, seed_from_id("game-cricket"));
+    }
+
+    #[test]
+    fn history_preserves_signed_arcade_scores() {
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        for (command_id, action) in [
+            (
+                "signed-session",
+                RuntimeAction::StartSession {
+                    session_id: "signed-session".into(),
+                    players: vec![PlayerRef {
+                        id: "ada".into(),
+                        name: "Ada".into(),
+                        avatar: "comet".into(),
+                        color: "#28e7ff".into(),
+                    }],
+                },
+            ),
+            (
+                "signed-prepare",
+                RuntimeAction::PrepareGame {
+                    game_type: "countup".into(),
+                    options: serde_json::json!({"rounds": 3}),
+                },
+            ),
+            (
+                "signed-start",
+                RuntimeAction::StartPreparedGame {
+                    game_id: "signed-game".into(),
+                },
+            ),
+            ("signed-playing", RuntimeAction::MarkGamePlaying),
+        ] {
+            runtime
+                .dispatch("runtime", command_id, None, action)
+                .unwrap_or_else(|error| panic!("{command_id}: {error}"));
+        }
+        runtime
+            .dispatch(
+                "runtime",
+                "signed-dart",
+                None,
+                RuntimeAction::Dart {
+                    event: DartEvent::Miss {
+                        seq: 1,
+                        label: "MISS".into(),
+                        score: 0,
+                    },
+                    source: sdb_contracts::DartSource::Board,
+                },
+            )
+            .expect("record dart");
+
+        let repository = runtime.into_repository();
+        repository
+            .connection
+            .execute(
+                "UPDATE game_players SET final_score=-40 WHERE game_id='signed-game'",
+                [],
+            )
+            .expect("set signed final score");
+        repository
+            .connection
+            .execute(
+                "UPDATE throws SET score_after=-40 WHERE game_id='signed-game'",
+                [],
+            )
+            .expect("set signed throw score");
+
+        let detail = repository
+            .game_detail("signed-game")
+            .expect("game detail")
+            .expect("signed game");
+        assert_eq!(detail.game.players[0].final_score, Some(-40));
+        assert_eq!(detail.throws[0].score_after, -40);
     }
 
     #[test]
