@@ -248,22 +248,9 @@ function testModeEnabled(){
   return Boolean(appState.experience?.hardware?.test_events);
 }
 
-async function api(path, body = {}){
-  const response = await fetch(path, {
-    method: 'POST',
-    headers: {'content-type':'application/json'},
-    body: JSON.stringify(body),
-  });
-  const payload = await response.json();
-  if(!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
-  return payload;
-}
-async function getJson(path){
-  const response=await fetch(path);
-  const payload=await response.json();
-  if(!response.ok) throw new Error(payload.detail || `HTTP ${response.status}`);
-  return payload;
-}
+const runtimeClient=window.SDBRuntimeClient.create();
+async function api(path,body={}){ return runtimeClient.dispatch(path,body); }
+async function getJson(path){ return runtimeClient.query(path); }
 async function action(path, body = {}){
   try { return await api(path, body); }
   catch(error){ showToast(error.message); throw error; }
@@ -288,20 +275,13 @@ function scheduleRematchExpiryCheck(){
 }
 
 async function loadBootstrap(){
-  const response = await fetch('/api/bootstrap');
-  updateExperience(await response.json());
+  updateExperience(await runtimeClient.bootstrap());
 }
 function connectWs(){
-  const protocol = location.protocol === 'https:' ? 'wss' : 'ws';
-  const ws = new WebSocket(`${protocol}://${location.host}/ws`);
-  ws.onopen = () => { appState.wsOk = true; renderConnection(); };
-  ws.onclose = () => {
-    appState.wsOk = false;
-    renderConnection();
-    setTimeout(connectWs, 1000);
-  };
-  ws.onmessage = message => {
-    const payload = JSON.parse(message.data);
+  runtimeClient.subscribe({
+    onOpen:()=>{ appState.wsOk=true; renderConnection(); },
+    onClose:()=>{ appState.wsOk=false; renderConnection(); },
+    onMessage:payload=>{
     if(
       payload.dev_reload
       && appState.serverInstance
@@ -313,7 +293,8 @@ function connectWs(){
     }
     if(payload.server_instance) appState.serverInstance=payload.server_instance;
     if(payload.experience) updateExperience(payload.experience, payload.event);
-  };
+    },
+  });
 }
 function updateExperience(experience, event){
   const previous = appState.experience;
