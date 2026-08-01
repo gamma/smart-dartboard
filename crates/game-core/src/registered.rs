@@ -9,6 +9,7 @@ mod candy_cannon;
 mod eight_ball;
 mod ghost_chase;
 mod heart_chase;
+mod lightning_round;
 mod robin_hood;
 mod target_rush;
 
@@ -16,6 +17,7 @@ use candy_cannon::CANDY_CANNON_MODE;
 use eight_ball::EIGHT_BALL_MODE;
 use ghost_chase::GHOST_CHASE_MODE;
 use heart_chase::HEART_CHASE_MODE;
+use lightning_round::LIGHTNING_ROUND_MODE;
 use robin_hood::ROBIN_HOOD_MODE;
 use target_rush::TARGET_RUSH_MODE;
 
@@ -1125,12 +1127,13 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 7] = [
+static MODES: [&'static dyn GameMode; 8] = [
     &CRICKET_MODE,
     &CANDY_CANNON_MODE,
     &EIGHT_BALL_MODE,
     &GHOST_CHASE_MODE,
     &HEART_CHASE_MODE,
+    &LIGHTNING_ROUND_MODE,
     &ROBIN_HOOD_MODE,
     &TARGET_RUSH_MODE,
 ];

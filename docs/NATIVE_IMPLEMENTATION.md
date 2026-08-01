@@ -18,9 +18,10 @@ Umgesetzt und lokal verifiziert:
 - statische, zur Buildzeit typsicher registrierte Spielmodi mit versionierten
   Metadaten, validierten Optionen, Anleitungen, Artwork-/Sound-Referenzen und
   Projector-Overlay. `GET /api/v2/modes` liefert derzeit CountUp, X01, Cricket,
-  8-Ball, Heart Chase, Target Rush, Ghost Chase, Robin Hood und Candy Cannon.
+  8-Ball, Heart Chase, Target Rush, Ghost Chase, Robin Hood, Candy Cannon und
+  Lightning Round.
   Cricket, 8-Ball, Heart Chase, Target Rush, Ghost Chase, Robin Hood und Candy
-  Cannon laufen über
+  Cannon sowie Lightning Round laufen über
   denselben generischen Registry-Pfad
   und sind durch gemeinsame Python-/Rust-Golden-Fixtures belegt;
   Cricket zusätzlich durch den vollständigen SQLite-Recovery-Pfad,
@@ -61,7 +62,8 @@ Umgesetzt und lokal verifiziert:
   Spiele bleiben dauerhaft aus der normalen Statistik ausgeschlossen.
 - Öffentliche Commands zum Korrigieren und Löschen über stabile Action-IDs für
   CountUp, X01 und alle Registry-Modi, derzeit Cricket, 8-Ball, Heart Chase,
-  Target Rush, Ghost Chase, Robin Hood und Candy Cannon. Der gemeinsame State
+  Target Rush, Ghost Chase, Robin Hood, Candy Cannon und Lightning Round. Der
+  gemeinsame State
   liefert die
   editierbaren
   Darts der aktuellen und vorherigen Aufnahme. Replay,

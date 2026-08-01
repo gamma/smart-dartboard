@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict, List
 
 from .arcade import DARTS, finish_round_game, number_overlay_items, overlay_item
@@ -51,8 +50,7 @@ class LightningRoundMode:
         player.score = 0; player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        # Gameplay variety only; not used for a security decision.
-        task = random.choice(TASKS)  # nosec B311
+        task = TASKS[state.random_index(len(TASKS))]
         state.mode_state = {"task_id": task["id"]}
         state.message = task["prompt"]
 
@@ -63,7 +61,7 @@ class LightningRoundMode:
     def _next_task(self, state: Any) -> None:
         current = state.mode_state.get("task_id")
         pool = [t for t in TASKS if t["id"] != current]
-        task = random.choice(pool)  # nosec B311
+        task = pool[state.random_index(len(pool))]
         state.mode_state["task_id"] = task["id"]
         state.message = task["prompt"]
 

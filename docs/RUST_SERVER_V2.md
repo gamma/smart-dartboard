@@ -125,8 +125,9 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 ## Aktueller Funktionsumfang
 
 - CountUp, X01, Cricket, 8-Ball, Heart Chase, Target Rush, Ghost Chase,
-  Robin Hood und Candy Cannon starten; Cricket, 8-Ball, Heart Chase,
-  Target Rush, Ghost Chase, Robin Hood und Candy Cannon nutzen
+  Robin Hood, Candy Cannon und Lightning Round starten; Cricket, 8-Ball,
+  Heart Chase, Target Rush, Ghost Chase, Robin Hood, Candy Cannon und
+  Lightning Round nutzen
   dieselbe generische, statische Modus-Registry statt neuer Runtime- oder
   Serverzweige,
 - Modusmetadaten einschließlich validierter Optionen, Anleitungen,
