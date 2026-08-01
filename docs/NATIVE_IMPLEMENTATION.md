@@ -18,7 +18,11 @@ Umgesetzt und lokal verifiziert:
 - macOS-Tauri-App mit Control- und Projector-Fenster,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,
 - nativer Apple-DisplayHost mit eigener Projector-WKWebView auf `TVOut`,
-- Live-State-Verteilung sowie Disconnect/Reconnect ohne Zustandsverlust.
+- Live-State-Verteilung sowie Disconnect/Reconnect ohne Zustandsverlust,
+- Apple-M0 verwendet für den Testtreffer keinen Demo-Zähler mehr: Ein
+  kanonisches `T20`-Event läuft durch den gemeinsamen CountUp-Core und die
+  revisionsgesicherte Runtime. Control und Projector zeigten im
+  iPad-Pro-Simulator übereinstimmend Score 60 bei Revision 2.
 
 Noch nicht als produktionsreif nachgewiesen:
 
@@ -54,8 +58,9 @@ npm --prefix apps/tauri run tauri ios build -- \
 ```
 
 Der M0-Zwei-Display-Test kann in einem Debug-Build mit dem Simulator-Argument
-`--m0-test-hit-after-start` reproduziert werden. Der virtuelle externe Ausgang
-wird über `simctl io ... screenConfig --display external power on|off`
+`--m0-test-hit-after-start` reproduziert werden. Revision 1 ist dabei der
+CountUp-Start, Revision 2 der automatische `T20`-Treffer. Der virtuelle externe
+Ausgang wird über `simctl io ... screenConfig --display external power on|off`
 verbunden beziehungsweise getrennt.
 
 ## Apple-DisplayHost

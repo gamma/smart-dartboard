@@ -2484,14 +2484,44 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
+name = "sdb-contracts"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "sdb-game-core"
+version = "0.1.0"
+dependencies = [
+ "sdb-contracts",
+ "serde",
+ "thiserror 2.0.19",
+]
+
+[[package]]
 name = "sdb-native-m0"
 version = "0.1.0"
 dependencies = [
  "libc",
+ "sdb-contracts",
+ "sdb-runtime",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
+]
+
+[[package]]
+name = "sdb-runtime"
+version = "0.1.0"
+dependencies = [
+ "sdb-contracts",
+ "sdb-game-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.19",
 ]
 
 [[package]]

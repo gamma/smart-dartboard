@@ -1,3 +1,5 @@
+use sdb_contracts::{DartEvent, Ring};
+use sdb_runtime::{MemoryRepository, Runtime, RuntimeAction, RuntimeGameState};
 use serde::Serialize;
 use std::sync::Mutex;
 use tauri::{Emitter, State};
@@ -15,28 +17,83 @@ static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 #[cfg(target_os = "ios")]
 static EXTERNAL_DISPLAY_COUNT: AtomicU32 = AtomicU32::new(0);
 
-#[derive(Debug, Default)]
 struct NativeState {
-    counter: u64,
-    revision: u64,
+    runtime: Runtime<MemoryRepository>,
+    next_dart_seq: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
 struct PublicState {
-    runtime_instance_id: &'static str,
+    runtime_instance_id: String,
     revision: u64,
     counter: u64,
     external_display_count: u32,
+    game: Option<RuntimeGameState>,
 }
 
 impl NativeState {
+    fn new() -> Result<Self, String> {
+        let mut runtime = Runtime::restore("native-m0", MemoryRepository::default())
+            .map_err(|error| error.to_string())?;
+        runtime
+            .dispatch(
+                "native-m0",
+                "bootstrap-countup",
+                Some(0),
+                RuntimeAction::StartCountUp {
+                    players: vec![("test-player".into(), "Test Player".into())],
+                    rounds: 20,
+                },
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(Self {
+            runtime,
+            next_dart_seq: 1,
+        })
+    }
+
     fn public(&self) -> PublicState {
+        let game = self
+            .runtime
+            .snapshot()
+            .game
+            .as_ref()
+            .map(|game| game.state());
+        let counter = game.as_ref().map_or(0, |state| match state {
+            RuntimeGameState::CountUp(state) => state.players[0].score.into(),
+            RuntimeGameState::X01(state) => state.players[0].score.into(),
+        });
         PublicState {
-            runtime_instance_id: "native-m0",
-            revision: self.revision,
-            counter: self.counter,
+            runtime_instance_id: self.runtime.instance_id().into(),
+            revision: self.runtime.snapshot().revision,
+            counter,
             external_display_count: external_display_count(),
+            game,
         }
+    }
+
+    fn ingest_test_hit(&mut self) -> Result<PublicState, String> {
+        let seq = self.next_dart_seq;
+        self.next_dart_seq += 1;
+        let command_id = format!("test-hit-{seq}");
+        self.runtime
+            .dispatch(
+                "native-m0",
+                &command_id,
+                Some(self.runtime.snapshot().revision),
+                RuntimeAction::Dart {
+                    event: DartEvent::Hit {
+                        seq,
+                        field: 20,
+                        ring: Ring::Triple,
+                        multiplier: 3,
+                        label: "T20".into(),
+                        score: 60,
+                    },
+                },
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(self.public())
     }
 }
 
@@ -144,9 +201,7 @@ fn increment_runtime(
 ) -> Result<PublicState, String> {
     let public = {
         let mut state = state.lock().map_err(|error| error.to_string())?;
-        state.counter += 1;
-        state.revision += 1;
-        state.public()
+        state.ingest_test_hit()?
     };
     publish_to_external_projector(&public);
     app.emit("runtime-state", &public)
@@ -156,8 +211,9 @@ fn increment_runtime(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let native_state = NativeState::new().expect("initialize shared runtime");
     tauri::Builder::default()
-        .manage(Mutex::new(NativeState::default()))
+        .manage(Mutex::new(native_state))
         .setup(|app| {
             #[cfg(target_os = "ios")]
             {
