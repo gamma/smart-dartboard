@@ -1,0 +1,45 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 4,
+  "random_seed": 42,
+  "players": [{"id": "ada", "name": "Ada"}, {"id": "bob", "name": "Bob"}],
+  "options": {"rounds": 3, "bomb_count": 4, "bomb_growth": "escalating", "hidden_bombs": "memory", "penalty": -50},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 7, "ring": "triple", "multiplier": 3, "label": "T7", "score": 21}},
+      "expected": {"scores": [-50, 0], "bomb_ids": ["triple:7", "triple:13", "double:17", "triple:4"], "hidden_bomb_ids": [], "last_effect": "bomb_explosion", "current_player_index": 0, "darts_in_turn": 1, "turn_score": -50, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 4}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+      "expected": {"scores": [10, 0], "bomb_ids": ["triple:7", "triple:13", "double:17", "triple:4"], "hidden_bomb_ids": [], "last_effect": "", "current_player_index": 0, "darts_in_turn": 2, "turn_score": 10, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 4}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 3, "field": 6, "ring": "triple", "multiplier": 3, "label": "T6", "score": 18}},
+      "expected": {"scores": [28, 0], "bomb_ids": ["triple:7", "triple:13", "double:17", "triple:4"], "hidden_bomb_ids": [], "last_effect": "bomb_near_miss", "current_player_index": 0, "darts_in_turn": 3, "turn_score": 28, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 4}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [28, 0], "bomb_ids": ["triple:7", "triple:13", "double:17", "triple:4"], "hidden_bomb_ids": [], "last_effect": "bomb_near_miss", "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 4}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 4, "field": 17, "ring": "double", "multiplier": 2, "label": "D17", "score": 34}},
+      "expected": {"scores": [28, -50], "bomb_ids": ["triple:7", "triple:13", "double:17", "triple:4"], "hidden_bomb_ids": [], "last_effect": "bomb_explosion", "current_player_index": 1, "darts_in_turn": 1, "turn_score": -50, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 4}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 5, "field": 20, "ring": "single_outer", "multiplier": 1, "label": "S20", "score": 20}},
+      "expected": {"scores": [28, -30], "bomb_ids": ["triple:7", "triple:13", "double:17", "triple:4"], "hidden_bomb_ids": [], "last_effect": "", "current_player_index": 1, "darts_in_turn": 2, "turn_score": -30, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 4}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 6, "label": "MISS", "score": 0}},
+      "expected": {"scores": [28, -30], "bomb_ids": ["triple:7", "triple:13", "double:17", "triple:4"], "hidden_bomb_ids": [], "last_effect": "", "current_player_index": 1, "darts_in_turn": 3, "turn_score": -30, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 4}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [28, -30], "bomb_ids": ["triple:7", "triple:13", "double:17", "triple:4", "single_outer:14", "double:4"], "hidden_bomb_ids": ["triple:13", "single_outer:14", "double:17"], "last_effect": "", "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 9}
+    },
+    {
+      "command": {"type": "correct", "action_id": 5, "event": {"type": "hit", "seq": 999, "field": 20, "ring": "double", "multiplier": 2, "label": "D20", "score": 40}},
+      "expected": {"scores": [28, 60], "bomb_ids": ["triple:7", "triple:13", "double:17", "triple:4", "single_outer:14", "double:4"], "hidden_bomb_ids": ["triple:13", "single_outer:14", "double:17"], "last_effect": "", "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 9}
+    }
+  ]
+}

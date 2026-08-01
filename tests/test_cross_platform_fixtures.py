@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 
 from sdb_dartboard.game import GameEngine
+from sdb_dartboard.games import registry
 from sdb_dartboard.session import SessionController
 from sdb_dartboard.protocol import decode_packet, normalize_hex
 
@@ -49,6 +50,9 @@ SIMON_SAYS_FIXTURE = (
 )
 TREASURE_HUNT_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "treasure_hunt_v1.json"
+)
+AVOID_BOMB_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "avoid_bomb_v4.json"
 )
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
@@ -563,6 +567,53 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
             actual = {
                 "scores": [player.score for player in state.players],
                 "revealed": revealed,
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_id": state.winner_id,
+                "result_type": state.result_type,
+                "random_cursor": state.random_cursor,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_avoid_bomb_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(AVOID_BOMB_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_schema_version"], 1)
+        self.assertEqual(fixture["ruleset_version"], 4)
+        self.assertEqual(
+            fixture["ruleset_version"],
+            registry.get("avoid_bomb").metadata.ruleset_version,
+        )
+        engine = GameEngine()
+        engine.reset(
+            "avoid_bomb",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]), dict(command["event"])
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            actual = {
+                "scores": [player.score for player in state.players],
+                "bomb_ids": [
+                    f"{bomb['ring']}:{bomb['field']}"
+                    for bomb in state.mode_state["bombs"]
+                ],
+                "hidden_bomb_ids": state.mode_state["hidden_bomb_ids"],
+                "last_effect": state.mode_state["last_effect"],
                 "current_player_index": state.current_player_index,
                 "darts_in_turn": state.darts_in_turn,
                 "turn_score": state.turn_score,

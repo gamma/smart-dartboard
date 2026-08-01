@@ -5,6 +5,7 @@ use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
 
 mod arcade;
+mod avoid_bomb;
 mod candy_cannon;
 mod eight_ball;
 mod ghost_chase;
@@ -16,6 +17,7 @@ mod simon_says;
 mod target_rush;
 mod treasure_hunt;
 
+use avoid_bomb::AVOID_BOMB_MODE;
 use candy_cannon::CANDY_CANNON_MODE;
 use eight_ball::EIGHT_BALL_MODE;
 use ghost_chase::GHOST_CHASE_MODE;
@@ -1133,7 +1135,8 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 11] = [
+static MODES: [&'static dyn GameMode; 12] = [
+    &AVOID_BOMB_MODE,
     &CRICKET_MODE,
     &CANDY_CANNON_MODE,
     &EIGHT_BALL_MODE,

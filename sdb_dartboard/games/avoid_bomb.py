@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict
 
 from .arcade import finish_round_game, overlay_item, same_target
@@ -38,16 +37,28 @@ BOMB_POOL = _bomb_pool()
 
 
 def _choose_bombs(
+    state: Any,
     count: int,
     exclude: set[str] | None = None,
-    *,
-    rng: random.Random | None = None,
 ) -> list[Dict[str, Any]]:
     excluded = exclude or set()
     available = [target for target in BOMB_POOL if _bomb_id(target) not in excluded]
-    picker = rng or random
-    # Gameplay variety only; no security decision depends on this randomness.
-    return picker.sample(available, min(count, len(available)))  # nosec B311
+    selected: list[Dict[str, Any]] = []
+    for _ in range(min(count, len(available))):
+        selected.append(available.pop(state.random_index(len(available))))
+    return selected
+
+
+def _choose_from_existing(
+    state: Any,
+    targets: list[Dict[str, Any]],
+    count: int,
+) -> list[Dict[str, Any]]:
+    available = list(targets)
+    selected: list[Dict[str, Any]] = []
+    for _ in range(min(count, len(available))):
+        selected.append(available.pop(state.random_index(len(available))))
+    return selected
 
 
 class AvoidBombMode:
@@ -85,7 +96,7 @@ class AvoidBombMode:
             ),
         ],
         sound_theme="arcade",
-        ruleset_version=3,
+        ruleset_version=4,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -94,16 +105,16 @@ class AvoidBombMode:
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
         count = int(options.get("bomb_count", 6))
-        seed = random.randrange(2**63)  # nosec B311 - reproducible gameplay seed
-        bombs = _choose_bombs(count, rng=random.Random(f"{seed}:initial"))
+        bombs = _choose_bombs(state, count)
         state.mode_state = {
             "bombs": bombs,
             "bomb_round": 1,
-            "seed": seed,
             "hidden_bomb_ids": [],
             "hidden_until_round": 0,
             "next_hide_round": 2,
             "visibility_round": 1,
+            "last_effect": "",
+            "effect_target": None,
         }
         state.message = "Meide Rot!"
 
@@ -120,11 +131,10 @@ class AvoidBombMode:
                 else 1
             )
             excluded = {_bomb_id(bomb) for bomb in bombs}
-            seed = int(state.mode_state.get("seed", 0))
             additions = _choose_bombs(
+                state,
                 growth,
                 excluded,
-                rng=random.Random(f"{seed}:growth:{next_round}"),
             )
             bombs.extend(additions)
             added_count += len(additions)
@@ -165,9 +175,7 @@ class AvoidBombMode:
             ):
                 bombs = mode_state.get("bombs", [])
                 hide_count = max(1, len(bombs) // 2) if bombs else 0
-                seed = int(mode_state.get("seed", 0))
-                rng = random.Random(f"{seed}:hide:{current}")
-                hidden = rng.sample(bombs, hide_count) if hide_count else []
+                hidden = _choose_from_existing(state, bombs, hide_count)
                 mode_state["hidden_bomb_ids"] = [_bomb_id(bomb) for bomb in hidden]
                 mode_state["hidden_until_round"] = current + 2
                 mode_state["next_hide_round"] = current + 3
@@ -178,6 +186,8 @@ class AvoidBombMode:
         return messages
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        state.mode_state["last_effect"] = ""
+        state.mode_state["effect_target"] = None
         bombs = state.mode_state.get("bombs", [])
         if event.get("type") == "miss":
             outcome = ThrowOutcome(turn_value=0, message="Miss")
@@ -189,6 +199,8 @@ class AvoidBombMode:
             if bomb_id in hidden_ids:
                 hidden_ids.remove(bomb_id)
             event.update({"effect": "bomb_explosion", "bomb": dict(bomb)})
+            state.mode_state["last_effect"] = "bomb_explosion"
+            state.mode_state["effect_target"] = dict(bomb)
             outcome = ThrowOutcome(turn_value=penalty, message=f"BOMB! {penalty}")
         else:
             score = int(event.get("score", 0))
@@ -202,6 +214,8 @@ class AvoidBombMode:
                     "effect": "bomb_near_miss",
                     "near_bomb": dict(near_bomb),
                 })
+                state.mode_state["last_effect"] = "bomb_near_miss"
+                state.mode_state["effect_target"] = dict(near_bomb)
                 message = f"DAS WAR KNAPP! {event.get('label', '')} +{score}"
             else:
                 message = f"Safe {event.get('label', '')} +{score}"
