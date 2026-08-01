@@ -262,6 +262,7 @@ jobs:
           import json
           health = json.load(open('/tmp/rust-health.json'))
           assert health['status'] == 'ok', health
+          assert health['schema_version'] == 2, health
           assert health['database'] == 'ok', health
           assert health['board'] == 'disabled', health
           PY

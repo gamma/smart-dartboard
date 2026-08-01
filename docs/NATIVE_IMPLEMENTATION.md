@@ -32,6 +32,10 @@ Umgesetzt und lokal verifiziert:
 - Spiel und Session werden in einem Runtime-Snapshot atomar committed. Undo
   eines Siegtreffers öffnet das Ergebnis wieder und entfernt auch die zuvor
   vergebene Sessionwertung; ein Commitfehler lässt beide Zustände unverändert.
+- SQLite-Schema 2 mit fortlaufender Migration, Downgrade-Sperre,
+  Post-Migration-Integritätsprüfung und append-only Runtime-Journal. Ein
+  injizierter Fehler beim Journal-Insert rollt Snapshot und Deduplizierung mit
+  zurück.
 
 Noch nicht als produktionsreif nachgewiesen:
 

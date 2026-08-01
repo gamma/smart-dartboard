@@ -10,6 +10,8 @@ repository.workspace = true
 [dependencies]
 rusqlite = { version = "0.38", features = ["bundled"] }
 sdb-runtime = { path = "../runtime" }
+serde.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 sdb-contracts = { path = "../contracts" }

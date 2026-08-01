@@ -633,7 +633,9 @@ dependencies = [
  "sdb-contracts",
  "sdb-runtime",
  "sdb-session-core",
+ "serde",
  "serde_json",
+ "thiserror",
 ]
 
 [[package]]

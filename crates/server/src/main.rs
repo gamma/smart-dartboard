@@ -38,6 +38,7 @@ struct Health {
     database: &'static str,
     board: &'static str,
     protocol_version: u16,
+    schema_version: u32,
     revision: u64,
 }
 
@@ -145,12 +146,17 @@ async fn health(State(state): State<AppState>) -> Result<Json<Health>, ApiError>
         .lock()
         .map_err(|_| internal_error("runtime lock poisoned"))?;
     let board_ready = matches!(state.board_status, "ready" | "disabled");
+    let schema_version = runtime
+        .repository()
+        .schema_version()
+        .map_err(|_| internal_error("database schema query failed"))?;
     Ok(Json(Health {
         status: if board_ready { "ok" } else { "degraded" },
         runtime: "ok",
         database: "ok",
         board: state.board_status,
         protocol_version: PROTOCOL_VERSION,
+        schema_version,
         revision: runtime.snapshot().revision,
     }))
 }
@@ -323,6 +329,7 @@ mod tests {
         .expect("json");
         assert_eq!(value["status"], "ok");
         assert_eq!(value["protocol_version"], PROTOCOL_VERSION);
+        assert_eq!(value["schema_version"], 2);
 
         let bootstrap = test_app()
             .oneshot(

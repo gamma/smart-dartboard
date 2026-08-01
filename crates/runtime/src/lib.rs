@@ -136,8 +136,10 @@ pub struct CommandResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommitRequest<'a> {
     pub command_id: &'a str,
+    pub runtime_instance_id: &'a str,
     pub previous_revision: u64,
     pub next_revision: u64,
+    pub action_json: &'a str,
     pub snapshot_json: &'a str,
     pub result_json: &'a str,
 }
@@ -236,6 +238,11 @@ impl<R: Repository> Runtime<R> {
         &self.snapshot
     }
 
+    #[must_use]
+    pub const fn repository(&self) -> &R {
+        &self.repository
+    }
+
     /// Validates and applies one transport-neutral command envelope.
     ///
     /// # Errors
@@ -302,6 +309,8 @@ impl<R: Repository> Runtime<R> {
             });
         }
 
+        let action_json = serde_json::to_string(&action)
+            .map_err(|error| RuntimeError::InvalidPersistedData(error.to_string()))?;
         let mut next = self.snapshot.clone();
         apply_action(&mut next, action)?;
         next.revision = self.snapshot.revision + 1;
@@ -321,8 +330,10 @@ impl<R: Repository> Runtime<R> {
             .repository
             .commit(CommitRequest {
                 command_id,
+                runtime_instance_id: &self.instance_id,
                 previous_revision: self.snapshot.revision,
                 next_revision: next.revision,
+                action_json: &action_json,
                 snapshot_json: &snapshot_json,
                 result_json: &result_json,
             })

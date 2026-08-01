@@ -30,7 +30,7 @@ Der Container läuft ohne Root, ohne `privileged` und ohne Linux-Capabilities.
 
 | Methode | Pfad | Zweck |
 | --- | --- | --- |
-| `GET` | `/api/v2/health` | Runtime-, Datenbank-, Board- und Protokollstatus |
+| `GET` | `/api/v2/health` | Runtime-, Datenbank-, Board-, Protokoll- und Schemastatus |
 | `GET` | `/api/v2/runtime/bootstrap` | vollständiger versionierter Snapshot |
 | `GET` | `/api/v2/runtime/snapshot` | erneuter Snapshot nach Lücke oder Reconnect |
 | `POST` | `/api/v2/runtime/commands` | ein `CommandEnvelope` atomar anwenden |
@@ -55,6 +55,8 @@ Fehlercodes und passende HTTP-Statuscodes.
   wieder und nimmt die Sessionwertung atomar zurück,
 - `command_id` deduplizieren,
 - Commit und Snapshot in einer SQLite-Transaktion sichern,
+- jedes akzeptierte Command mit Runtime-ID, Revision, kanonischem Action-JSON
+  und exakt committed Snapshot unveränderlich journalisieren,
 - nach Prozessneustart ausschließlich den letzten Commit wiederherstellen,
 - neue `runtime_instance_id` bei jedem Prozessstart,
 - vollständige Snapshots per WebSocket publizieren.
@@ -71,3 +73,11 @@ Noch offen und daher ausdrücklich kein Produktionsersatz:
 Wenn `SDB_ENABLE_BLE=1` gesetzt ist, meldet Health derzeit `degraded` und Board
 `unavailable`. Das verhindert, dass ein Container ohne implementierten
 Boardadapter fälschlich als produktionsbereit erscheint.
+
+## Datenbankschema
+
+Schema 2 führt `runtime_journal` als append-only Auditspur ein. Migrationen
+laufen fortlaufend und transaktional; eine Datenbank mit neuerer unbekannter
+Schema-Version wird ohne Downgrade oder Schreibversuch abgelehnt. Nach jeder
+Migration läuft `PRAGMA quick_check`. Da 1 → 2 ausschließlich eine neue Tabelle
+ergänzt, ist hierfür kein destruktives Migrationsbackup erforderlich.

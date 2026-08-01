@@ -2,8 +2,33 @@
 
 use rusqlite::{Connection, OptionalExtension, params};
 use sdb_runtime::{CommitOutcome, CommitRequest, Repository};
+use serde::{Deserialize, Serialize};
 use std::path::Path;
+use thiserror::Error;
 
+const CURRENT_SCHEMA_VERSION: u32 = 2;
+
+#[derive(Debug, Error)]
+pub enum StorageError {
+    #[error("SQLite operation failed: {0}")]
+    Sqlite(#[from] rusqlite::Error),
+    #[error("database schema {found} is newer than supported schema {supported}")]
+    UnsupportedSchema { found: u32, supported: u32 },
+    #[error("database integrity check failed: {0}")]
+    Integrity(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimeJournalEntry {
+    pub revision: u64,
+    pub command_id: String,
+    pub runtime_instance_id: String,
+    pub action_json: String,
+    pub snapshot_json: String,
+    pub committed_at: String,
+}
+
+#[derive(Debug)]
 pub struct SqliteRepository {
     connection: Connection,
 }
@@ -13,11 +38,95 @@ impl SqliteRepository {
     ///
     /// # Errors
     ///
-    /// Returns the `SQLite` error when the database cannot be opened or migrated.
-    pub fn open(path: impl AsRef<Path>) -> rusqlite::Result<Self> {
+    /// Returns an error when the database cannot be opened, migrated or fails
+    /// its post-migration integrity check. Newer schemas are never downgraded.
+    pub fn open(path: impl AsRef<Path>) -> Result<Self, StorageError> {
         let connection = Connection::open(path)?;
         connection.pragma_update(None, "journal_mode", "WAL")?;
         connection.pragma_update(None, "foreign_keys", "ON")?;
+        migrate(&connection)?;
+        verify_integrity(&connection)?;
+        Ok(Self { connection })
+    }
+
+    /// Opens an isolated in-memory repository.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when schema initialization or verification fails.
+    pub fn in_memory() -> Result<Self, StorageError> {
+        Self::open(":memory:")
+    }
+
+    /// Returns the installed schema version.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying `SQLite` error when the pragma cannot be read.
+    pub fn schema_version(&self) -> Result<u32, StorageError> {
+        Ok(self
+            .connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))?)
+    }
+
+    /// Returns committed journal entries in ascending revision order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the journal cannot be queried or a stored
+    /// revision is outside the unsigned range.
+    pub fn journal(&self, limit: usize) -> Result<Vec<RuntimeJournalEntry>, StorageError> {
+        let limit = i64::try_from(limit.clamp(1, 10_000))
+            .map_err(|_| StorageError::Integrity("journal limit is out of range".into()))?;
+        let mut statement = self.connection.prepare(
+            "SELECT revision, command_id, runtime_instance_id, action_json,
+                    snapshot_json, committed_at
+             FROM runtime_journal ORDER BY revision ASC LIMIT ?1",
+        )?;
+        let rows = statement.query_map([limit], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+            ))
+        })?;
+        rows.map(|row| {
+            let (
+                revision,
+                command_id,
+                runtime_instance_id,
+                action_json,
+                snapshot_json,
+                committed_at,
+            ) = row?;
+            let revision = u64::try_from(revision).map_err(|_| {
+                StorageError::Integrity("journal contains a negative revision".into())
+            })?;
+            Ok(RuntimeJournalEntry {
+                revision,
+                command_id,
+                runtime_instance_id,
+                action_json,
+                snapshot_json,
+                committed_at,
+            })
+        })
+        .collect()
+    }
+}
+
+fn migrate(connection: &Connection) -> Result<(), StorageError> {
+    let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if version > CURRENT_SCHEMA_VERSION {
+        return Err(StorageError::UnsupportedSchema {
+            found: version,
+            supported: CURRENT_SCHEMA_VERSION,
+        });
+    }
+    if version < 1 {
         connection.execute_batch(
             "
             BEGIN;
@@ -41,16 +150,33 @@ impl SqliteRepository {
             COMMIT;
             ",
         )?;
-        Ok(Self { connection })
     }
+    if version < 2 {
+        connection.execute_batch(
+            "
+            BEGIN;
+            CREATE TABLE runtime_journal (
+                revision INTEGER PRIMARY KEY,
+                command_id TEXT NOT NULL UNIQUE,
+                runtime_instance_id TEXT NOT NULL,
+                action_json TEXT NOT NULL,
+                snapshot_json TEXT NOT NULL,
+                committed_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+            PRAGMA user_version=2;
+            COMMIT;
+            ",
+        )?;
+    }
+    Ok(())
+}
 
-    /// Opens an isolated in-memory repository.
-    ///
-    /// # Errors
-    ///
-    /// Returns the `SQLite` error when the connection or schema fails.
-    pub fn in_memory() -> rusqlite::Result<Self> {
-        Self::open(":memory:")
+fn verify_integrity(connection: &Connection) -> Result<(), StorageError> {
+    let result: String = connection.pragma_query_value(None, "quick_check", |row| row.get(0))?;
+    if result == "ok" {
+        Ok(())
+    } else {
+        Err(StorageError::Integrity(result))
     }
 }
 
@@ -129,6 +255,20 @@ impl Repository for SqliteRepository {
                 params![next_revision, request.snapshot_json],
             )
             .map_err(|error| error.to_string())?;
+        transaction
+            .execute(
+                "INSERT INTO runtime_journal(
+                    revision, command_id, runtime_instance_id, action_json, snapshot_json
+                 ) VALUES(?1, ?2, ?3, ?4, ?5)",
+                params![
+                    next_revision,
+                    request.command_id,
+                    request.runtime_instance_id,
+                    request.action_json,
+                    request.snapshot_json
+                ],
+            )
+            .map_err(|error| error.to_string())?;
         transaction.commit().map_err(|error| error.to_string())?;
         Ok(CommitOutcome::Committed)
     }
@@ -177,6 +317,15 @@ mod tests {
             .expect("deduplicated");
         assert!(duplicate.duplicate);
         assert_eq!(duplicate.revision, 1);
+        let repository = runtime.into_repository();
+        let journal = repository.journal(10).expect("journal");
+        assert_eq!(journal.len(), 1);
+        assert_eq!(journal[0].revision, 1);
+        assert_eq!(journal[0].command_id, "start");
+        assert_eq!(journal[0].runtime_instance_id, "first");
+        let action: serde_json::Value =
+            serde_json::from_str(&journal[0].action_json).expect("action JSON");
+        assert_eq!(action["type"], "start_count_up");
         std::fs::remove_file(temporary).expect("remove test database");
     }
 
@@ -246,5 +395,119 @@ mod tests {
             Some(sdb_runtime::RuntimeGame::X01(_))
         ));
         std::fs::remove_file(temporary).expect("remove test database");
+    }
+
+    #[test]
+    fn version_one_database_migrates_forward_without_losing_runtime_tables() {
+        let temporary = std::env::temp_dir().join(format!(
+            "sdb-migration-{}-{}.sqlite",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_file(&temporary);
+        {
+            let connection = Connection::open(&temporary).expect("legacy database");
+            connection
+                .execute_batch(
+                    "
+                    CREATE TABLE runtime_meta (
+                        singleton INTEGER PRIMARY KEY CHECK(singleton = 1),
+                        revision INTEGER NOT NULL,
+                        snapshot_json TEXT NOT NULL
+                    );
+                    CREATE TABLE processed_commands (
+                        command_id TEXT PRIMARY KEY,
+                        committed_revision INTEGER NOT NULL,
+                        result_json TEXT NOT NULL
+                    );
+                    CREATE TABLE effect_outbox (
+                        effect_id TEXT PRIMARY KEY,
+                        committed_revision INTEGER NOT NULL,
+                        effect_json TEXT NOT NULL,
+                        status TEXT NOT NULL DEFAULT 'pending'
+                    );
+                    PRAGMA user_version=1;
+                    ",
+                )
+                .expect("legacy schema");
+        }
+        let repository = SqliteRepository::open(&temporary).expect("migrate");
+        assert_eq!(repository.schema_version().expect("version"), 2);
+        assert!(repository.journal(10).expect("journal").is_empty());
+        std::fs::remove_file(temporary).expect("remove test database");
+    }
+
+    #[test]
+    fn newer_database_schema_is_rejected_without_downgrade() {
+        let temporary = std::env::temp_dir().join(format!(
+            "sdb-future-schema-{}-{}.sqlite",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_file(&temporary);
+        {
+            let connection = Connection::open(&temporary).expect("future database");
+            connection
+                .pragma_update(None, "user_version", 99)
+                .expect("future version");
+        }
+        let error = SqliteRepository::open(&temporary).expect_err("must reject downgrade");
+        assert!(matches!(
+            error,
+            StorageError::UnsupportedSchema {
+                found: 99,
+                supported: CURRENT_SCHEMA_VERSION
+            }
+        ));
+        let connection = Connection::open(&temporary).expect("inspect future database");
+        let version: u32 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("version");
+        assert_eq!(version, 99);
+        drop(connection);
+        std::fs::remove_file(temporary).expect("remove test database");
+    }
+
+    #[test]
+    fn failed_journal_insert_rolls_back_snapshot_and_deduplication() {
+        let repository = SqliteRepository::in_memory().expect("repository");
+        repository
+            .connection
+            .execute_batch(
+                "CREATE TRIGGER fail_runtime_journal
+                 BEFORE INSERT ON runtime_journal
+                 BEGIN
+                   SELECT RAISE(ABORT, 'injected journal failure');
+                 END;",
+            )
+            .expect("failure trigger");
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        let error = runtime
+            .dispatch(
+                "runtime",
+                "start",
+                Some(0),
+                RuntimeAction::StartCountUp {
+                    players: vec![("ada".into(), "Ada".into())],
+                    rounds: 5,
+                },
+            )
+            .expect_err("transaction must fail");
+        assert!(matches!(error, sdb_runtime::RuntimeError::Persistence(_)));
+        assert_eq!(runtime.snapshot().revision, 0);
+        let repository = runtime.into_repository();
+        assert!(
+            repository
+                .load_snapshot()
+                .expect("snapshot query")
+                .is_none()
+        );
+        assert!(
+            repository
+                .load_command_result("start")
+                .expect("command query")
+                .is_none()
+        );
+        assert!(repository.journal(10).expect("journal query").is_empty());
     }
 }
