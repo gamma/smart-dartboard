@@ -3,11 +3,17 @@ use sdb_board::BoardStatus;
 use sdb_board::{BoardFailureCode, BoardPhase};
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 use sdb_board::{BoardIngress, BoardIngressOutcome};
+use sdb_companion::{
+    CompanionRole, PairedDevice, PairingAuthority, PairingGrant, PairingOffer, PairingRequest,
+};
 use sdb_contracts::{DartEvent, DartSource, Ring};
 use sdb_runtime::{Runtime, RuntimeAction, RuntimeGameState};
 use sdb_storage::SqliteRepository;
 use serde::Serialize;
-use std::sync::Mutex;
+use std::{
+    sync::Mutex,
+    time::{SystemTime, UNIX_EPOCH},
+};
 use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 
@@ -27,6 +33,7 @@ struct NativeState {
     #[cfg(any(target_os = "ios", target_os = "macos", test))]
     board_ingress: BoardIngress,
     board_status: BoardStatus,
+    companions: PairingAuthority,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -39,8 +46,30 @@ struct PublicState {
     game: Option<RuntimeGameState>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct CompanionDeviceView {
+    device_id: String,
+    device_name: String,
+    role: CompanionRole,
+    paired_at_ms: u64,
+}
+
+impl From<PairedDevice> for CompanionDeviceView {
+    fn from(device: PairedDevice) -> Self {
+        Self {
+            device_id: device.device_id,
+            device_name: device.device_name,
+            role: device.role,
+            paired_at_ms: device.paired_at_ms,
+        }
+    }
+}
+
 impl NativeState {
     fn restore(repository: SqliteRepository) -> Result<Self, String> {
+        let companion_devices = repository
+            .companion_devices()
+            .map_err(|error| error.to_string())?;
         let runtime_instance_id = Uuid::new_v4().to_string();
         let mut runtime = Runtime::restore(runtime_instance_id.clone(), repository)
             .map_err(|error| error.to_string())?;
@@ -63,6 +92,7 @@ impl NativeState {
             #[cfg(any(target_os = "ios", target_os = "macos", test))]
             board_ingress: BoardIngress::new(),
             board_status: BoardStatus::unavailable(),
+            companions: PairingAuthority::from_devices(companion_devices),
         })
     }
 
@@ -111,6 +141,61 @@ impl NativeState {
             )
             .map_err(|error| error.to_string())?;
         Ok(self.public())
+    }
+
+    #[allow(dead_code)] // Native network ingress calls this; it must never become a WebView command.
+    fn pair_companion(
+        &mut self,
+        request: PairingRequest,
+        paired_at_ms: u64,
+    ) -> Result<PairingGrant, String> {
+        let grant = self
+            .companions
+            .pair(request, paired_at_ms)
+            .map_err(|error| error.to_string())?;
+        let device = self
+            .companions
+            .device(&grant.device_id)
+            .cloned()
+            .ok_or_else(|| "paired companion is missing".to_owned())?;
+        if self
+            .runtime
+            .repository_mut()
+            .save_companion_device(&device)
+            .is_err()
+        {
+            let persisted = self
+                .runtime
+                .repository()
+                .companion_devices()
+                .map_err(|error| error.to_string())?;
+            self.companions = PairingAuthority::from_devices(persisted);
+            return Err("companion grant persistence failed".into());
+        }
+        Ok(grant)
+    }
+
+    fn companion_devices(&self) -> Vec<CompanionDeviceView> {
+        self.companions
+            .devices()
+            .into_iter()
+            .map(CompanionDeviceView::from)
+            .collect()
+    }
+
+    fn revoke_companion(&mut self, device_id: &str, revoked_at_ms: u64) -> Result<(), String> {
+        if self.companions.device(device_id).is_none() {
+            return Err("companion device not found".into());
+        }
+        let persisted = self
+            .runtime
+            .repository_mut()
+            .revoke_companion_device(device_id, revoked_at_ms)
+            .map_err(|error| error.to_string())?;
+        if !persisted || !self.companions.revoke(device_id) {
+            return Err("companion grant state is inconsistent".into());
+        }
+        Ok(())
     }
 
     #[cfg(any(target_os = "ios", target_os = "macos", test))]
@@ -358,6 +443,36 @@ fn runtime_query(state: State<'_, Mutex<NativeState>>) -> Result<PublicState, St
 }
 
 #[tauri::command]
+fn companion_pairing_open(state: State<'_, Mutex<NativeState>>) -> Result<PairingOffer, String> {
+    state
+        .lock()
+        .map_err(|error| error.to_string())?
+        .companions
+        .open(now_ms())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn companion_devices(
+    state: State<'_, Mutex<NativeState>>,
+) -> Result<Vec<CompanionDeviceView>, String> {
+    state
+        .lock()
+        .map(|state| state.companion_devices())
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn companion_revoke(
+    state: State<'_, Mutex<NativeState>>,
+    device_id: String,
+) -> Result<Vec<CompanionDeviceView>, String> {
+    let mut state = state.lock().map_err(|error| error.to_string())?;
+    state.revoke_companion(&device_id, now_ms())?;
+    Ok(state.companion_devices())
+}
+
+#[tauri::command]
 fn runtime_dispatch(
     app: tauri::AppHandle,
     state: State<'_, Mutex<NativeState>>,
@@ -384,6 +499,15 @@ fn increment_runtime(
 fn publish_public_state(app: &tauri::AppHandle, public: &PublicState) {
     publish_to_external_projector(public);
     let _ = app.emit("runtime-state", public);
+}
+
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -432,7 +556,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             runtime_bootstrap,
             runtime_query,
-            runtime_dispatch
+            runtime_dispatch,
+            companion_pairing_open,
+            companion_devices,
+            companion_revoke
         ])
         .run(tauri::generate_context!())
         .expect("error while running Smart Dartboard native M0");
@@ -476,6 +603,42 @@ mod tests {
         assert_ne!(state.runtime.instance_id(), first_instance);
         assert_eq!(state.public().revision, 2);
         assert_eq!(state.public().counter, 60);
+        std::fs::remove_file(path).expect("remove test database");
+    }
+
+    #[test]
+    fn native_controller_persists_and_revokes_companion_grants() {
+        let path =
+            std::env::temp_dir().join(format!("sdb-native-companion-{}.sqlite", Uuid::new_v4()));
+        let grant = {
+            let repository = SqliteRepository::open(&path).expect("repository");
+            let mut state = NativeState::restore(repository).expect("native state");
+            let offer = state.companions.open(1_000).expect("pairing offer");
+            state
+                .pair_companion(
+                    PairingRequest {
+                        device_id: "projector-ipad".into(),
+                        device_name: "Arcade iPad".into(),
+                        code: offer.code,
+                    },
+                    2_000,
+                )
+                .expect("grant")
+        };
+
+        let repository = SqliteRepository::open(&path).expect("reopened repository");
+        let mut state = NativeState::restore(repository).expect("restored state");
+        assert_eq!(state.companion_devices().len(), 1);
+        assert!(state.companions.authenticate(&grant.token).is_some());
+        state
+            .revoke_companion("projector-ipad", 3_000)
+            .expect("revoke");
+        assert!(state.companions.authenticate(&grant.token).is_none());
+        drop(state);
+
+        let repository = SqliteRepository::open(&path).expect("reopen after revoke");
+        let state = NativeState::restore(repository).expect("restored revoked state");
+        assert!(state.companion_devices().is_empty());
         std::fs::remove_file(path).expect("remove test database");
     }
 }

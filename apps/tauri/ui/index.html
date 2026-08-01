@@ -18,6 +18,18 @@
     <p id="boardStatus" class="display-status board-status">Board: wird initialisiert …</p>
     <p id="displayStatus" class="display-status">Projector: nicht verbunden</p>
     <p id="status" class="status">Runtime wird verbunden …</p>
+    <section id="companionSetup" class="setup" aria-labelledby="companionTitle">
+      <p class="eyebrow">BOARD SETUP</p>
+      <h2 id="companionTitle">Companion-iPad</h2>
+      <p class="setup-copy">Öffne für fünf Minuten einen Einmalcode. Das zweite iPad erhält ausschließlich die Projector-Rolle.</p>
+      <button id="openPairing" type="button">Companion koppeln</button>
+      <div id="pairingOffer" class="pairing-offer" hidden>
+        <span>Einmalcode</span>
+        <strong id="pairingCode">000 000</strong>
+        <small id="pairingExpiry">5:00 Minuten gültig</small>
+      </div>
+      <ul id="companionDevices" class="device-list" aria-live="polite"></ul>
+    </section>
   </main>
   <script src="./main.js"></script>
 </body>

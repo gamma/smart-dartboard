@@ -85,7 +85,11 @@ Implementiert und automatisiert getestet:
   den Token-Hash und behält den Widerrufszeitpunkt als lokale Auditspur,
 - Headless-Pairing-API sowie Bearer-authentisierte Bootstrap- und
   WebSocket-Endpunkte. Jeder Socket beginnt mit einem Vollsnapshot, schließt bei
-  einer Broadcast-Lücke und wird durch einen Gerätewiderruf aktiv beendet.
+  einer Broadcast-Lücke und wird durch einen Gerätewiderruf aktiv beendet,
+- natives Controller-Setup zum Öffnen des Pairing-Fensters, Anzeigen des
+  ablaufenden Codes sowie Auflisten und Widerrufen persistierter Geräte. Diese
+  Kommandos sind nur für die Control-WebView freigegeben; die Projector-WebView
+  besitzt keine Companion-Verwaltungsrechte.
 
 Noch offen:
 

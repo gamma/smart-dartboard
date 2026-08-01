@@ -74,8 +74,15 @@ Umgesetzt und lokal verifiziert:
   Widerruf und strikt revisionsgenaue Snapshot-Replikation. Der Headless-Host
   bietet den authentisierten Pairing-, Bootstrap- und WebSocket-Transport an
   und schließt aktive Verbindungen beim Widerruf oder einer Revisionslücke.
-  Native Discovery, TLS/Keychain und UI sind noch offen; Details:
+  Native Discovery, TLS/Keychain, eingehender Transport und die UI der
+  Projector-Rolle sind noch offen; Details:
   [COMPANION_PROTOCOL.md](COMPANION_PROTOCOL.md).
+- natives Board-Setup für den Controller: Pairing-Fenster öffnen, gruppierten
+  Einmalcode mit Live-Countdown anzeigen, persistierte Projector-Geräte ohne
+  Token-Hash auflisten und Grants widerrufen. Nur das Control-Fenster besitzt
+  diese Tauri-Rechte; das Einlösen bleibt der noch anzuschließenden nativen
+  Netzwerkgrenze vorbehalten. Der iPad-Viewport wurde mit WebKit visuell
+  geprüft.
 
 Noch nicht als produktionsreif nachgewiesen:
 
@@ -83,7 +90,8 @@ Noch nicht als produktionsreif nachgewiesen:
   implementiert, aber noch nicht mit der realen Scheibe qualifiziert,
 - reale AirPlay-, HDMI- und Audio-Hardware,
 - External-Display-Scene-Accessory ab iOS/iPadOS 27,
-- iPhone/iPad-zu-iPad-Companion mit Pairing,
+- iPhone/iPad-zu-iPad-Companion mit Discovery, eingehendem Pairing-Transport,
+  Keychain und Projector-Client,
 - vollständige Portierung aller Spielmodi sowie Heatmap, Modusstatistiken,
   Export und Trainingsempfehlungen,
 - vollständige Docker-Parität zur Python-Anwendung,

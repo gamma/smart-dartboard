@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-companion-revoke"
+description = "Enables the companion_revoke command without any pre-configured scope."
+commands.allow = ["companion_revoke"]
+
+[[permission]]
+identifier = "deny-companion-revoke"
+description = "Denies the companion_revoke command without any pre-configured scope."
+commands.deny = ["companion_revoke"]

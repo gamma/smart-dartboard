@@ -13,6 +13,12 @@ button{border:0;border-radius:18px;padding:18px 28px;background:linear-gradient(
 .display-status[data-connected="true"]{border-color:#28e7ff66;color:#28e7ff}
 .display-status[data-connected="true"]::before{background:#28e7ff;box-shadow:0 0 12px #28e7ff}
 .status{font-size:13px;color:#8ca0b7;margin-top:24px}
+.setup{margin:36px auto 0;padding:24px;width:min(620px,100%);border:1px solid #ffffff1f;border-radius:24px;background:#091019cc;text-align:left}
+.setup .eyebrow{margin:0}.setup h2{font-size:28px;margin:8px 0}.setup-copy{color:#a8b7ca;line-height:1.5;margin:0 0 20px}
+.pairing-offer{margin-top:18px;padding:18px;border:1px solid #28e7ff55;border-radius:18px;background:#071a22;text-align:center}
+.pairing-offer span,.pairing-offer small{display:block;color:#8ca0b7}.pairing-offer strong{display:block;color:#28e7ff;font-size:42px;letter-spacing:.12em;margin:4px 0}
+.device-list{display:grid;gap:10px;list-style:none;margin:18px 0 0;padding:0}.device-list li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border:1px solid #ffffff14;border-radius:14px}.device-list span,.device-list small{display:block}.device-list small,.device-empty{color:#8ca0b7}.device-list .revoke{padding:9px 12px;border-radius:10px;background:#ffffff12;color:#f5f8ff;font-size:13px}
 body[data-role="projector"] button{display:none}
 body[data-role="projector"] .board-status{display:none}
+body[data-role="projector"] .setup{display:none}
 body[data-role="projector"] h1{font-size:clamp(72px,10vw,150px)}

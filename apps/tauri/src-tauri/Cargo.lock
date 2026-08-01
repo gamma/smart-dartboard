@@ -2594,6 +2594,7 @@ dependencies = [
  "cc",
  "libc",
  "sdb-board",
+ "sdb-companion",
  "sdb-contracts",
  "sdb-runtime",
  "sdb-storage",

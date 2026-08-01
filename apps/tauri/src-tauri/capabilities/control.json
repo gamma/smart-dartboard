@@ -7,6 +7,9 @@
     "core:default",
     "allow-runtime-bootstrap",
     "allow-runtime-query",
-    "allow-runtime-dispatch"
+    "allow-runtime-dispatch",
+    "allow-companion-pairing-open",
+    "allow-companion-devices",
+    "allow-companion-revoke"
   ]
 }

@@ -17,6 +17,9 @@ fn main() {
             "runtime_bootstrap",
             "runtime_dispatch",
             "runtime_query",
+            "companion_pairing_open",
+            "companion_devices",
+            "companion_revoke",
         ]));
     tauri_build::try_build(attributes).expect("failed to build Tauri application");
 }
