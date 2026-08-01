@@ -1,0 +1,16 @@
+{
+  "name": "smart-dartboard-native",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "dev": "tauri dev",
+    "build": "tauri build --no-bundle",
+    "ios:init": "tauri ios init",
+    "ios:dev": "tauri ios dev"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.11.4"
+  }
+}

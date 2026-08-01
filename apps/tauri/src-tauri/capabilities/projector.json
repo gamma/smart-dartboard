@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "projector",
+  "description": "Projector receives state events but cannot mutate the runtime.",
+  "windows": ["projector"],
+  "permissions": [
+    "core:default",
+    "allow-runtime-bootstrap",
+    "allow-runtime-query"
+  ]
+}

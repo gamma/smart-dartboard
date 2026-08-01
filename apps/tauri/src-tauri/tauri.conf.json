@@ -1,0 +1,30 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Smart Dartboard M0",
+  "version": "0.1.0",
+  "identifier": "de.gammaproduction.smart-dartboard.m0",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": ["control", "projector"]
+    },
+    "windows": [
+      {
+        "label": "control",
+        "title": "Smart Dartboard · Control M0",
+        "url": "index.html?role=control",
+        "width": 1024,
+        "height": 768,
+        "minWidth": 768,
+        "minHeight": 600
+      }
+    ]
+  },
+  "bundle": {
+    "active": false,
+    "targets": "all"
+  }
+}
