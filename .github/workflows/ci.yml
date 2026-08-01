@@ -140,7 +140,7 @@ jobs:
         run: npm --prefix apps/tauri run build
 
       - name: Build unsigned iOS simulator app
-        run: npm --prefix apps/tauri run tauri ios build -- --debug --target aarch64-sim --no-sign --ci
+        run: npm --prefix apps/tauri run ios:build:sim
 
   container:
     name: Container build and smoke test
@@ -262,7 +262,7 @@ jobs:
           import json
           health = json.load(open('/tmp/rust-health.json'))
           assert health['status'] == 'ok', health
-          assert health['schema_version'] == 2, health
+          assert health['schema_version'] == 3, health
           assert health['database'] == 'ok', health
           assert health['board'] == 'disabled', health
           PY

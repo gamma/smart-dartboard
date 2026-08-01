@@ -32,10 +32,18 @@ Umgesetzt und lokal verifiziert:
 - Spiel und Session werden in einem Runtime-Snapshot atomar committed. Undo
   eines Siegtreffers öffnet das Ergebnis wieder und entfernt auch die zuvor
   vergebene Sessionwertung; ein Commitfehler lässt beide Zustände unverändert.
-- SQLite-Schema 2 mit fortlaufender Migration, Downgrade-Sperre,
+- SQLite-Schema 3 mit fortlaufender Migration, Downgrade-Sperre,
   Post-Migration-Integritätsprüfung und append-only Runtime-Journal. Ein
   injizierter Fehler beim Journal-Insert rollt Snapshot und Deduplizierung mit
   zurück.
+- Transaktionale Historienprojektion für Profile, Sessions, Spiele, Würfe,
+  Gewinner und Endstände. Nur beendete Produktionsspiele fließen in die neue
+  Spielerstatistik ein; Undo macht Wurf und Sieg unwirksam, ohne das
+  Auditereignis zu löschen. Die ersten read-only API-v2-Endpunkte liefern
+  Profile, Sessionhistorie und Spielerstatistiken.
+- Gemeinsamer Dart-Source-Contract für Board, Projektor-Test und manuelle
+  Korrektur. Der Apple-Testtreffer ist als `projector_test` markiert; solche
+  Spiele bleiben dauerhaft aus der normalen Statistik ausgeschlossen.
 
 Noch nicht als produktionsreif nachgewiesen:
 
@@ -43,7 +51,8 @@ Noch nicht als produktionsreif nachgewiesen:
 - reale AirPlay-, HDMI- und Audio-Hardware,
 - External-Display-Scene-Accessory ab iOS/iPadOS 27,
 - iPhone/iPad-zu-iPad-Companion mit Pairing,
-- vollständige Portierung aller Spielmodi, Sessions und Statistiken,
+- vollständige Portierung aller Spielmodi sowie Replay, Heatmap,
+  Modusstatistiken, Export und Trainingsempfehlungen,
 - vollständige Docker-Parität zur Python-Anwendung.
 
 ## Lokale Befehle
@@ -66,9 +75,12 @@ npm --prefix apps/tauri run build
 iOS-Simulator-Build:
 
 ```bash
-npm --prefix apps/tauri run tauri ios build -- \
-  --debug --target aarch64-sim --no-sign --ci
+npm --prefix apps/tauri run ios:build:sim
 ```
+
+Das Script entfernt vorab nur das generierte Simulator-Archiv und das bereits
+exportierte `.app`-Bundle. Das ist nötig, weil Tauri 2.11.4 beim wiederholten
+Simulator-Build ein vorhandenes Exportziel nicht selbst ersetzt.
 
 Der M0-Zwei-Display-Test kann in einem Debug-Build mit dem Simulator-Argument
 `--m0-test-hit-after-start` reproduziert werden. Revision 1 ist dabei der

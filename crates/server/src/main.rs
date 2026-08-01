@@ -10,7 +10,7 @@ use sdb_contracts::{
 };
 use sdb_runtime::{CommandResult, Runtime, RuntimeSnapshot};
 use sdb_storage::SqliteRepository;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     env,
     net::{IpAddr, Ipv4Addr, SocketAddr},
@@ -47,6 +47,11 @@ struct ServiceInfo {
     service: &'static str,
     api: &'static str,
     production_replacement: bool,
+}
+
+#[derive(Debug, Deserialize)]
+struct HistoryQuery {
+    limit: Option<usize>,
 }
 
 #[tokio::main]
@@ -115,6 +120,9 @@ fn router(state: AppState) -> Router {
         .route("/api/v2/runtime/snapshot", get(snapshot))
         .route("/api/v2/runtime/commands", post(command))
         .route("/api/v2/runtime/events", get(websocket))
+        .route("/api/v2/players", get(players))
+        .route("/api/v2/history/sessions", get(session_history))
+        .route("/api/v2/statistics/players", get(player_statistics))
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),
@@ -167,6 +175,49 @@ async fn bootstrap(State(state): State<AppState>) -> Result<Json<StateMessage>, 
 
 async fn snapshot(State(state): State<AppState>) -> Result<Json<StateMessage>, ApiError> {
     Ok(Json(state.snapshot(Uuid::new_v4().to_string())?))
+}
+
+async fn players(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<sdb_storage::PlayerProfile>>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let players = runtime
+        .repository()
+        .players()
+        .map_err(|_| internal_error("player profile query failed"))?;
+    Ok(Json(players))
+}
+
+async fn session_history(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<HistoryQuery>,
+) -> Result<Json<Vec<sdb_storage::SessionHistory>>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let sessions = runtime
+        .repository()
+        .sessions(query.limit.unwrap_or(50))
+        .map_err(|_| internal_error("session history query failed"))?;
+    Ok(Json(sessions))
+}
+
+async fn player_statistics(
+    State(state): State<AppState>,
+) -> Result<Json<Vec<sdb_storage::PlayerStatistics>>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let statistics = runtime
+        .repository()
+        .player_statistics()
+        .map_err(|_| internal_error("player statistics query failed"))?;
+    Ok(Json(statistics))
 }
 
 async fn command(
@@ -329,7 +380,7 @@ mod tests {
         .expect("json");
         assert_eq!(value["status"], "ok");
         assert_eq!(value["protocol_version"], PROTOCOL_VERSION);
-        assert_eq!(value["schema_version"], 2);
+        assert_eq!(value["schema_version"], 3);
 
         let bootstrap = test_app()
             .oneshot(
@@ -340,6 +391,18 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(bootstrap.status(), StatusCode::OK);
+
+        for path in [
+            "/api/v2/players",
+            "/api/v2/history/sessions?limit=10",
+            "/api/v2/statistics/players",
+        ] {
+            let response = test_app()
+                .oneshot(Request::get(path).body(Body::empty()).expect("request"))
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::OK, "{path}");
+        }
     }
 
     #[tokio::test]

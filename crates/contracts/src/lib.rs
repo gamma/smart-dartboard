@@ -75,6 +75,15 @@ pub enum Ring {
     DoubleBull,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DartSource {
+    #[default]
+    Board,
+    ProjectorTest,
+    ManualCorrection,
+}
+
 impl Ring {
     #[must_use]
     pub const fn multiplier(self) -> u8 {
@@ -162,6 +171,8 @@ pub enum RuntimeCommand {
     CloseSession,
     IngestDart {
         event: DartEvent,
+        #[serde(default)]
+        source: DartSource,
     },
     StartGame {
         game_type: String,

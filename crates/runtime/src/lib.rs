@@ -5,7 +5,7 @@
 //! product's state when persistence fails between a dart and its broadcast.
 
 use sdb_contracts::{
-    CommandEnvelope, ContractError, DartEvent, ErrorCode, PROTOCOL_VERSION, PlayerRef,
+    CommandEnvelope, ContractError, DartEvent, DartSource, ErrorCode, PROTOCOL_VERSION, PlayerRef,
     RuntimeCommand, StarterSelection,
 };
 use sdb_game_core::{CountUpGame, CountUpState, GameError, GameStatus, OutRule, X01Game, X01State};
@@ -51,6 +51,7 @@ pub enum RuntimeAction {
     },
     Dart {
         event: DartEvent,
+        source: DartSource,
     },
     Continue,
     Undo,
@@ -140,6 +141,7 @@ pub struct CommitRequest<'a> {
     pub previous_revision: u64,
     pub next_revision: u64,
     pub action_json: &'a str,
+    pub previous_snapshot_json: &'a str,
     pub snapshot_json: &'a str,
     pub result_json: &'a str,
 }
@@ -311,6 +313,8 @@ impl<R: Repository> Runtime<R> {
 
         let action_json = serde_json::to_string(&action)
             .map_err(|error| RuntimeError::InvalidPersistedData(error.to_string()))?;
+        let previous_snapshot_json = serde_json::to_string(&self.snapshot)
+            .map_err(|error| RuntimeError::InvalidPersistedData(error.to_string()))?;
         let mut next = self.snapshot.clone();
         apply_action(&mut next, action)?;
         next.revision = self.snapshot.revision + 1;
@@ -334,6 +338,7 @@ impl<R: Repository> Runtime<R> {
                 previous_revision: self.snapshot.revision,
                 next_revision: next.revision,
                 action_json: &action_json,
+                previous_snapshot_json: &previous_snapshot_json,
                 snapshot_json: &snapshot_json,
                 result_json: &result_json,
             })
@@ -385,7 +390,7 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
         RuntimeCommand::StartRematch { game_id } => Ok(RuntimeAction::StartRematch { game_id }),
         RuntimeCommand::EndSession => Ok(RuntimeAction::EndSession),
         RuntimeCommand::CloseSession => Ok(RuntimeAction::CloseSession),
-        RuntimeCommand::IngestDart { event } => Ok(RuntimeAction::Dart { event }),
+        RuntimeCommand::IngestDart { event, source } => Ok(RuntimeAction::Dart { event, source }),
         RuntimeCommand::StartGame {
             game_type,
             player_ids,
@@ -526,7 +531,7 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
                 out_rule,
             )?));
         }
-        RuntimeAction::Dart { event } => {
+        RuntimeAction::Dart { event, .. } => {
             snapshot
                 .game
                 .as_mut()
@@ -787,6 +792,7 @@ mod tests {
                         label: "D20".into(),
                         score: 40,
                     },
+                    source: DartSource::Board,
                 },
             )
             .expect("checkout");
@@ -926,6 +932,7 @@ mod tests {
                 None,
                 RuntimeAction::Dart {
                     event: checkout.clone(),
+                    source: DartSource::Board,
                 },
             )
             .expect("checkout");
@@ -950,7 +957,10 @@ mod tests {
                 "runtime",
                 "failed-checkout",
                 None,
-                RuntimeAction::Dart { event: checkout },
+                RuntimeAction::Dart {
+                    event: checkout,
+                    source: DartSource::Board,
+                },
             )
             .expect_err("commit must fail");
         assert!(matches!(error, RuntimeError::Persistence(_)));

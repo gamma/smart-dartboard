@@ -35,6 +35,9 @@ Der Container läuft ohne Root, ohne `privileged` und ohne Linux-Capabilities.
 | `GET` | `/api/v2/runtime/snapshot` | erneuter Snapshot nach Lücke oder Reconnect |
 | `POST` | `/api/v2/runtime/commands` | ein `CommandEnvelope` atomar anwenden |
 | `GET` | `/api/v2/runtime/events` | WebSocket mit initialem und folgenden Snapshots |
+| `GET` | `/api/v2/players` | persistente Spielerprofile |
+| `GET` | `/api/v2/history/sessions` | Sessionhistorie; optional `?limit=` |
+| `GET` | `/api/v2/statistics/players` | Langzeitstatistik aus gewerteten Produktionsspielen |
 
 Browser-POSTs und WebSockets akzeptieren nur dieselbe Origin. Clients ohne
 `Origin`, etwa lokale Diagnosewerkzeuge, bleiben möglich. Unvereinbare
@@ -51,19 +54,26 @@ Fehlercodes und passende HTTP-Statuscodes.
 - Einzel- und Koop-Siege mit drei Sessionpunkten je Gewinner werten;
   Unentschieden und Abbrüche bleiben punktlos,
 - kanonische Dart-Events übernehmen,
+- die Wurfquelle transportneutral als `board`, `projector_test` oder
+  `manual_correction` führen; ein Projektor-Testwurf markiert das gesamte Spiel
+  als Test und schließt es aus der Standardstatistik aus,
 - Turn fortsetzen und Undo; ein Undo des Siegtreffers öffnet zugleich das Spiel
   wieder und nimmt die Sessionwertung atomar zurück,
 - `command_id` deduplizieren,
 - Commit und Snapshot in einer SQLite-Transaktion sichern,
 - jedes akzeptierte Command mit Runtime-ID, Revision, kanonischem Action-JSON
   und exakt committed Snapshot unveränderlich journalisieren,
+- Spielerprofile, Sessionteilnehmer, Spiele, Würfe, Gewinner und Endstände in
+  derselben Transaktion als abfragbare Historienprojektion fortschreiben;
+  Undo behält das Auditereignis, entfernt aber dessen Wertung,
 - nach Prozessneustart ausschließlich den letzten Commit wiederherstellen,
 - neue `runtime_instance_id` bei jedem Prozessstart,
 - vollständige Snapshots per WebSocket publizieren.
 
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
-- dauerhaftes Spielerprofil-, Team-, Historien- und Statistikmodell,
+- Teammodell sowie vollständige History-, Replay-, Heatmap-, Modusstatistik-
+  und Exportabfragen,
 - restliche Spielmodi und deklarative Effects,
 - Wurfkorrektur und Löschen über den öffentlichen Contract,
 - Bleak-/BlueZ-Gateway und reale Boardqualifizierung,
@@ -76,8 +86,12 @@ Boardadapter fälschlich als produktionsbereit erscheint.
 
 ## Datenbankschema
 
-Schema 2 führt `runtime_journal` als append-only Auditspur ein. Migrationen
+Schema 2 führt `runtime_journal` als append-only Auditspur ein. Schema 3 ergänzt
+die mit der bisherigen Python-Datenbank kompatiblen Profil-, Session-, Spiel-,
+Wurf- und Eventtabellen. Runtimezustand und diese fachliche Projektion werden
+atomar geschrieben. Eine vorhandene Python-Schema-2-Datenbank wird nur ergänzt;
+bestehende Profile und Historieneinträge bleiben erhalten. Migrationen
 laufen fortlaufend und transaktional; eine Datenbank mit neuerer unbekannter
 Schema-Version wird ohne Downgrade oder Schreibversuch abgelehnt. Nach jeder
-Migration läuft `PRAGMA quick_check`. Da 1 → 2 ausschließlich eine neue Tabelle
-ergänzt, ist hierfür kein destruktives Migrationsbackup erforderlich.
+Migration läuft `PRAGMA quick_check`. Da 1 → 2 und 2 → 3 ausschließlich neue
+Tabellen ergänzen, ist hierfür kein destruktives Migrationsbackup erforderlich.

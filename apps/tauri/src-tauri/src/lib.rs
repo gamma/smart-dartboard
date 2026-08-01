@@ -1,4 +1,4 @@
-use sdb_contracts::{DartEvent, Ring};
+use sdb_contracts::{DartEvent, DartSource, Ring};
 use sdb_runtime::{MemoryRepository, Runtime, RuntimeAction, RuntimeGameState};
 use serde::Serialize;
 use std::sync::Mutex;
@@ -90,6 +90,7 @@ impl NativeState {
                         label: "T20".into(),
                         score: 60,
                     },
+                    source: DartSource::ProjectorTest,
                 },
             )
             .map_err(|error| error.to_string())?;
