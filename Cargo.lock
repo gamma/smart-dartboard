@@ -901,6 +901,7 @@ dependencies = [
  "sdb-board",
  "sdb-companion",
  "sdb-contracts",
+ "sdb-game-core",
  "sdb-runtime",
  "sdb-storage",
  "serde",

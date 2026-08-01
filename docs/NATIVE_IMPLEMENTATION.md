@@ -10,10 +10,16 @@ Cross-Platform-Rewrites. Zielarchitektur und Abnahmekriterien stehen in
 
 Umgesetzt und lokal verifiziert:
 
-- Rust-Workspace mit Contracts, FFF1-Protokoll, CountUp- und X01-Kern,
-  atomarer Runtime und SQLite-Repository,
+- Rust-Workspace mit Contracts, FFF1-Protokoll, CountUp-, X01- und
+  Cricket-Kern, atomarer Runtime und SQLite-Repository,
 - gemeinsame Golden Fixtures für Python und Rust; bei X01 einschließlich Bust,
   Double-out, Spielerwechsel, Wurfkorrektur, Löschen und Undo,
+- statische, zur Buildzeit typsicher registrierte Spielmodi mit versionierten
+  Metadaten, validierten Optionen, Anleitungen, Artwork-/Sound-Referenzen und
+  Projector-Overlay. `GET /api/v2/modes` liefert derzeit CountUp, X01 und
+  Cricket. Cricket läuft bereits über den generischen Registry-Pfad und ist
+  durch eine gemeinsame Python-/Rust-Golden-Fixture sowie SQLite-Recovery
+  belegt,
 - Web-UI hinter `HostedRuntimeClient` und `TauriRuntimeClient`,
 - macOS-Tauri-App mit Control- und Projector-Fenster,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,
@@ -160,6 +166,8 @@ Noch nicht als produktionsreif nachgewiesen:
   Projector-Animationen,
 - vollständige Portierung aller Spielmodi sowie Heatmap, Modusstatistiken,
   Export und Trainingsempfehlungen,
+- generische Wurfkorrektur und Löschung für Registry-Modi; derzeit besitzt nur
+  X01 den vollständigen Action-ID-/Replay-Vertrag,
 - vollständige Docker-Parität zur Python-Anwendung,
 - reale Linux-BlueZ-/Board-Abnahme des neuen Sidecars.
 

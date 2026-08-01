@@ -1220,6 +1220,22 @@ fn game_projection(game: &RuntimeGame) -> GameProjection {
                 last_bust: state.last_bust,
             }
         }
+        RuntimeGame::Registered(game) => {
+            let state = game.state();
+            GameProjection {
+                players: state
+                    .players
+                    .iter()
+                    .map(|player| (player.id.clone(), player.score))
+                    .collect(),
+                current_player_index: state.current_player_index,
+                round_number: state.round_number,
+                darts_in_turn: state.darts_in_turn,
+                winner_ids: state.winner_ids.clone(),
+                result_type: state.result_type.clone(),
+                last_bust: false,
+            }
+        }
     }
 }
 
@@ -1374,7 +1390,9 @@ fn project_domain(
         | RuntimeAction::SelectStarter { .. }
         | RuntimeAction::NextGame
         | RuntimeAction::StartCountUp { .. }
-        | RuntimeAction::StartX01 { .. } => {}
+        | RuntimeAction::StartX01 { .. }
+        | RuntimeAction::StartRegistered { .. }
+        | RuntimeAction::GameAction { .. } => {}
     }
 
     let before = previous.session.state();
@@ -2066,6 +2084,7 @@ impl Repository for SqliteRepository {
 mod tests {
     use super::*;
     use sdb_contracts::{DartEvent, PlayerRef, Ring};
+    use sdb_game_core::GameStatus;
     use sdb_runtime::{Runtime, RuntimeAction};
     use sdb_session_core::Screen;
 
@@ -2512,6 +2531,110 @@ mod tests {
             )
             .expect("events");
         assert_eq!(effective_events, 1);
+    }
+
+    #[test]
+    fn registered_cricket_projects_history_and_recovers_like_legacy_modes() {
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        for (command_id, action) in [
+            (
+                "cricket-session",
+                RuntimeAction::StartSession {
+                    session_id: "session-cricket".into(),
+                    players: vec![PlayerRef {
+                        id: "ada".into(),
+                        name: "Ada".into(),
+                        avatar: "comet".into(),
+                        color: "#28e7ff".into(),
+                    }],
+                },
+            ),
+            (
+                "cricket-prepare",
+                RuntimeAction::PrepareGame {
+                    game_type: "cricket".into(),
+                    options: serde_json::json!({}),
+                },
+            ),
+            (
+                "cricket-start",
+                RuntimeAction::StartPreparedGame {
+                    game_id: "game-cricket".into(),
+                },
+            ),
+            ("cricket-playing", RuntimeAction::MarkGamePlaying),
+        ] {
+            runtime
+                .dispatch("runtime", command_id, None, action)
+                .unwrap_or_else(|error| panic!("{command_id}: {error}"));
+        }
+
+        let darts = [
+            (20, Ring::Triple, 3, "T20", 60),
+            (19, Ring::Triple, 3, "T19", 57),
+            (18, Ring::Triple, 3, "T18", 54),
+            (17, Ring::Triple, 3, "T17", 51),
+            (16, Ring::Triple, 3, "T16", 48),
+            (15, Ring::Triple, 3, "T15", 45),
+            (25, Ring::DoubleBull, 2, "DBULL", 50),
+            (25, Ring::SingleBull, 1, "BULL", 25),
+        ];
+        for (index, (field, ring, multiplier, label, score)) in darts.into_iter().enumerate() {
+            if matches!(index, 3 | 6) {
+                runtime
+                    .dispatch(
+                        "runtime",
+                        &format!("cricket-continue-{index}"),
+                        None,
+                        RuntimeAction::Continue,
+                    )
+                    .expect("continue Cricket turn");
+            }
+            runtime
+                .dispatch(
+                    "runtime",
+                    &format!("cricket-dart-{index}"),
+                    None,
+                    RuntimeAction::Dart {
+                        event: DartEvent::Hit {
+                            seq: u64::try_from(index + 1).expect("sequence"),
+                            field,
+                            ring,
+                            multiplier,
+                            label: label.into(),
+                            score,
+                        },
+                        source: sdb_contracts::DartSource::Board,
+                    },
+                )
+                .expect("Cricket dart");
+        }
+
+        assert_eq!(
+            runtime.snapshot().session.state().screen,
+            Screen::GameResult
+        );
+        assert_eq!(
+            runtime.snapshot().session.state().standings[0].session_points,
+            3
+        );
+        let repository = runtime.into_repository();
+        let detail = repository
+            .game_detail("game-cricket")
+            .expect("game detail")
+            .expect("Cricket game");
+        assert_eq!(detail.game.game_type, "cricket");
+        assert_eq!(detail.game.status, "finished");
+        assert_eq!(detail.game.winner_ids, vec!["ada"]);
+        assert_eq!(detail.throws.len(), 8);
+        assert_eq!(detail.game.ruleset_version, 1);
+        let restored = Runtime::restore("restored", repository).expect("restore Cricket runtime");
+        let Some(RuntimeGame::Registered(game)) = restored.snapshot().game.as_ref() else {
+            panic!("registered Cricket snapshot missing");
+        };
+        assert_eq!(game.state().status, GameStatus::Finished);
+        assert_eq!(game.state().winner_ids, vec!["ada"]);
     }
 
     #[test]

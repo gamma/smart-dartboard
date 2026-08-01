@@ -16,6 +16,7 @@ use sdb_contracts::{
     CommandEnvelope, ContractError, DartSource, Envelope, ErrorCode, MessageKind, PROTOCOL_VERSION,
     RuntimeCommand,
 };
+use sdb_game_core::{GameMetadata, registered_game_metadata};
 use sdb_runtime::{CommandResult, Runtime, RuntimeSnapshot};
 use sdb_storage::SqliteRepository;
 use serde::{Deserialize, Serialize};
@@ -232,6 +233,7 @@ fn router(state: AppState) -> Router {
         )
         .route("/api/v2/board/status", post(board_status))
         .route("/api/v2/board/packets", post(board_packet))
+        .route("/api/v2/modes", get(modes))
         .route("/api/v2/players", get(players))
         .route("/api/v2/history/sessions", get(session_history))
         .route("/api/v2/history/sessions/{session_id}", get(session_detail))
@@ -535,6 +537,10 @@ async fn companion_websocket(
             token,
         )
     }))
+}
+
+async fn modes() -> Json<Vec<GameMetadata>> {
+    Json(registered_game_metadata().into_iter().copied().collect())
 }
 
 async fn players(
@@ -1142,6 +1148,7 @@ mod tests {
         assert_eq!(bootstrap.status(), StatusCode::OK);
 
         for path in [
+            "/api/v2/modes",
             "/api/v2/players",
             "/api/v2/history/sessions?limit=10",
             "/api/v2/statistics/players",
@@ -1152,6 +1159,36 @@ mod tests {
                 .expect("response");
             assert_eq!(response.status(), StatusCode::OK, "{path}");
         }
+
+        let response = test_app()
+            .oneshot(
+                Request::get("/api/v2/modes")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        let modes: Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("mode metadata");
+        assert_eq!(modes.as_array().map(Vec::len), Some(3));
+        assert!(
+            modes
+                .as_array()
+                .is_some_and(|items| items.iter().any(|mode| mode["slug"] == "cricket"
+                    && mode["artwork"] == "/static/assets/modes/cricket.webp"
+                    && mode["instructions"]
+                        .as_array()
+                        .is_some_and(|steps| steps.len() == 4)))
+        );
+        assert!(modes.as_array().is_some_and(|items| {
+            items
+                .iter()
+                .any(|mode| mode["slug"] == "countup" && mode["options"][0]["default"] == 8)
+        }));
     }
 
     #[tokio::test]
@@ -1188,6 +1225,50 @@ mod tests {
         .expect("json");
         assert_eq!(value["revision"], 1);
         assert_eq!(value["state"]["game_type"], "count_up");
+    }
+
+    #[tokio::test]
+    async fn command_endpoint_starts_a_registered_cricket_game() {
+        let envelope = serde_json::json!({
+            "protocol_version": 1,
+            "command_id": "start-cricket-1",
+            "runtime_instance_id": "test-runtime",
+            "expected_revision": 0,
+            "command": {
+                "type": "start_game",
+                "game_type": "cricket",
+                "player_ids": ["Ada", "Lin"],
+                "options": {}
+            }
+        });
+        let response = test_app()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/v2/runtime/commands")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(envelope.to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let value: Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("json");
+        assert_eq!(value["revision"], 1);
+        assert_eq!(value["state"]["game_type"], "registered");
+        assert_eq!(value["state"]["state"]["game_type"], "cricket");
+        assert_eq!(value["state"]["state"]["ruleset_version"], 1);
+        assert_eq!(
+            value["state"]["state"]["overlay"]["cricket"]["remaining"]
+                .as_array()
+                .map(Vec::len),
+            Some(7)
+        );
     }
 
     #[tokio::test]

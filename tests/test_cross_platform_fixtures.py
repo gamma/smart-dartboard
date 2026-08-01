@@ -17,6 +17,9 @@ COUNTUP_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "countup_v1.json"
 )
 X01_FIXTURE = Path(__file__).parents[1] / "fixtures" / "games" / "x01_v1.json"
+CRICKET_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "cricket_v1.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -105,6 +108,42 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                         "bust": bool((state.last_event or {}).get("bust", False)),
                         "labels": [throw.label for throw in state.throws],
                         "seqs": [throw.seq for throw in state.throws],
+                    }
+                    self.assertEqual(actual, step["expected"])
+
+    def test_python_cricket_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(CRICKET_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_schema_version"], 1)
+        self.assertEqual(fixture["ruleset_version"], 1)
+        for case in fixture["cases"]:
+            with self.subTest(case=case["name"]):
+                engine = GameEngine()
+                engine.reset("cricket", case["players"], options=case["options"])
+                for step in case["steps"]:
+                    command = step["command"]
+                    if command["type"] == "dart":
+                        engine.handle_event(dict(command["event"]))
+                    elif command["type"] == "continue":
+                        engine.continue_turn()
+                    else:
+                        self.fail(f"Unsupported fixture command: {command['type']}")
+                    state = engine.state
+                    remaining = (state.overlay() or {}).get("cricket", {}).get(
+                        "remaining", []
+                    )
+                    actual = {
+                        "scores": [player.score for player in state.players],
+                        "marks_20": [
+                            player.marks.get("20", 0) for player in state.players
+                        ],
+                        "current_player_index": state.current_player_index,
+                        "darts_in_turn": state.darts_in_turn,
+                        "turn_score": state.turn_score,
+                        "round_number": state.round_number,
+                        "status": state.status,
+                        "winner_id": state.winner_id,
+                        "result_type": state.result_type,
+                        "remaining_fields": [item["field"] for item in remaining],
                     }
                     self.assertEqual(actual, step["expected"])
 

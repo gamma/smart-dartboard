@@ -299,6 +299,7 @@ impl NativeState {
         let counter = game.as_ref().map_or(0, |state| match state {
             RuntimeGameState::CountUp(state) => state.players[0].score.into(),
             RuntimeGameState::X01(state) => state.players[0].score.into(),
+            RuntimeGameState::Registered(state) => state.players[0].score.into(),
         });
         PublicState {
             app_role: self.app_role,

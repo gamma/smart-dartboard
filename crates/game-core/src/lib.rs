@@ -1,7 +1,15 @@
 //! Deterministic, platform-independent game rules.
 //!
-//! Count Up is the first parity slice. Further modes use the same transition
-//! boundary and are added only together with shared Python/Rust fixtures.
+//! Count Up and X01 are the first parity slices. Further modes use the static
+//! registered-mode boundary and are added only together with shared
+//! Python/Rust fixtures.
+
+mod registered;
+
+pub use registered::{
+    GameInstruction, GameMetadata, GameOption, GameOptionChoice, GameOptionValue, RegisteredGame,
+    RegisteredGameState, RegisteredPlayer, game_metadata, registered_game_metadata,
+};
 
 use sdb_contracts::DartEvent;
 use serde::{Deserialize, Serialize};
@@ -64,6 +72,14 @@ pub enum GameError {
     InvalidStartScore,
     #[error("only darts from the current or previous turn can be edited")]
     ActionNotEditable,
+    #[error("unknown registered game mode: {0}")]
+    UnknownMode(String),
+    #[error("registered game ruleset is unavailable: {0}")]
+    RulesetUnavailable(String),
+    #[error("invalid registered game options: {0}")]
+    InvalidOptions(String),
+    #[error("registered game action is unsupported: {0}")]
+    UnsupportedAction(String),
 }
 
 impl CountUpGame {

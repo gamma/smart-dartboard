@@ -10,11 +10,10 @@ repository.workspace = true
 [dependencies]
 sdb-contracts = { path = "../contracts" }
 serde.workspace = true
+serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 
 [lints]
 workspace = true
-

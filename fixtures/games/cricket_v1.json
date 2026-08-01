@@ -1,0 +1,99 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 1,
+  "cases": [
+    {
+      "name": "overflow_scores_only_while_an_opponent_is_open",
+      "players": [
+        {"id": "player-ada", "name": "Ada"},
+        {"id": "player-bob", "name": "Bob"}
+      ],
+      "options": {},
+      "steps": [
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+          "expected": {"scores": [0, 0], "marks_20": [3, 0], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+          "expected": {"scores": [60, 0], "marks_20": [3, 0], "current_player_index": 0, "darts_in_turn": 2, "turn_score": 60, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "miss", "seq": 3, "label": "MISS", "score": 0}},
+          "expected": {"scores": [60, 0], "marks_20": [3, 0], "current_player_index": 0, "darts_in_turn": 3, "turn_score": 60, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "continue"},
+          "expected": {"scores": [60, 0], "marks_20": [3, 0], "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [20, 19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 4, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+          "expected": {"scores": [60, 0], "marks_20": [3, 3], "current_player_index": 1, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "miss", "seq": 5, "label": "MISS", "score": 0}},
+          "expected": {"scores": [60, 0], "marks_20": [3, 3], "current_player_index": 1, "darts_in_turn": 2, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "miss", "seq": 6, "label": "MISS", "score": 0}},
+          "expected": {"scores": [60, 0], "marks_20": [3, 3], "current_player_index": 1, "darts_in_turn": 3, "turn_score": 0, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "continue"},
+          "expected": {"scores": [60, 0], "marks_20": [3, 3], "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 7, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+          "expected": {"scores": [60, 0], "marks_20": [3, 3], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        }
+      ]
+    },
+    {
+      "name": "all_targets_and_sufficient_score_finish_the_game",
+      "players": [{"id": "player-ada", "name": "Ada"}],
+      "options": {},
+      "steps": [
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [19, 18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 19, "ring": "triple", "multiplier": 3, "label": "T19", "score": 57}},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 2, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [18, 17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 3, "field": 18, "ring": "triple", "multiplier": 3, "label": "T18", "score": 54}},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 3, "turn_score": 0, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "remaining_fields": [17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "continue"},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [17, 16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 4, "field": 17, "ring": "triple", "multiplier": 3, "label": "T17", "score": 51}},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [16, 15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 5, "field": 16, "ring": "triple", "multiplier": 3, "label": "T16", "score": 48}},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 2, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [15, 25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 6, "field": 15, "ring": "triple", "multiplier": 3, "label": "T15", "score": 45}},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 3, "turn_score": 0, "round_number": 2, "status": "hold", "winner_id": null, "result_type": "", "remaining_fields": [25]}
+        },
+        {
+          "command": {"type": "continue"},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 3, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 7, "field": 25, "ring": "double_bull", "multiplier": 2, "label": "DBULL", "score": 50}},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 3, "status": "running", "winner_id": null, "result_type": "", "remaining_fields": [25]}
+        },
+        {
+          "command": {"type": "dart", "event": {"type": "hit", "seq": 8, "field": 25, "ring": "single_bull", "multiplier": 1, "label": "BULL", "score": 25}},
+          "expected": {"scores": [0], "marks_20": [3], "current_player_index": 0, "darts_in_turn": 2, "turn_score": 0, "round_number": 3, "status": "finished", "winner_id": "player-ada", "result_type": "individual_win", "remaining_fields": []}
+        }
+      ]
+    }
+  ]
+}

@@ -2974,6 +2974,7 @@ version = "0.1.0"
 dependencies = [
  "sdb-contracts",
  "serde",
+ "serde_json",
  "thiserror 2.0.19",
 ]
 

@@ -8,7 +8,10 @@ use sdb_contracts::{
     CommandEnvelope, ContractError, DartEvent, DartSource, ErrorCode, PROTOCOL_VERSION, PlayerRef,
     RuntimeCommand, StarterSelection,
 };
-use sdb_game_core::{CountUpGame, CountUpState, GameError, GameStatus, OutRule, X01Game, X01State};
+use sdb_game_core::{
+    CountUpGame, CountUpState, GameError, GameStatus, OutRule, RegisteredGame, RegisteredGameState,
+    X01Game, X01State, game_metadata,
+};
 use sdb_session_core::{Screen, SessionCore, SessionError, SessionState};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -49,6 +52,11 @@ pub enum RuntimeAction {
         start_score: u32,
         out_rule: OutRule,
     },
+    StartRegistered {
+        game_type: String,
+        players: Vec<(String, String)>,
+        options: serde_json::Value,
+    },
     Dart {
         event: DartEvent,
         source: DartSource,
@@ -60,6 +68,10 @@ pub enum RuntimeAction {
     },
     DeleteDart {
         action_id: u64,
+    },
+    GameAction {
+        action: String,
+        payload: serde_json::Value,
     },
     Continue,
     Undo,
@@ -78,6 +90,7 @@ pub struct RuntimeSnapshot {
 pub enum RuntimeGame {
     CountUp(CountUpGame),
     X01(Box<X01Game>),
+    Registered(RegisteredGame),
 }
 
 impl RuntimeGame {
@@ -85,6 +98,7 @@ impl RuntimeGame {
         match self {
             Self::CountUp(game) => game.apply_throw(&event).map(|_| ()),
             Self::X01(game) => game.apply_throw(event).map(|_| ()),
+            Self::Registered(game) => game.apply_throw(&event).map(|_| ()),
         }
     }
 
@@ -92,6 +106,7 @@ impl RuntimeGame {
         match self {
             Self::CountUp(game) => game.continue_turn().map(|_| ()),
             Self::X01(game) => game.continue_turn().map(|_| ()),
+            Self::Registered(game) => game.continue_turn().map(|_| ()),
         }
     }
 
@@ -99,20 +114,32 @@ impl RuntimeGame {
         match self {
             Self::CountUp(game) => game.undo().map(|_| ()),
             Self::X01(game) => game.undo().map(|_| ()),
+            Self::Registered(game) => game.undo().map(|_| ()),
         }
     }
 
     fn correct_dart(&mut self, action_id: u64, replacement: DartEvent) -> Result<(), GameError> {
         match self {
             Self::X01(game) => game.correct_throw(action_id, replacement).map(|_| ()),
-            Self::CountUp(_) => Err(GameError::ActionNotEditable),
+            Self::CountUp(_) | Self::Registered(_) => Err(GameError::ActionNotEditable),
         }
     }
 
     fn delete_dart(&mut self, action_id: u64) -> Result<(), GameError> {
         match self {
             Self::X01(game) => game.delete_throw(action_id).map(|_| ()),
-            Self::CountUp(_) => Err(GameError::ActionNotEditable),
+            Self::CountUp(_) | Self::Registered(_) => Err(GameError::ActionNotEditable),
+        }
+    }
+
+    fn handle_action(
+        &mut self,
+        action: &str,
+        payload: &serde_json::Value,
+    ) -> Result<(), GameError> {
+        match self {
+            Self::Registered(game) => game.handle_action(action, payload).map(|_| ()),
+            Self::CountUp(_) | Self::X01(_) => Err(GameError::UnsupportedAction(action.into())),
         }
     }
 
@@ -121,6 +148,7 @@ impl RuntimeGame {
         match self {
             Self::CountUp(game) => RuntimeGameState::CountUp(game.state().clone()),
             Self::X01(game) => RuntimeGameState::X01(game.state().clone()),
+            Self::Registered(game) => RuntimeGameState::Registered(game.state().clone()),
         }
     }
 
@@ -128,6 +156,7 @@ impl RuntimeGame {
         match self {
             Self::CountUp(game) => game.state().status == GameStatus::Finished,
             Self::X01(game) => game.state().status == GameStatus::Finished,
+            Self::Registered(game) => game.state().status == GameStatus::Finished,
         }
     }
 
@@ -135,6 +164,7 @@ impl RuntimeGame {
         match self {
             Self::CountUp(game) => &game.state().winner_ids,
             Self::X01(game) => &game.state().winner_ids,
+            Self::Registered(game) => &game.state().winner_ids,
         }
     }
 }
@@ -144,6 +174,7 @@ impl RuntimeGame {
 pub enum RuntimeGameState {
     CountUp(CountUpState),
     X01(X01State),
+    Registered(RegisteredGameState),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -464,15 +495,20 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
                         out_rule,
                     })
                 }
+                _ if game_metadata(&game_type).is_some() => Ok(RuntimeAction::StartRegistered {
+                    game_type,
+                    players,
+                    options,
+                }),
                 _ => Err(invalid_command("unsupported game type")),
             }
         }
         RuntimeCommand::ContinueTurn | RuntimeCommand::NextPlayer => Ok(RuntimeAction::Continue),
         RuntimeCommand::Undo => Ok(RuntimeAction::Undo),
         RuntimeCommand::AbortGame => Ok(RuntimeAction::AbortGame),
-        RuntimeCommand::GameAction { .. } => Err(invalid_command(
-            "command is not implemented by this runtime slice",
-        )),
+        RuntimeCommand::GameAction { action, payload } => {
+            Ok(RuntimeAction::GameAction { action, payload })
+        }
     }
 }
 
@@ -554,20 +590,9 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
             snapshot.session.close_session();
             snapshot.game = None;
         }
-        RuntimeAction::StartCountUp { players, rounds } => {
-            snapshot.game = Some(RuntimeGame::CountUp(CountUpGame::new(players, rounds)?));
-        }
-        RuntimeAction::StartX01 {
-            players,
-            start_score,
-            out_rule,
-        } => {
-            snapshot.game = Some(RuntimeGame::X01(Box::new(X01Game::new(
-                players,
-                start_score,
-                out_rule,
-            )?)));
-        }
+        direct_action @ (RuntimeAction::StartCountUp { .. }
+        | RuntimeAction::StartX01 { .. }
+        | RuntimeAction::StartRegistered { .. }) => start_direct_game(snapshot, direct_action)?,
         RuntimeAction::Dart { event, .. } => {
             snapshot
                 .game
@@ -590,6 +615,14 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
             game.delete_dart(action_id)?;
             sync_edited_game(snapshot)?;
         }
+        RuntimeAction::GameAction { action, payload } => {
+            snapshot
+                .game
+                .as_mut()
+                .ok_or(RuntimeError::NoGame)?
+                .handle_action(&action, &payload)?;
+            sync_finished_game(snapshot)?;
+        }
         RuntimeAction::Continue => {
             snapshot
                 .game
@@ -610,6 +643,29 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
             }
         }
     }
+    Ok(())
+}
+
+fn start_direct_game(
+    snapshot: &mut RuntimeSnapshot,
+    action: RuntimeAction,
+) -> Result<(), RuntimeError> {
+    snapshot.game = Some(match action {
+        RuntimeAction::StartCountUp { players, rounds } => {
+            RuntimeGame::CountUp(CountUpGame::new(players, rounds)?)
+        }
+        RuntimeAction::StartX01 {
+            players,
+            start_score,
+            out_rule,
+        } => RuntimeGame::X01(Box::new(X01Game::new(players, start_score, out_rule)?)),
+        RuntimeAction::StartRegistered {
+            game_type,
+            players,
+            options,
+        } => RuntimeGame::Registered(RegisteredGame::new(&game_type, players, &options)?),
+        _ => unreachable!("start_direct_game only accepts direct game actions"),
+    });
     Ok(())
 }
 
@@ -684,6 +740,9 @@ fn game_from_options(
                 out_rule,
             )?)))
         }
+        _ if game_metadata(game_type).is_some() => Ok(RuntimeGame::Registered(
+            RegisteredGame::new(game_type, players, options)?,
+        )),
         _ => Err(RuntimeError::InvalidGameOptions(format!(
             "unsupported game type: {game_type}"
         ))),
@@ -1034,6 +1093,76 @@ mod tests {
         };
         assert_eq!(state.start_score, 301);
         assert_eq!(state.out_rule, OutRule::Double);
+    }
+
+    #[test]
+    fn command_envelope_starts_a_registered_cricket_game() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        let started = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "start-cricket".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(0),
+                command: RuntimeCommand::StartGame {
+                    game_type: "cricket".into(),
+                    player_ids: vec!["ada".into(), "bob".into()],
+                    options: serde_json::json!({}),
+                },
+            })
+            .expect("start Cricket");
+        let Some(RuntimeGameState::Registered(state)) = started.state else {
+            panic!("wrong game type");
+        };
+        assert_eq!(state.game_type, "cricket");
+        assert_eq!(state.ruleset_version, 1);
+        assert_eq!(state.players[0].marks.get("20"), Some(&0));
+        assert_eq!(
+            state.overlay["prompt"],
+            serde_json::json!("Offene Cricket-Ziele")
+        );
+
+        let invalid = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "invalid-cricket".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(1),
+                command: RuntimeCommand::StartGame {
+                    game_type: "cricket".into(),
+                    player_ids: vec!["ada".into()],
+                    options: serde_json::json!({"unknown": true}),
+                },
+            })
+            .expect_err("unknown options must be rejected");
+        assert_eq!(invalid.code, ErrorCode::InvalidCommand);
+        assert_eq!(runtime.snapshot().revision, 1);
+        runtime
+            .dispatch(
+                "runtime",
+                "cricket-t20",
+                Some(1),
+                RuntimeAction::Dart {
+                    event: DartEvent::Hit {
+                        seq: 1,
+                        field: 20,
+                        ring: Ring::Triple,
+                        multiplier: 3,
+                        label: "T20".into(),
+                        score: 60,
+                    },
+                    source: DartSource::Board,
+                },
+            )
+            .expect("Cricket dart");
+        let repository = runtime.into_repository();
+        let restored = Runtime::restore("restored-runtime", repository).expect("restore Cricket");
+        let Some(RuntimeGame::Registered(game)) = restored.snapshot().game.as_ref() else {
+            panic!("registered game was not restored");
+        };
+        assert_eq!(game.state().players[0].marks.get("20"), Some(&3));
+        assert_eq!(restored.snapshot().revision, 2);
     }
 
     #[test]

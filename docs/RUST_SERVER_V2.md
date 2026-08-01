@@ -76,6 +76,7 @@ begrenztem Proxy-Netz.
 | `GET` | `/api/v2/runtime/snapshot` | erneuter Snapshot nach Lücke oder Reconnect |
 | `POST` | `/api/v2/runtime/commands` | ein `CommandEnvelope` atomar anwenden |
 | `GET` | `/api/v2/runtime/events` | WebSocket mit initialem und folgenden Snapshots |
+| `GET` | `/api/v2/modes` | versionierte Modusmetadaten, Optionen, Anleitungen und Assets |
 | `POST` | `/api/v2/companion/pairing/open` | TLS-gebundenes fünfminütiges Einmalcode-Fenster öffnen |
 | `POST` | `/api/v2/companion/pairing` | Code einmalig gegen einen Projector-Grant tauschen |
 | `GET` | `/api/v2/companion/devices` | gekoppelte Projector-Geräte ohne Token-Hashes auflisten |
@@ -123,7 +124,10 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 
 ## Aktueller Funktionsumfang
 
-- CountUp und X01 starten,
+- CountUp, X01 und Cricket starten; Cricket nutzt bereits die generische,
+  statische Modus-Registry statt eines neuen Runtime- oder Serverzweigs,
+- Modusmetadaten einschließlich validierter Optionen, Anleitungen,
+  Artwork-/Sound-Referenzen und Regelsatz-Version über `/api/v2/modes` liefern,
 - Session mit vollständigen Spielerreferenzen starten, Modus vorbereiten und
   Startspieler festlegen,
 - Countdown, Spiel, Ergebnis, nächste Spielauswahl, Rematch und
@@ -158,7 +162,8 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
 - Teammodell sowie Heatmap-, Modusstatistik-, Export- und Trainingsabfragen,
-- restliche Spielmodi und deklarative Effects,
+- restliche Spielmodi und deklarative Effects sowie generische
+  Action-ID-Korrektur für Registry-Modi,
 - reale BlueZ-/Boardqualifizierung mit schneller Trefferfolge, Reconnect,
   Adapterausfall und Langzeittest,
 - Migration vorhandener Python-Datenbanken,
