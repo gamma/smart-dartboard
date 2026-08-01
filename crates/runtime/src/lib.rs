@@ -736,12 +736,12 @@ fn game_from_options(
     options: &serde_json::Value,
     random_seed: u64,
 ) -> Result<RuntimeGame, RuntimeError> {
-    let players = players
-        .into_iter()
-        .map(|player| (player.id, player.name))
-        .collect();
     match game_type {
         "countup" => {
+            let players = players
+                .into_iter()
+                .map(|player| (player.id, player.name))
+                .collect();
             let rounds = options
                 .get("rounds")
                 .and_then(serde_json::Value::as_u64)
@@ -754,6 +754,10 @@ fn game_from_options(
             )?)))
         }
         "x01" => {
+            let players = players
+                .into_iter()
+                .map(|player| (player.id, player.name))
+                .collect();
             let start_score = options
                 .get("start_score")
                 .and_then(serde_json::Value::as_u64)
@@ -781,7 +785,7 @@ fn game_from_options(
             )?)))
         }
         _ if game_metadata(game_type).is_some() => Ok(RuntimeGame::Registered(Box::new(
-            RegisteredGame::new_seeded(game_type, players, options, random_seed)?,
+            RegisteredGame::new_seeded_with_players(game_type, players, options, random_seed)?,
         ))),
         _ => Err(RuntimeError::InvalidGameOptions(format!(
             "unsupported game type: {game_type}"
@@ -1506,5 +1510,19 @@ mod tests {
             panic!("wrong game type");
         };
         assert_eq!(game.state().players[0].score, 40);
+    }
+
+    #[test]
+    fn prepared_registry_game_preserves_session_profiles() {
+        let game = game_from_options("eight_ball", session_players(), &serde_json::json!({}), 42)
+            .expect("registered game");
+        let RuntimeGame::Registered(game) = game else {
+            panic!("wrong game type");
+        };
+
+        assert_eq!(game.state().players[0].avatar, "nova");
+        assert_eq!(game.state().players[0].color, "#ff00aa");
+        assert_eq!(game.state().players[1].avatar, "comet");
+        assert_eq!(game.state().players[1].color, "#28e7ff");
     }
 }

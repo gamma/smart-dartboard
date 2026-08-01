@@ -1,5 +1,5 @@
 use crate::{GameError, GameStatus, seed_from_id, with_seq};
-use sdb_contracts::{DartEvent, Ring};
+use sdb_contracts::{DartEvent, PlayerRef, Ring};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
 use std::collections::BTreeMap;
@@ -114,9 +114,28 @@ pub struct GameMetadata {
 pub struct RegisteredPlayer {
     pub id: String,
     pub name: String,
+    #[serde(default = "default_player_avatar")]
+    pub avatar: String,
+    #[serde(default = "default_player_color")]
+    pub color: String,
     pub score: i64,
     #[serde(default)]
     pub marks: BTreeMap<String, u8>,
+}
+
+fn default_player_avatar() -> String {
+    "comet".into()
+}
+
+fn default_player_color() -> String {
+    "#28e7ff".into()
+}
+
+const fn fallback_player_color(index: usize) -> &'static str {
+    const COLORS: [&str; 8] = [
+        "#28e7ff", "#ffb52b", "#3dff91", "#ff4f79", "#a77bff", "#ffffff", "#ff7a45", "#66a3ff",
+    ];
+    COLORS[index % COLORS.len()]
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -258,6 +277,30 @@ impl RegisteredGame {
         options: &Value,
         random_seed: u64,
     ) -> Result<Self, GameError> {
+        let players = players
+            .into_iter()
+            .enumerate()
+            .map(|(index, (id, name))| PlayerRef {
+                id,
+                name,
+                avatar: default_player_avatar(),
+                color: fallback_player_color(index).into(),
+            })
+            .collect();
+        Self::new_seeded_with_players(game_type, players, options, random_seed)
+    }
+
+    /// Creates a registered game while preserving selected player profiles.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an unknown mode, invalid players or invalid options.
+    pub fn new_seeded_with_players(
+        game_type: &str,
+        players: Vec<PlayerRef>,
+        options: &Value,
+        random_seed: u64,
+    ) -> Result<Self, GameError> {
         if players.is_empty() {
             return Err(GameError::NoPlayers);
         }
@@ -275,9 +318,11 @@ impl RegisteredGame {
             ruleset_version: metadata.ruleset_version,
             players: players
                 .into_iter()
-                .map(|(id, name)| RegisteredPlayer {
-                    id,
-                    name,
+                .map(|player| RegisteredPlayer {
+                    id: player.id,
+                    name: player.name,
+                    avatar: player.avatar,
+                    color: player.color,
                     score: 0,
                     marks: BTreeMap::new(),
                 })
@@ -1393,6 +1438,57 @@ mod tests {
                 .expect("restore");
         assert_eq!(restored.state().random_seed, 42);
         assert_eq!(restored.state().random_cursor, 8);
+    }
+
+    #[test]
+    fn registered_profiles_preserve_avatar_and_color() {
+        let game = RegisteredGame::new_seeded_with_players(
+            "eight_ball",
+            vec![
+                PlayerRef {
+                    id: "ada".into(),
+                    name: "Ada".into(),
+                    avatar: "fox".into(),
+                    color: "#ff00aa".into(),
+                },
+                PlayerRef {
+                    id: "bob".into(),
+                    name: "Bob".into(),
+                    avatar: "comet".into(),
+                    color: "#00ffaa".into(),
+                },
+            ],
+            &json!({}),
+            42,
+        )
+        .expect("game");
+
+        assert_eq!(game.state().players[0].avatar, "fox");
+        assert_eq!(game.state().players[0].color, "#ff00aa");
+        assert_eq!(game.state().players[1].avatar, "comet");
+        assert_eq!(game.state().players[1].color, "#00ffaa");
+    }
+
+    #[test]
+    fn legacy_registered_players_receive_profile_defaults() {
+        let game = RegisteredGame::new(
+            "eight_ball",
+            vec![("ada".into(), "Ada".into()), ("bob".into(), "Bob".into())],
+            &json!({}),
+        )
+        .expect("game");
+        let mut serialized = serde_json::to_value(game).expect("serialize");
+        for player in serialized["state"]["players"]
+            .as_array_mut()
+            .expect("players")
+        {
+            player.as_object_mut().expect("player").remove("avatar");
+            player.as_object_mut().expect("player").remove("color");
+        }
+
+        let restored: RegisteredGame = serde_json::from_value(serialized).expect("legacy game");
+        assert_eq!(restored.state().players[0].avatar, "comet");
+        assert_eq!(restored.state().players[0].color, "#28e7ff");
     }
 
     #[test]
