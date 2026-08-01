@@ -10,10 +10,10 @@ repository.workspace = true
 [dependencies]
 sdb-contracts = { path = "../contracts" }
 sdb-game-core = { path = "../game-core" }
+sdb-session-core = { path = "../session-core" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true
 
 [lints]
 workspace = true
-

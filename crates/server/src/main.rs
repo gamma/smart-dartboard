@@ -371,6 +371,49 @@ mod tests {
         assert_eq!(value["state"]["game_type"], "count_up");
     }
 
+    #[tokio::test]
+    async fn command_endpoint_exposes_the_committed_session_state() {
+        let envelope = serde_json::json!({
+            "protocol_version": 1,
+            "command_id": "session-1",
+            "runtime_instance_id": "test-runtime",
+            "expected_revision": 0,
+            "command": {
+                "type": "start_session",
+                "session_id": "session-1",
+                "players": [
+                    {
+                        "id": "ada",
+                        "name": "Ada",
+                        "avatar": "nova",
+                        "color": "#ff00aa"
+                    }
+                ]
+            }
+        });
+        let response = test_app()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/v2/runtime/commands")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(envelope.to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let value: Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("json");
+        assert_eq!(value["revision"], 1);
+        assert_eq!(value["session"]["screen"], "game_select");
+        assert_eq!(value["session"]["players"][0]["id"], "ada");
+    }
+
     #[test]
     fn websocket_origin_must_match_host() {
         let mut headers = HeaderMap::new();

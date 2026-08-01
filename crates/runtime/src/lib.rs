@@ -5,9 +5,11 @@
 //! product's state when persistence fails between a dart and its broadcast.
 
 use sdb_contracts::{
-    CommandEnvelope, ContractError, DartEvent, ErrorCode, PROTOCOL_VERSION, RuntimeCommand,
+    CommandEnvelope, ContractError, DartEvent, ErrorCode, PROTOCOL_VERSION, PlayerRef,
+    RuntimeCommand, StarterSelection,
 };
-use sdb_game_core::{CountUpGame, CountUpState, GameError, OutRule, X01Game, X01State};
+use sdb_game_core::{CountUpGame, CountUpState, GameError, GameStatus, OutRule, X01Game, X01State};
+use sdb_session_core::{Screen, SessionCore, SessionError, SessionState};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
@@ -15,6 +17,29 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RuntimeAction {
+    StartSession {
+        session_id: String,
+        players: Vec<PlayerRef>,
+    },
+    PrepareGame {
+        game_type: String,
+        options: serde_json::Value,
+    },
+    StartPreparedGame {
+        game_id: String,
+    },
+    MarkGamePlaying,
+    SelectStarter {
+        player_id: String,
+        selection: StarterSelection,
+    },
+    NextGame,
+    StartRematch {
+        game_id: String,
+    },
+    AbortGame,
+    EndSession,
+    CloseSession,
     StartCountUp {
         players: Vec<(String, String)>,
         rounds: u16,
@@ -35,6 +60,8 @@ pub enum RuntimeAction {
 pub struct RuntimeSnapshot {
     pub revision: u64,
     pub game: Option<RuntimeGame>,
+    #[serde(default)]
+    pub session: SessionCore,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -73,6 +100,20 @@ impl RuntimeGame {
             Self::X01(game) => RuntimeGameState::X01(game.state().clone()),
         }
     }
+
+    fn is_finished(&self) -> bool {
+        match self {
+            Self::CountUp(game) => game.state().status == GameStatus::Finished,
+            Self::X01(game) => game.state().status == GameStatus::Finished,
+        }
+    }
+
+    fn winner_ids(&self) -> &[String] {
+        match self {
+            Self::CountUp(game) => &game.state().winner_ids,
+            Self::X01(game) => &game.state().winner_ids,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -88,6 +129,8 @@ pub struct CommandResult {
     pub revision: u64,
     pub duplicate: bool,
     pub state: Option<RuntimeGameState>,
+    #[serde(default)]
+    pub session: SessionState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,6 +186,10 @@ pub enum RuntimeError {
     Persistence(String),
     #[error("persisted data is invalid: {0}")]
     InvalidPersistedData(String),
+    #[error("session transition failed: {0}")]
+    Session(#[from] SessionError),
+    #[error("invalid game options: {0}")]
+    InvalidGameOptions(String),
 }
 
 pub struct Runtime<R> {
@@ -170,6 +217,7 @@ impl<R: Repository> Runtime<R> {
             .unwrap_or(RuntimeSnapshot {
                 revision: 0,
                 game: None,
+                session: SessionCore::default(),
             });
         Ok(Self {
             instance_id: instance_id.into(),
@@ -262,6 +310,7 @@ impl<R: Repository> Runtime<R> {
             revision: next.revision,
             duplicate: false,
             state: next.game.as_ref().map(RuntimeGame::state),
+            session: next.session.state().clone(),
         };
         let snapshot_json = serde_json::to_string(&next)
             .map_err(|error| RuntimeError::InvalidPersistedData(error.to_string()))?;
@@ -300,6 +349,31 @@ impl<R: Repository> Runtime<R> {
 
 fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractError> {
     match command {
+        RuntimeCommand::StartSession {
+            session_id,
+            players,
+        } => Ok(RuntimeAction::StartSession {
+            session_id,
+            players,
+        }),
+        RuntimeCommand::PrepareGame { game_type, options } => {
+            Ok(RuntimeAction::PrepareGame { game_type, options })
+        }
+        RuntimeCommand::StartPreparedGame { game_id } => {
+            Ok(RuntimeAction::StartPreparedGame { game_id })
+        }
+        RuntimeCommand::MarkGamePlaying => Ok(RuntimeAction::MarkGamePlaying),
+        RuntimeCommand::SelectStarter {
+            player_id,
+            selection,
+        } => Ok(RuntimeAction::SelectStarter {
+            player_id,
+            selection,
+        }),
+        RuntimeCommand::NextGame => Ok(RuntimeAction::NextGame),
+        RuntimeCommand::StartRematch { game_id } => Ok(RuntimeAction::StartRematch { game_id }),
+        RuntimeCommand::EndSession => Ok(RuntimeAction::EndSession),
+        RuntimeCommand::CloseSession => Ok(RuntimeAction::CloseSession),
         RuntimeCommand::IngestDart { event } => Ok(RuntimeAction::Dart { event }),
         RuntimeCommand::StartGame {
             game_type,
@@ -342,7 +416,8 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
         }
         RuntimeCommand::ContinueTurn | RuntimeCommand::NextPlayer => Ok(RuntimeAction::Continue),
         RuntimeCommand::Undo => Ok(RuntimeAction::Undo),
-        RuntimeCommand::GameAction { .. } | RuntimeCommand::AbortGame => Err(invalid_command(
+        RuntimeCommand::AbortGame => Ok(RuntimeAction::AbortGame),
+        RuntimeCommand::GameAction { .. } => Err(invalid_command(
             "command is not implemented by this runtime slice",
         )),
     }
@@ -373,15 +448,59 @@ fn runtime_contract_error(error: &RuntimeError) -> ContractError {
         RuntimeError::WrongRuntimeInstance => ErrorCode::WrongRuntimeInstance,
         RuntimeError::StaleRevision { .. } => ErrorCode::StaleRevision,
         RuntimeError::Persistence(_) => ErrorCode::PersistenceFailed,
-        RuntimeError::NoGame | RuntimeError::Game(_) | RuntimeError::InvalidPersistedData(_) => {
-            ErrorCode::InvalidCommand
-        }
+        RuntimeError::NoGame
+        | RuntimeError::Game(_)
+        | RuntimeError::InvalidPersistedData(_)
+        | RuntimeError::Session(_)
+        | RuntimeError::InvalidGameOptions(_) => ErrorCode::InvalidCommand,
     };
     contract_error(code, &error.to_string(), None)
 }
 
 fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result<(), RuntimeError> {
     match action {
+        RuntimeAction::StartSession {
+            session_id,
+            players,
+        } => {
+            snapshot.session.start_session(session_id, players)?;
+            snapshot.game = None;
+        }
+        RuntimeAction::PrepareGame { game_type, options } => {
+            snapshot.session.prepare_game(game_type, options)?;
+        }
+        RuntimeAction::StartPreparedGame { game_id } => {
+            start_prepared_game(snapshot, game_id, false)?;
+        }
+        RuntimeAction::MarkGamePlaying => {
+            snapshot.session.mark_playing()?;
+        }
+        RuntimeAction::SelectStarter {
+            player_id,
+            selection,
+        } => {
+            snapshot.session.select_starter(&player_id, selection)?;
+        }
+        RuntimeAction::NextGame => {
+            snapshot.session.next_game()?;
+            snapshot.game = None;
+        }
+        RuntimeAction::StartRematch { game_id } => {
+            start_prepared_game(snapshot, game_id, true)?;
+        }
+        RuntimeAction::AbortGame => {
+            if snapshot.session.state().session_id.is_some() {
+                snapshot.session.abort_game()?;
+            }
+            snapshot.game = None;
+        }
+        RuntimeAction::EndSession => {
+            snapshot.session.end_session()?;
+        }
+        RuntimeAction::CloseSession => {
+            snapshot.session.close_session();
+            snapshot.game = None;
+        }
         RuntimeAction::StartCountUp { players, rounds } => {
             snapshot.game = Some(RuntimeGame::CountUp(CountUpGame::new(players, rounds)?));
         }
@@ -402,6 +521,7 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
                 .as_mut()
                 .ok_or(RuntimeError::NoGame)?
                 .apply_throw(event)?;
+            sync_finished_game(snapshot)?;
         }
         RuntimeAction::Continue => {
             snapshot
@@ -409,10 +529,111 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
                 .as_mut()
                 .ok_or(RuntimeError::NoGame)?
                 .continue_turn()?;
+            sync_finished_game(snapshot)?;
         }
         RuntimeAction::Undo => {
-            snapshot.game.as_mut().ok_or(RuntimeError::NoGame)?.undo()?;
+            let game = snapshot.game.as_mut().ok_or(RuntimeError::NoGame)?;
+            let was_finished = game.is_finished();
+            game.undo()?;
+            if was_finished
+                && !game.is_finished()
+                && snapshot.session.state().screen == Screen::GameResult
+            {
+                snapshot.session.reopen_game()?;
+            }
         }
+    }
+    Ok(())
+}
+
+fn start_prepared_game(
+    snapshot: &mut RuntimeSnapshot,
+    game_id: String,
+    rematch: bool,
+) -> Result<(), RuntimeError> {
+    let prepared = snapshot
+        .session
+        .state()
+        .prepared_game
+        .clone()
+        .ok_or(SessionError::NoPreparedGame)?;
+    let ordered = if rematch {
+        snapshot.session.start_rematch(game_id)?
+    } else {
+        snapshot.session.start_game(game_id)?
+    };
+    snapshot.game = Some(game_from_options(
+        &prepared.game_type,
+        ordered,
+        &prepared.options,
+    )?);
+    Ok(())
+}
+
+fn game_from_options(
+    game_type: &str,
+    players: Vec<PlayerRef>,
+    options: &serde_json::Value,
+) -> Result<RuntimeGame, RuntimeError> {
+    let players = players
+        .into_iter()
+        .map(|player| (player.id, player.name))
+        .collect();
+    match game_type {
+        "countup" => {
+            let rounds = options
+                .get("rounds")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(8);
+            let rounds = u16::try_from(rounds).map_err(|_| {
+                RuntimeError::InvalidGameOptions("countup rounds are out of range".into())
+            })?;
+            Ok(RuntimeGame::CountUp(CountUpGame::new(players, rounds)?))
+        }
+        "x01" => {
+            let start_score = options
+                .get("start_score")
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(501);
+            let start_score = u32::try_from(start_score).map_err(|_| {
+                RuntimeError::InvalidGameOptions("X01 start score is out of range".into())
+            })?;
+            let out_rule = match options
+                .get("out_rule")
+                .and_then(serde_json::Value::as_str)
+                .unwrap_or("straight")
+            {
+                "straight" => OutRule::Straight,
+                "double" => OutRule::Double,
+                _ => {
+                    return Err(RuntimeError::InvalidGameOptions(
+                        "X01 out rule must be straight or double".into(),
+                    ));
+                }
+            };
+            Ok(RuntimeGame::X01(X01Game::new(
+                players,
+                start_score,
+                out_rule,
+            )?))
+        }
+        _ => Err(RuntimeError::InvalidGameOptions(format!(
+            "unsupported game type: {game_type}"
+        ))),
+    }
+}
+
+fn sync_finished_game(snapshot: &mut RuntimeSnapshot) -> Result<(), RuntimeError> {
+    let Some(game) = snapshot.game.as_ref() else {
+        return Ok(());
+    };
+    if game.is_finished()
+        && matches!(
+            snapshot.session.state().screen,
+            Screen::Countdown | Screen::Playing
+        )
+    {
+        snapshot.session.complete_game(game.winner_ids())?;
     }
     Ok(())
 }
@@ -461,6 +682,23 @@ mod tests {
 
     fn players() -> Vec<(String, String)> {
         vec![("ada".into(), "Ada".into())]
+    }
+
+    fn session_players() -> Vec<PlayerRef> {
+        vec![
+            PlayerRef {
+                id: "ada".into(),
+                name: "Ada".into(),
+                avatar: "nova".into(),
+                color: "#ff00aa".into(),
+            },
+            PlayerRef {
+                id: "bob".into(),
+                name: "Bob".into(),
+                avatar: "comet".into(),
+                color: "#28e7ff".into(),
+            },
+        ]
     }
 
     #[test]
@@ -618,5 +856,101 @@ mod tests {
             })
             .expect_err("revision must be rejected");
         assert_eq!(stale.code, ErrorCode::StaleRevision);
+    }
+
+    #[test]
+    fn session_result_and_game_state_commit_or_rollback_together() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        runtime
+            .dispatch(
+                "runtime",
+                "session",
+                None,
+                RuntimeAction::StartSession {
+                    session_id: "session-1".into(),
+                    players: session_players(),
+                },
+            )
+            .expect("session");
+        runtime
+            .dispatch(
+                "runtime",
+                "prepare",
+                None,
+                RuntimeAction::PrepareGame {
+                    game_type: "x01".into(),
+                    options: serde_json::json!({
+                        "start_score": 40,
+                        "out_rule": "double"
+                    }),
+                },
+            )
+            .expect("prepare");
+        runtime
+            .dispatch(
+                "runtime",
+                "start",
+                None,
+                RuntimeAction::StartPreparedGame {
+                    game_id: "game-1".into(),
+                },
+            )
+            .expect("start");
+        runtime
+            .dispatch("runtime", "playing", None, RuntimeAction::MarkGamePlaying)
+            .expect("playing");
+        let checkout = DartEvent::Hit {
+            seq: 1,
+            field: 20,
+            ring: Ring::Double,
+            multiplier: 2,
+            label: "D20".into(),
+            score: 40,
+        };
+        runtime
+            .dispatch(
+                "runtime",
+                "checkout",
+                None,
+                RuntimeAction::Dart {
+                    event: checkout.clone(),
+                },
+            )
+            .expect("checkout");
+        assert_eq!(runtime.snapshot.session.state().screen, Screen::GameResult);
+        assert_eq!(
+            runtime.snapshot.session.state().standings[0].session_points,
+            3
+        );
+
+        runtime
+            .dispatch("runtime", "undo", None, RuntimeAction::Undo)
+            .expect("undo checkout");
+        assert_eq!(runtime.snapshot.session.state().screen, Screen::Playing);
+        assert_eq!(
+            runtime.snapshot.session.state().standings[0].session_points,
+            0
+        );
+
+        runtime.repository.fail_next_commit();
+        let error = runtime
+            .dispatch(
+                "runtime",
+                "failed-checkout",
+                None,
+                RuntimeAction::Dart { event: checkout },
+            )
+            .expect_err("commit must fail");
+        assert!(matches!(error, RuntimeError::Persistence(_)));
+        assert_eq!(runtime.snapshot.session.state().screen, Screen::Playing);
+        assert_eq!(
+            runtime.snapshot.session.state().standings[0].session_points,
+            0
+        );
+        let Some(RuntimeGame::X01(game)) = &runtime.snapshot.game else {
+            panic!("wrong game type");
+        };
+        assert_eq!(game.state().players[0].score, 40);
     }
 }

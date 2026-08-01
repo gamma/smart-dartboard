@@ -11,6 +11,10 @@ repository.workspace = true
 rusqlite = { version = "0.38", features = ["bundled"] }
 sdb-runtime = { path = "../runtime" }
 
+[dev-dependencies]
+sdb-contracts = { path = "../contracts" }
+sdb-session-core = { path = "../session-core" }
+serde_json.workspace = true
+
 [lints]
 workspace = true
-

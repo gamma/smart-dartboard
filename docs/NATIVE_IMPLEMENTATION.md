@@ -29,6 +29,9 @@ Umgesetzt und lokal verifiziert:
 - deterministischer Session-Core mit gemeinsamer Python-/Rust-Fixture für
   Screenfluss, Starterrotation, Rematch, Abbruch, Draw sowie Einzel- und
   Koop-Wertung mit drei Punkten pro gewonnenem Spiel.
+- Spiel und Session werden in einem Runtime-Snapshot atomar committed. Undo
+  eines Siegtreffers öffnet das Ergebnis wieder und entfernt auch die zuvor
+  vergebene Sessionwertung; ein Commitfehler lässt beide Zustände unverändert.
 
 Noch nicht als produktionsreif nachgewiesen:
 

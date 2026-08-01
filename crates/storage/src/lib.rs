@@ -137,7 +137,9 @@ impl Repository for SqliteRepository {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sdb_contracts::PlayerRef;
     use sdb_runtime::{Runtime, RuntimeAction};
+    use sdb_session_core::Screen;
 
     #[test]
     fn sqlite_restores_committed_runtime_and_deduplicates() {
@@ -175,6 +177,74 @@ mod tests {
             .expect("deduplicated");
         assert!(duplicate.duplicate);
         assert_eq!(duplicate.revision, 1);
+        std::fs::remove_file(temporary).expect("remove test database");
+    }
+
+    #[test]
+    fn sqlite_restores_session_and_game_from_the_same_snapshot() {
+        let temporary = std::env::temp_dir().join(format!(
+            "sdb-session-runtime-{}-{}.sqlite",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_file(&temporary);
+        {
+            let repository = SqliteRepository::open(&temporary).expect("open");
+            let mut runtime = Runtime::restore("first", repository).expect("runtime");
+            runtime
+                .dispatch(
+                    "first",
+                    "session",
+                    None,
+                    RuntimeAction::StartSession {
+                        session_id: "session-1".into(),
+                        players: vec![PlayerRef {
+                            id: "ada".into(),
+                            name: "Ada".into(),
+                            avatar: "nova".into(),
+                            color: "#ff00aa".into(),
+                        }],
+                    },
+                )
+                .expect("session");
+            runtime
+                .dispatch(
+                    "first",
+                    "prepare",
+                    None,
+                    RuntimeAction::PrepareGame {
+                        game_type: "x01".into(),
+                        options: serde_json::json!({
+                            "start_score": 301,
+                            "out_rule": "double"
+                        }),
+                    },
+                )
+                .expect("prepare");
+            runtime
+                .dispatch(
+                    "first",
+                    "start",
+                    None,
+                    RuntimeAction::StartPreparedGame {
+                        game_id: "game-1".into(),
+                    },
+                )
+                .expect("start");
+        }
+
+        let repository = SqliteRepository::open(&temporary).expect("reopen");
+        let runtime = Runtime::restore("second", repository).expect("restore");
+        assert_eq!(runtime.snapshot().revision, 3);
+        assert_eq!(runtime.snapshot().session.state().screen, Screen::Countdown);
+        assert_eq!(
+            runtime.snapshot().session.state().game_id.as_deref(),
+            Some("game-1")
+        );
+        assert!(matches!(
+            runtime.snapshot().game,
+            Some(sdb_runtime::RuntimeGame::X01(_))
+        ));
         std::fs::remove_file(temporary).expect("remove test database");
     }
 }

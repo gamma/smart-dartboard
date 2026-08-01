@@ -593,6 +593,7 @@ version = "0.1.0"
 dependencies = [
  "sdb-contracts",
  "sdb-game-core",
+ "sdb-session-core",
  "serde",
  "serde_json",
  "thiserror",
@@ -629,7 +630,10 @@ name = "sdb-storage"
 version = "0.1.0"
 dependencies = [
  "rusqlite",
+ "sdb-contracts",
  "sdb-runtime",
+ "sdb-session-core",
+ "serde_json",
 ]
 
 [[package]]

@@ -4,6 +4,7 @@
 //! execute game rules. Hosts inject IDs and notify it about committed results.
 
 use sdb_contracts::PlayerRef;
+pub use sdb_contracts::StarterSelection;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -29,16 +30,7 @@ pub enum SessionStatus {
     Finished,
 }
 
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum StarterSelection {
-    #[default]
-    Rotation,
-    Manual,
-    Random,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PreparedGame {
     pub game_type: String,
     pub options: Value,
@@ -52,7 +44,7 @@ pub struct SessionStanding {
     pub session_points: u32,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionState {
     pub screen: Screen,
     pub session_id: Option<String>,
@@ -61,6 +53,10 @@ pub struct SessionState {
     pub prepared_game: Option<PreparedGame>,
     pub game_id: Option<String>,
     pub game_player_ids: Vec<String>,
+    #[serde(default)]
+    pub active_game_counted: bool,
+    #[serde(default)]
+    pub active_game_winner_ids: Vec<String>,
     pub default_starter_id: Option<String>,
     pub selected_starter_id: Option<String>,
     pub starter_selection: StarterSelection,
@@ -77,6 +73,8 @@ impl Default for SessionState {
             prepared_game: None,
             game_id: None,
             game_player_ids: Vec::new(),
+            active_game_counted: false,
+            active_game_winner_ids: Vec::new(),
             default_starter_id: None,
             selected_starter_id: None,
             starter_selection: StarterSelection::Rotation,
@@ -85,7 +83,7 @@ impl Default for SessionState {
     }
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionCore {
     state: SessionState,
 }
@@ -94,6 +92,12 @@ pub struct SessionCore {
 pub enum SessionError {
     #[error("a session requires at least one player")]
     NoPlayers,
+    #[error("a session supports at most eight players")]
+    TooManyPlayers,
+    #[error("session ID is invalid")]
+    InvalidSessionId,
+    #[error("player ID, name, avatar or color is invalid")]
+    InvalidPlayer,
     #[error("session player IDs must be unique")]
     DuplicatePlayer,
     #[error("an active session is required")]
@@ -131,6 +135,16 @@ impl SessionCore {
         if players.is_empty() {
             return Err(SessionError::NoPlayers);
         }
+        if players.len() > 8 {
+            return Err(SessionError::TooManyPlayers);
+        }
+        let session_id = session_id.into();
+        if session_id.is_empty() || session_id.len() > 128 {
+            return Err(SessionError::InvalidSessionId);
+        }
+        if players.iter().any(|player| !valid_player(player)) {
+            return Err(SessionError::InvalidPlayer);
+        }
         let mut ids: Vec<&str> = players.iter().map(|player| player.id.as_str()).collect();
         ids.sort_unstable();
         if ids.windows(2).any(|pair| pair[0] == pair[1]) {
@@ -139,7 +153,7 @@ impl SessionCore {
         let starter = players[0].id.clone();
         self.state = SessionState {
             screen: Screen::GameSelect,
-            session_id: Some(session_id.into()),
+            session_id: Some(session_id),
             session_status: Some(SessionStatus::Active),
             standings: players
                 .iter()
@@ -154,6 +168,8 @@ impl SessionCore {
             prepared_game: None,
             game_id: None,
             game_player_ids: Vec::new(),
+            active_game_counted: false,
+            active_game_winner_ids: Vec::new(),
             default_starter_id: Some(starter.clone()),
             selected_starter_id: Some(starter),
             starter_selection: StarterSelection::Rotation,
@@ -238,6 +254,8 @@ impl SessionCore {
             .collect();
         self.state.game_player_ids = ordered.iter().map(|player| player.id.clone()).collect();
         self.state.game_id = Some(game_id.into());
+        self.state.active_game_counted = false;
+        self.state.active_game_winner_ids.clear();
         self.state.screen = Screen::Countdown;
         Ok(ordered)
     }
@@ -279,6 +297,8 @@ impl SessionCore {
                 standing.session_points += 3;
             }
         }
+        self.state.active_game_counted = true;
+        self.state.active_game_winner_ids = winner_ids.to_vec();
         self.state.screen = Screen::GameResult;
         Ok(&self.state)
     }
@@ -322,6 +342,8 @@ impl SessionCore {
         self.state.selected_starter_id = Some(next_starter);
         self.state.starter_selection = StarterSelection::Rotation;
         self.state.game_id = Some(game_id.into());
+        self.state.active_game_counted = false;
+        self.state.active_game_winner_ids.clear();
         self.state.screen = Screen::Countdown;
         let players = self
             .state
@@ -353,6 +375,32 @@ impl SessionCore {
         self.clear_game_selection();
         self.state.selected_starter_id = self.state.default_starter_id.clone();
         self.state.screen = Screen::GameSelect;
+        Ok(&self.state)
+    }
+
+    /// Reopens the just-finished game and reverses its standings exactly once.
+    ///
+    /// # Errors
+    ///
+    /// Requires a counted game on the result screen.
+    pub fn reopen_game(&mut self) -> Result<&SessionState, SessionError> {
+        if self.state.screen != Screen::GameResult || !self.state.active_game_counted {
+            return Err(SessionError::NoFinishedGame);
+        }
+        for standing in &mut self.state.standings {
+            standing.games = standing.games.saturating_sub(1);
+            if self
+                .state
+                .active_game_winner_ids
+                .contains(&standing.player_id)
+            {
+                standing.wins = standing.wins.saturating_sub(1);
+                standing.session_points = standing.session_points.saturating_sub(3);
+            }
+        }
+        self.state.active_game_counted = false;
+        self.state.active_game_winner_ids.clear();
+        self.state.screen = Screen::Playing;
         Ok(&self.state)
     }
 
@@ -398,8 +446,25 @@ impl SessionCore {
         self.state.prepared_game = None;
         self.state.game_id = None;
         self.state.game_player_ids.clear();
+        self.state.active_game_counted = false;
+        self.state.active_game_winner_ids.clear();
         self.state.starter_selection = StarterSelection::Rotation;
     }
+}
+
+fn valid_player(player: &PlayerRef) -> bool {
+    let valid_color = player.color.len() == 7
+        && player.color.starts_with('#')
+        && player.color[1..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit());
+    !player.id.is_empty()
+        && player.id.len() <= 128
+        && !player.name.trim().is_empty()
+        && player.name.chars().count() <= 32
+        && !player.avatar.is_empty()
+        && player.avatar.len() <= 32
+        && valid_color
 }
 
 #[cfg(test)]
@@ -476,5 +541,44 @@ mod tests {
             session.end_session().expect_err("must return first"),
             SessionError::InvalidEndScreen
         );
+    }
+
+    #[test]
+    fn reopening_a_win_reverses_games_wins_and_points() {
+        let mut session = SessionCore::default();
+        session
+            .start_session("session", players())
+            .expect("session");
+        session
+            .prepare_game("countup", serde_json::json!({"rounds": 5}))
+            .expect("prepare");
+        session.start_game("game").expect("start");
+        session.complete_game(&["ada".into()]).expect("finish");
+        session.reopen_game().expect("reopen");
+        assert_eq!(session.state.screen, Screen::Playing);
+        assert!(
+            session
+                .state
+                .standings
+                .iter()
+                .all(|standing| standing.games == 0
+                    && standing.wins == 0
+                    && standing.session_points == 0)
+        );
+        assert!(!session.state.active_game_counted);
+    }
+
+    #[test]
+    fn invalid_player_profiles_are_rejected_before_state_changes() {
+        let mut invalid = players();
+        invalid[0].color = "pink".into();
+        let mut session = SessionCore::default();
+        assert_eq!(
+            session
+                .start_session("session", invalid)
+                .expect_err("invalid profile"),
+            SessionError::InvalidPlayer
+        );
+        assert_eq!(session.state, SessionState::default());
     }
 }

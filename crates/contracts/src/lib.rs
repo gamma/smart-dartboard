@@ -55,6 +55,15 @@ pub struct PlayerRef {
     pub color: String,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StarterSelection {
+    #[default]
+    Rotation,
+    Manual,
+    Random,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Ring {
@@ -129,6 +138,28 @@ impl DartEvent {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RuntimeCommand {
+    StartSession {
+        session_id: String,
+        players: Vec<PlayerRef>,
+    },
+    PrepareGame {
+        game_type: String,
+        options: Value,
+    },
+    StartPreparedGame {
+        game_id: String,
+    },
+    MarkGamePlaying,
+    SelectStarter {
+        player_id: String,
+        selection: StarterSelection,
+    },
+    NextGame,
+    StartRematch {
+        game_id: String,
+    },
+    EndSession,
+    CloseSession,
     IngestDart {
         event: DartEvent,
     },

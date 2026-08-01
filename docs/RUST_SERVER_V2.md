@@ -44,8 +44,15 @@ Fehlercodes und passende HTTP-Statuscodes.
 ## Aktueller Funktionsumfang
 
 - CountUp und X01 starten,
+- Session mit vollständigen Spielerreferenzen starten, Modus vorbereiten und
+  Startspieler festlegen,
+- Countdown, Spiel, Ergebnis, nächste Spielauswahl, Rematch und
+  Sessionzusammenfassung als gemeinsamen Screenfluss führen,
+- Einzel- und Koop-Siege mit drei Sessionpunkten je Gewinner werten;
+  Unentschieden und Abbrüche bleiben punktlos,
 - kanonische Dart-Events übernehmen,
-- Turn fortsetzen und Undo,
+- Turn fortsetzen und Undo; ein Undo des Siegtreffers öffnet zugleich das Spiel
+  wieder und nimmt die Sessionwertung atomar zurück,
 - `command_id` deduplizieren,
 - Commit und Snapshot in einer SQLite-Transaktion sichern,
 - nach Prozessneustart ausschließlich den letzten Commit wiederherstellen,
@@ -54,9 +61,9 @@ Fehlercodes und passende HTTP-Statuscodes.
 
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
-- Session-, Spielerprofil-, Team- und Statistiklogik,
+- dauerhaftes Spielerprofil-, Team-, Historien- und Statistikmodell,
 - restliche Spielmodi und deklarative Effects,
-- Wurfkorrektur, Löschen und Abbruch über den öffentlichen Contract,
+- Wurfkorrektur und Löschen über den öffentlichen Contract,
 - Bleak-/BlueZ-Gateway und reale Boardqualifizierung,
 - Migration vorhandener Python-Datenbanken,
 - Umstellung der bestehenden UI auf API v2.
