@@ -323,6 +323,10 @@ function updateExperience(experience, event){
     Math.max(0,Number(experience.rematch?.expires_in_ms)||0),
   );
   appState.experience = experience;
+  if(experience.screen==='calibration' && appState.localView==='settings'){
+    appState.localView=null;
+    appState.settingsReturnView=null;
+  }
   appState.selectedLanguage=experience.ui_language==='en'?'en':'de';
   try{ localStorage.setItem(UI_LANGUAGE_KEY,appState.selectedLanguage); }catch(_){}
   document.documentElement.lang=language();
@@ -428,8 +432,12 @@ function renderConnection(){
   if(projectorLink) projectorLink.setAttribute('title',t('open_projector'));
   const settingsButton=document.querySelector('.settings-button');
   if(settingsButton){
-    settingsButton.setAttribute('title',t('settings'));
-    settingsButton.setAttribute('aria-label',t('settings'));
+    const settingsBlocked=appState.experience?.screen==='calibration';
+    const settingsLabel=settingsBlocked?t('settings_unavailable_calibration'):t('settings');
+    settingsButton.disabled=settingsBlocked;
+    settingsButton.setAttribute('title',settingsLabel);
+    settingsButton.setAttribute('aria-label',settingsLabel);
+    settingsButton.setAttribute('aria-disabled',String(settingsBlocked));
     settingsButton.setAttribute('aria-pressed',String(appState.localView==='settings'));
   }
   const hardware=appState.experience?.hardware;
@@ -1896,6 +1904,7 @@ document.addEventListener('click',async event=>{
   }
   if(name==='open-history'){ await openHistory(); return; }
   if(name==='open-settings'){
+    if(appState.experience?.screen==='calibration') return;
     if(appState.localView==='settings'){
       appState.localView=appState.settingsReturnView;
       appState.settingsReturnView=null;
@@ -1903,13 +1912,13 @@ document.addEventListener('click',async event=>{
       appState.settingsReturnView=appState.localView;
       appState.localView='settings';
     }
-    renderControl();
+    render();
     return;
   }
   if(name==='close-settings'){
     appState.localView=appState.settingsReturnView;
     appState.settingsReturnView=null;
-    renderControl();
+    render();
     return;
   }
   if(name==='close-history'){
@@ -1988,7 +1997,7 @@ document.addEventListener('click',async event=>{
     if(appState.localView==='settings'){
       appState.localView=appState.settingsReturnView;
       appState.settingsReturnView=null;
-      renderControl();
+      render();
       return;
     }
     if(appState.localView){ appState.localView=null; renderControl(); return; }
