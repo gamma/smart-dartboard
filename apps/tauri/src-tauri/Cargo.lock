@@ -2513,6 +2513,7 @@ dependencies = [
 name = "sdb-native-m0"
 version = "0.1.0"
 dependencies = [
+ "cc",
  "libc",
  "sdb-board",
  "sdb-contracts",

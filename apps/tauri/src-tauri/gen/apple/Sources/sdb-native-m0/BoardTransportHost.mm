@@ -197,7 +197,7 @@ typedef NS_ENUM(int32_t, SDBBoardFailure) {
  didDisconnectPeripheral:(CBPeripheral *)peripheral
                    timestamp:(CFAbsoluteTime)timestamp
         isReconnecting:(BOOL)isReconnecting
-                    error:(NSError *)error API_AVAILABLE(ios(17.0)) {
+                    error:(NSError *)error API_AVAILABLE(ios(17.0), macos(14.0)) {
   (void)central;
   (void)peripheral;
   (void)timestamp;

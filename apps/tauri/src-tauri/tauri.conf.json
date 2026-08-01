@@ -25,6 +25,10 @@
   },
   "bundle": {
     "active": false,
-    "targets": "all"
+    "targets": "all",
+    "macOS": {
+      "infoPlist": "Info-macOS.plist",
+      "entitlements": "Entitlements-macOS.plist"
+    }
   }
 }

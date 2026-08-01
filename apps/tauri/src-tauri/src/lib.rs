@@ -1,7 +1,7 @@
 use sdb_board::BoardStatus;
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 use sdb_board::{BoardFailureCode, BoardPhase};
-#[cfg(any(target_os = "ios", test))]
+#[cfg(any(target_os = "ios", target_os = "macos", test))]
 use sdb_board::{BoardIngress, BoardIngressOutcome};
 use sdb_contracts::{DartEvent, DartSource, Ring};
 use sdb_runtime::{MemoryRepository, Runtime, RuntimeAction, RuntimeGameState};
@@ -9,14 +9,14 @@ use serde::Serialize;
 use std::sync::Mutex;
 use tauri::{Emitter, State};
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 use std::sync::OnceLock;
 #[cfg(target_os = "ios")]
 use std::sync::atomic::{AtomicU32, Ordering};
 #[cfg(any(target_os = "ios", debug_assertions))]
 use tauri::Manager;
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 
 #[cfg(target_os = "ios")]
@@ -25,7 +25,7 @@ static EXTERNAL_DISPLAY_COUNT: AtomicU32 = AtomicU32::new(0);
 struct NativeState {
     runtime: Runtime<MemoryRepository>,
     next_dart_seq: u64,
-    #[cfg(any(target_os = "ios", test))]
+    #[cfg(any(target_os = "ios", target_os = "macos", test))]
     board_ingress: BoardIngress,
     board_status: BoardStatus,
 }
@@ -58,7 +58,7 @@ impl NativeState {
         Ok(Self {
             runtime,
             next_dart_seq: 1,
-            #[cfg(any(target_os = "ios", test))]
+            #[cfg(any(target_os = "ios", target_os = "macos", test))]
             board_ingress: BoardIngress::new(),
             board_status: BoardStatus::unavailable(),
         })
@@ -110,7 +110,7 @@ impl NativeState {
         Ok(self.public())
     }
 
-    #[cfg(any(target_os = "ios", test))]
+    #[cfg(any(target_os = "ios", target_os = "macos", test))]
     fn ingest_board_packet(&mut self, connection_id: &str, raw: &[u8]) -> Result<bool, String> {
         let BoardIngressOutcome::Dart { event, command_id } =
             self.board_ingress.ingest(connection_id, raw)
@@ -176,9 +176,9 @@ mod ios_display {
     }
 }
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 #[allow(unsafe_code)]
-mod ios_board {
+mod apple_board {
     use super::{
         APP_HANDLE, BoardFailureCode, BoardPhase, BoardStatus, NativeState, publish_public_state,
     };
@@ -298,6 +298,19 @@ mod ios_board {
     }
 }
 
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+mod macos_board_host {
+    #[link(name = "sdb_apple_board_transport", kind = "static")]
+    unsafe extern "C" {
+        fn sdb_install_board_transport_host();
+    }
+
+    pub fn install() {
+        unsafe { sdb_install_board_transport_host() };
+    }
+}
+
 #[cfg(target_os = "ios")]
 fn publish_to_external_projector(state: &PublicState) {
     ios_display::publish(state);
@@ -375,15 +388,18 @@ pub fn run() {
     tauri::Builder::default()
         .manage(Mutex::new(native_state))
         .setup(|app| {
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            let _ = APP_HANDLE.set(app.handle().clone());
             #[cfg(target_os = "ios")]
             {
-                let _ = APP_HANDLE.set(app.handle().clone());
                 if let Some(state) = app.try_state::<Mutex<NativeState>>() {
                     if let Ok(state) = state.lock() {
                         publish_to_external_projector(&state.public());
                     }
                 }
             }
+            #[cfg(target_os = "macos")]
+            macos_board_host::install();
             #[cfg(debug_assertions)]
             if std::env::args().any(|argument| argument == "--m0-test-hit-after-start") {
                 let app = app.handle().clone();
