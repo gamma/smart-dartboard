@@ -126,9 +126,10 @@ fachlichen Tests.
 
 ### 2.3 Bevorzugte iOS-/iPadOS-Anzeigemodi
 
-Die primäre Apple-Mobile-Konfiguration ist ein einzelnes unterstütztes iPhone
-oder iPad als Controller und Runtime; der Controller ist ausdrücklich nicht an
-ein iPad gebunden. Er verbindet das Board direkt per CoreBluetooth und gibt
+Die primäre Apple-Mobile-Konfiguration ist ein einzelnes unterstütztes iOS-
+oder iPadOS-Gerät als Controller und Runtime; konkret darf das ein iPhone oder
+iPad sein. Der Controller ist ausdrücklich nicht an ein iPad gebunden. Er
+verbindet das Board direkt per CoreBluetooth und gibt
 eine eigenständige Projector-Ansicht über AirPlay oder einen kabelgebundenen
 HDMI-/USB-C-Displayadapter aus. Das interne Display bleibt dabei immer die
 interaktive Control UI. Das externe Display zeigt nicht deren Spiegelung,
@@ -141,9 +142,12 @@ iPhone oder iPad                         iPad
 Controller + BLE + Runtime + SQLite  →  Projector + Sound
 ```
 
-Beide Geräte verwenden dieselbe App. Beim Start wird die Rolle `Dieses Gerät`
-oder `Companion-Projektor` gewählt; ein bereits eingerichtetes Gerät merkt sich
-die Auswahl. Der Controller wird über Bonjour gefunden und per QR-Code oder
+Beide Geräte verwenden dieselbe App; es gibt keine gesonderte zweite
+Companion-Anwendung. Beim Start wird die Rolle `Dieses Gerät` oder
+`Companion-Projektor` gewählt; ein bereits eingerichtetes Gerät merkt sich die
+Auswahl. Der normale Controller-Start verlangt kein Companion-Pairing und
+bevorzugt ein bereits verfügbares AirPlay-/HDMI-Ziel. Der Controller wird im
+Companion-Modus über Bonjour gefunden und per QR-Code oder
 kurzem Einmalcode gepaart. QR bindet dabei den Fingerprint der lokalen
 TLS-Identität; bei manueller Eingabe wird derselbe kurze Fingerprint auf beiden
 Geräten bestätigt. Bonjour allein ist ausdrücklich kein Vertrauensanker. Es

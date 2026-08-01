@@ -74,9 +74,18 @@ Umgesetzt und lokal verifiziert:
   Widerruf und strikt revisionsgenaue Snapshot-Replikation. Der Headless-Host
   bietet den authentisierten Pairing-, Bootstrap- und WebSocket-Transport an
   und schließt aktive Verbindungen beim Widerruf oder einer Revisionslücke.
-  Native Discovery, TLS/Keychain, eingehender Transport und die UI der
-  Projector-Rolle sind noch offen; Details:
+  Native Discovery, eingehender TLS-Transport und die UI der Projector-Rolle
+  sind noch offen; Details:
   [COMPANION_PROTOCOL.md](COMPANION_PROTOCOL.md).
+- persistente lokale Apple-TLS-Identität für Companion-Pairing. Zertifikat und
+  privater P-256-Schlüssel liegen als gebundener Datensatz im Keychain; SQLite
+  speichert nur die nicht geheime Host-ID. Nach Verlust der App-Daten stellt
+  die Keychain-Identität diese Host-ID wieder her, statt unbemerkt eine neue
+  Identität zu erzeugen. Das temporäre Rust-Blob und der native
+  `malloc`-Übergabepuffer mit Schlüsselmaterial werden beim Freigeben
+  überschrieben. Der Pairing-Bootstrap verwendet den
+  echten SHA-256-Zertifikat-Fingerprint. Identität und Fingerprint blieben bei
+  wiederholtem Start sowohl in der macOS-App als auch im iPad-Simulator stabil.
 - natives Board-Setup für den Controller: Pairing-Fenster öffnen, gruppierten
   Einmalcode mit Live-Countdown anzeigen, persistierte Projector-Geräte ohne
   Token-Hash auflisten und Grants widerrufen. Nur das Control-Fenster besitzt
@@ -96,7 +105,7 @@ Noch nicht als produktionsreif nachgewiesen:
 - reale AirPlay-, HDMI- und Audio-Hardware,
 - External-Display-Scene-Accessory ab iOS/iPadOS 27,
 - iPhone/iPad-zu-iPad-Companion mit Discovery, eingehendem Pairing-Transport,
-  Keychain und Projector-Client,
+  Client-Token im Keychain und Projector-Client,
 - vollständige Portierung aller Spielmodi sowie Heatmap, Modusstatistiken,
   Export und Trainingsempfehlungen,
 - vollständige Docker-Parität zur Python-Anwendung,

@@ -1,0 +1,17 @@
+[package]
+name = "sdb-companion-transport"
+description = "TLS identity and secure host adapters for Smart Dartboard companions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+rcgen = { version = "0.14.8", features = ["zeroize"] }
+sha2 = "0.10"
+thiserror.workspace = true
+zeroize = "1.8"
+
+[lints]
+workspace = true

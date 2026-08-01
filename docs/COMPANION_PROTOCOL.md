@@ -5,7 +5,10 @@ Stand: 2026-08-01
 Dieses Dokument konkretisiert den Companion-Modus aus der
 [Cross-Platform-Architektur](CROSS_PLATFORM_ARCHITECTURE.md). Der erste
 Produktfall ist ein iPhone oder iPad als Controller, BLE-Host, Runtime und
-SQLite-Instanz sowie ein zweites iPad als reiner Projector mit Sound.
+SQLite-Instanz sowie ein zweites iPad als reiner Projector mit Sound. Dieser
+Modus ist der sekundäre Ausgabepfad nach der direkten Projector-Ausgabe desselben
+Controller-Geräts über AirPlay oder HDMI. Beide Rollen werden von derselben App
+bereitgestellt; der Companion ist keine zweite autoritative Spielanwendung.
 
 ## Autorität und Rollen
 
@@ -108,7 +111,9 @@ Implementiert und automatisiert getestet:
 
 Noch offen:
 
-- Tokenablage im Apple Keychain beziehungsweise Android Keystore,
+- Tokenablage des Companion-Clients im Apple Keychain beziehungsweise Android
+  Keystore; die persistente lokale Apple-TLS-Identität des Controller-Hosts
+  liegt bereits im Keychain,
 - Bonjour-Advertiser und -Browser,
 - native TLS-Terminierung beziehungsweise abgesicherte HTTPS/WSS-Auslieferung;
   der Rust-WebSocket ist implementiert, Klartext-LAN bleibt gesperrt,

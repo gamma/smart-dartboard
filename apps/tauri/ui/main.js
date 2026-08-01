@@ -83,10 +83,12 @@ function renderCompanionDevices(devices=[]){
   }
 }
 
-function renderPairingOffer(offer){
+function renderPairingOffer(bootstrap){
+  const offer=bootstrap.offer;
   const container=document.querySelector('#pairingOffer');
   const expiry=document.querySelector('#pairingExpiry');
   document.querySelector('#pairingCode').textContent=`${offer.code.slice(0,3)} ${offer.code.slice(3)}`;
+  document.querySelector('#pairingFingerprint').textContent=(bootstrap.certificate_sha256.slice(0,16).match(/.{1,4}/g) ?? []).join('-').toUpperCase();
   container.hidden=false;
   clearInterval(pairingTimer);
   const update=()=>{

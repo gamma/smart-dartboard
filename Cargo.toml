@@ -4,6 +4,7 @@ exclude = ["apps/tauri/src-tauri"]
 members = [
   "crates/board",
   "crates/companion",
+  "crates/companion-transport",
   "crates/contracts",
   "crates/game-core",
   "crates/protocol",

@@ -4,7 +4,10 @@ use sdb_board::{BoardFailureCode, BoardPhase};
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 use sdb_board::{BoardIngress, BoardIngressOutcome};
 use sdb_companion::{
-    CompanionRole, PairedDevice, PairingAuthority, PairingGrant, PairingOffer, PairingRequest,
+    CompanionRole, PairedDevice, PairingAuthority, PairingBootstrap, PairingGrant, PairingRequest,
+};
+use sdb_companion_transport::{
+    SecretStore, TlsIdentity, load_identity, load_or_create_identity,
 };
 use sdb_contracts::{DartEvent, DartSource, Ring};
 use sdb_runtime::{Runtime, RuntimeAction, RuntimeGameState};
@@ -18,6 +21,7 @@ use tauri::{Emitter, Manager, State};
 use uuid::Uuid;
 
 const PROJECTOR_OUTPUT_PREFERENCE: &str = "projector.output";
+const COMPANION_HOST_ID_PREFERENCE: &str = "companion.host_id";
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 use std::sync::OnceLock;
@@ -37,6 +41,13 @@ struct NativeState {
     board_status: BoardStatus,
     companions: PairingAuthority,
     projector_output: ProjectorOutput,
+    companion_identity: CompanionIdentity,
+}
+
+#[derive(Debug, Clone)]
+struct CompanionIdentity {
+    host_id: String,
+    certificate_sha256: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -97,7 +108,10 @@ impl From<PairedDevice> for CompanionDeviceView {
 }
 
 impl NativeState {
-    fn restore(repository: SqliteRepository) -> Result<Self, String> {
+    fn restore(
+        repository: SqliteRepository,
+        companion_identity: CompanionIdentity,
+    ) -> Result<Self, String> {
         let companion_devices = repository
             .companion_devices()
             .map_err(|error| error.to_string())?;
@@ -131,6 +145,7 @@ impl NativeState {
             board_status: BoardStatus::unavailable(),
             companions: PairingAuthority::from_devices(companion_devices),
             projector_output,
+            companion_identity,
         })
     }
 
@@ -315,6 +330,110 @@ mod ios_display {
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 #[allow(unsafe_code)]
+mod apple_keychain {
+    use super::SecretStore;
+    #[cfg(target_os = "ios")]
+    use std::ffi::{CStr, c_void};
+    use std::ffi::{CString, c_char};
+
+    const MAX_SECRET_BYTES: usize = 128 * 1_024;
+
+    #[cfg(target_os = "macos")]
+    unsafe extern "C" {
+        fn sdb_keychain_load(
+            account: *const c_char,
+            bytes: *mut *mut u8,
+            length: *mut usize,
+        ) -> i32;
+        fn sdb_keychain_save(account: *const c_char, bytes: *const u8, length: usize) -> bool;
+        fn sdb_keychain_free(bytes: *mut u8, length: usize);
+    }
+
+    type KeychainLoad = unsafe extern "C" fn(*const c_char, *mut *mut u8, *mut usize) -> i32;
+    type KeychainSave = unsafe extern "C" fn(*const c_char, *const u8, usize) -> bool;
+    type KeychainFree = unsafe extern "C" fn(*mut u8, usize);
+
+    #[cfg(target_os = "ios")]
+    fn lookup(symbol: &CStr) -> Option<*mut c_void> {
+        let address = unsafe { libc::dlsym(libc::RTLD_DEFAULT, symbol.as_ptr()) };
+        (!address.is_null()).then_some(address)
+    }
+
+    #[cfg(target_os = "ios")]
+    fn keychain_load() -> Option<KeychainLoad> {
+        lookup(c"sdb_keychain_load")
+            .map(|address| unsafe { std::mem::transmute::<*mut c_void, KeychainLoad>(address) })
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn keychain_load() -> Option<KeychainLoad> {
+        Some(sdb_keychain_load)
+    }
+
+    #[cfg(target_os = "ios")]
+    fn keychain_save() -> Option<KeychainSave> {
+        lookup(c"sdb_keychain_save")
+            .map(|address| unsafe { std::mem::transmute::<*mut c_void, KeychainSave>(address) })
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn keychain_save() -> Option<KeychainSave> {
+        Some(sdb_keychain_save)
+    }
+
+    #[cfg(target_os = "ios")]
+    fn keychain_free() -> Option<KeychainFree> {
+        lookup(c"sdb_keychain_free")
+            .map(|address| unsafe { std::mem::transmute::<*mut c_void, KeychainFree>(address) })
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn keychain_free() -> Option<KeychainFree> {
+        Some(sdb_keychain_free)
+    }
+
+    pub struct AppleKeychainStore;
+
+    impl SecretStore for AppleKeychainStore {
+        fn load(&self, key: &str) -> Result<Option<Vec<u8>>, String> {
+            let account = CString::new(key).map_err(|_| "invalid Keychain account".to_owned())?;
+            let mut bytes = std::ptr::null_mut();
+            let mut length = 0_usize;
+            let load = keychain_load().ok_or_else(|| "Keychain host is unavailable".to_owned())?;
+            let free = keychain_free().ok_or_else(|| "Keychain host is unavailable".to_owned())?;
+            let status = unsafe { load(account.as_ptr(), &mut bytes, &mut length) };
+            if status == 0 {
+                return Ok(None);
+            }
+            if status != 1 || bytes.is_null() || length == 0 {
+                return Err("Keychain read failed".into());
+            }
+            if length > MAX_SECRET_BYTES {
+                unsafe { free(bytes, length) };
+                return Err("Keychain secret exceeds size limit".into());
+            }
+            let value = unsafe { std::slice::from_raw_parts(bytes, length) }.to_vec();
+            unsafe { free(bytes, length) };
+            Ok(Some(value))
+        }
+
+        fn save(&self, key: &str, value: &[u8]) -> Result<(), String> {
+            if value.is_empty() || value.len() > MAX_SECRET_BYTES {
+                return Err("Keychain secret has invalid size".into());
+            }
+            let account = CString::new(key).map_err(|_| "invalid Keychain account".to_owned())?;
+            let save = keychain_save().ok_or_else(|| "Keychain host is unavailable".to_owned())?;
+            if unsafe { save(account.as_ptr(), value.as_ptr(), value.len()) } {
+                Ok(())
+            } else {
+                Err("Keychain write failed".into())
+            }
+        }
+    }
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[allow(unsafe_code)]
 mod apple_board {
     use super::{
         APP_HANDLE, BoardFailureCode, BoardPhase, BoardStatus, NativeState, publish_public_state,
@@ -491,13 +610,20 @@ fn runtime_query(state: State<'_, Mutex<NativeState>>) -> Result<PublicState, St
 }
 
 #[tauri::command]
-fn companion_pairing_open(state: State<'_, Mutex<NativeState>>) -> Result<PairingOffer, String> {
-    state
-        .lock()
-        .map_err(|error| error.to_string())?
+fn companion_pairing_open(
+    state: State<'_, Mutex<NativeState>>,
+) -> Result<PairingBootstrap, String> {
+    let mut state = state.lock().map_err(|error| error.to_string())?;
+    let offer = state
         .companions
         .open(now_ms())
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    PairingBootstrap::new(
+        state.companion_identity.host_id.clone(),
+        state.companion_identity.certificate_sha256.clone(),
+        offer,
+    )
+    .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -572,16 +698,57 @@ fn now_ms() -> u64 {
         .unwrap_or(u64::MAX)
 }
 
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn prepare_companion_identity(repository: &mut SqliteRepository) -> Result<TlsIdentity, String> {
+    if let Some(host_id) = repository
+        .preference(COMPANION_HOST_ID_PREFERENCE)
+        .map_err(|error| error.to_string())?
+    {
+        return load_or_create_identity(&apple_keychain::AppleKeychainStore, &host_id)
+            .map_err(|error| error.to_string());
+    }
+    if let Some(identity) = load_identity(&apple_keychain::AppleKeychainStore)
+        .map_err(|error| error.to_string())?
+    {
+        repository
+            .save_preference(COMPANION_HOST_ID_PREFERENCE, identity.host_id())
+            .map_err(|error| error.to_string())?;
+        return Ok(identity);
+    }
+    let host_id = Uuid::new_v4().to_string();
+    repository
+        .save_preference(COMPANION_HOST_ID_PREFERENCE, &host_id)
+        .map_err(|error| error.to_string())?;
+    load_or_create_identity(&apple_keychain::AppleKeychainStore, &host_id)
+        .map_err(|error| error.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            let repository = SqliteRepository::open(data_dir.join("runtime.sqlite"))
+            let mut repository = SqliteRepository::open(data_dir.join("runtime.sqlite"))
                 .map_err(std::io::Error::other)?;
-            let native_state = NativeState::restore(repository).map_err(std::io::Error::other)?;
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            let tls_identity =
+                prepare_companion_identity(&mut repository).map_err(std::io::Error::other)?;
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            let companion_identity = CompanionIdentity {
+                host_id: tls_identity.host_id().into(),
+                certificate_sha256: tls_identity.certificate_sha256().into(),
+            };
+            #[cfg(not(any(target_os = "ios", target_os = "macos")))]
+            let companion_identity = CompanionIdentity {
+                host_id: "unsupported-native-host".into(),
+                certificate_sha256: "00".repeat(32),
+            };
+            let native_state = NativeState::restore(repository, companion_identity)
+                .map_err(std::io::Error::other)?;
             app.manage(Mutex::new(native_state));
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            app.manage(tls_identity);
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let _ = APP_HANDLE.set(app.handle().clone());
             #[cfg(target_os = "ios")]
@@ -632,10 +799,18 @@ pub fn run() {
 mod tests {
     use super::*;
 
+    fn test_companion_identity() -> CompanionIdentity {
+        CompanionIdentity {
+            host_id: "test-native-host".into(),
+            certificate_sha256: "ab".repeat(32),
+        }
+    }
+
     #[test]
     fn raw_board_packet_uses_shared_ingress_and_runtime_once() {
         let repository = SqliteRepository::in_memory().expect("repository");
-        let mut state = NativeState::restore(repository).expect("native state");
+        let mut state =
+            NativeState::restore(repository, test_companion_identity()).expect("native state");
         let packet = [1, 0, 0, 0, 5, 0, 0x0d, 0, 2, 0x0f];
         assert!(
             state
@@ -657,7 +832,8 @@ mod tests {
         let path = std::env::temp_dir().join(format!("sdb-native-{}.sqlite", Uuid::new_v4()));
         let first_instance = {
             let repository = SqliteRepository::open(&path).expect("first repository");
-            let mut state = NativeState::restore(repository).expect("first state");
+            let mut state =
+                NativeState::restore(repository, test_companion_identity()).expect("first state");
             state.ingest_test_hit().expect("committed hit");
             state
                 .select_projector_output(ProjectorOutput::LocalPreview)
@@ -665,11 +841,15 @@ mod tests {
             state.runtime.instance_id().to_owned()
         };
         let repository = SqliteRepository::open(&path).expect("reopened repository");
-        let state = NativeState::restore(repository).expect("restored state");
+        let state =
+            NativeState::restore(repository, test_companion_identity()).expect("restored state");
         assert_ne!(state.runtime.instance_id(), first_instance);
         assert_eq!(state.public().revision, 2);
         assert_eq!(state.public().counter, 60);
-        assert_eq!(state.public().projector_output, ProjectorOutput::LocalPreview);
+        assert_eq!(
+            state.public().projector_output,
+            ProjectorOutput::LocalPreview
+        );
         std::fs::remove_file(path).expect("remove test database");
     }
 
@@ -679,7 +859,8 @@ mod tests {
             std::env::temp_dir().join(format!("sdb-native-companion-{}.sqlite", Uuid::new_v4()));
         let grant = {
             let repository = SqliteRepository::open(&path).expect("repository");
-            let mut state = NativeState::restore(repository).expect("native state");
+            let mut state =
+                NativeState::restore(repository, test_companion_identity()).expect("native state");
             let offer = state.companions.open(1_000).expect("pairing offer");
             state
                 .pair_companion(
@@ -694,7 +875,8 @@ mod tests {
         };
 
         let repository = SqliteRepository::open(&path).expect("reopened repository");
-        let mut state = NativeState::restore(repository).expect("restored state");
+        let mut state =
+            NativeState::restore(repository, test_companion_identity()).expect("restored state");
         assert_eq!(state.companion_devices().len(), 1);
         assert!(state.companions.authenticate(&grant.token).is_some());
         state
@@ -704,7 +886,8 @@ mod tests {
         drop(state);
 
         let repository = SqliteRepository::open(&path).expect("reopen after revoke");
-        let state = NativeState::restore(repository).expect("restored revoked state");
+        let state = NativeState::restore(repository, test_companion_identity())
+            .expect("restored revoked state");
         assert!(state.companion_devices().is_empty());
         std::fs::remove_file(path).expect("remove test database");
     }
