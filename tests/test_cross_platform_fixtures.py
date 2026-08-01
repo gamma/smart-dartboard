@@ -47,6 +47,9 @@ MINI_GOLF_FIXTURE = (
 SIMON_SAYS_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "simon_says_v2.json"
 )
+TREASURE_HUNT_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "treasure_hunt_v1.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -515,6 +518,51 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                 "scores": [player.score for player in state.players],
                 "sequence": state.mode_state["sequence"],
                 "position": state.mode_state["position"],
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_id": state.winner_id,
+                "result_type": state.result_type,
+                "random_cursor": state.random_cursor,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_treasure_hunt_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(TREASURE_HUNT_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_schema_version"], 1)
+        self.assertEqual(fixture["ruleset_version"], 1)
+        engine = GameEngine()
+        engine.reset(
+            "treasure_hunt",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]), dict(command["event"])
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            revealed = {
+                key: {
+                    "reward": item["reward"],
+                    "revealed_by": item["revealed_by"],
+                }
+                for key, item in sorted(state.mode_state["revealed"].items())
+            }
+            actual = {
+                "scores": [player.score for player in state.players],
+                "revealed": revealed,
                 "current_player_index": state.current_player_index,
                 "darts_in_turn": state.darts_in_turn,
                 "turn_score": state.turn_score,

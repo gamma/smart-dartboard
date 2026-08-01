@@ -1,0 +1,48 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 1,
+  "random_seed": 42,
+  "players": [
+    {"id": "ada", "name": "Ada"},
+    {"id": "bob", "name": "Bob"}
+  ],
+  "options": {"rounds": 3, "traps": 3},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 13, "ring": "double", "multiplier": 2, "label": "D13", "score": 26}},
+      "expected": {"scores": [-40, 0], "revealed": {"D13": {"reward": "trap", "revealed_by": "ada"}}, "current_player_index": 0, "darts_in_turn": 1, "turn_score": -40, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 121}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 19, "ring": "double", "multiplier": 2, "label": "D19", "score": 38}},
+      "expected": {"scores": [35, 0], "revealed": {"D13": {"reward": "trap", "revealed_by": "ada"}, "D19": {"reward": "gold", "revealed_by": "ada"}}, "current_player_index": 0, "darts_in_turn": 2, "turn_score": 35, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 121}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 3, "label": "MISS", "score": 0}},
+      "expected": {"scores": [35, 0], "revealed": {"D13": {"reward": "trap", "revealed_by": "ada"}, "D19": {"reward": "gold", "revealed_by": "ada"}}, "current_player_index": 0, "darts_in_turn": 3, "turn_score": 35, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 121}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [35, 0], "revealed": {"D13": {"reward": "trap", "revealed_by": "ada"}, "D19": {"reward": "gold", "revealed_by": "ada"}}, "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 121}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 4, "field": 19, "ring": "double", "multiplier": 2, "label": "D19", "score": 38}},
+      "expected": {"scores": [35, 0], "revealed": {"D13": {"reward": "trap", "revealed_by": "ada"}, "D19": {"reward": "gold", "revealed_by": "ada"}}, "current_player_index": 1, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 121}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 5, "field": 9, "ring": "single_outer", "multiplier": 1, "label": "S9", "score": 9}},
+      "expected": {"scores": [35, 35], "revealed": {"D13": {"reward": "trap", "revealed_by": "ada"}, "D19": {"reward": "gold", "revealed_by": "ada"}, "S9": {"reward": "silver", "revealed_by": "bob"}}, "current_player_index": 1, "darts_in_turn": 2, "turn_score": 35, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 121}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 6, "field": 6, "ring": "triple", "multiplier": 3, "label": "T6", "score": 18}},
+      "expected": {"scores": [35, 45], "revealed": {"D13": {"reward": "trap", "revealed_by": "ada"}, "D19": {"reward": "gold", "revealed_by": "ada"}, "S9": {"reward": "silver", "revealed_by": "bob"}, "T6": {"reward": "coin", "revealed_by": "bob"}}, "current_player_index": 1, "darts_in_turn": 3, "turn_score": 45, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 121}
+    },
+    {
+      "command": {"type": "correct", "action_id": 1, "event": {"type": "hit", "seq": 999, "field": 4, "ring": "double", "multiplier": 2, "label": "D4", "score": 8}},
+      "expected": {"scores": [85, 45], "revealed": {"D19": {"reward": "gold", "revealed_by": "ada"}, "D4": {"reward": "coin", "revealed_by": "ada"}, "S9": {"reward": "silver", "revealed_by": "bob"}, "T6": {"reward": "coin", "revealed_by": "bob"}}, "current_player_index": 1, "darts_in_turn": 3, "turn_score": 45, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 121}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [85, 45], "revealed": {"D19": {"reward": "gold", "revealed_by": "ada"}, "D4": {"reward": "coin", "revealed_by": "ada"}, "S9": {"reward": "silver", "revealed_by": "bob"}, "T6": {"reward": "coin", "revealed_by": "bob"}}, "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 121}
+    }
+  ]
+}

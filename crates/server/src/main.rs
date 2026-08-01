@@ -1177,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(12));
+        assert_eq!(modes.as_array().map(Vec::len), Some(13));
         assert!(
             modes
                 .as_array()

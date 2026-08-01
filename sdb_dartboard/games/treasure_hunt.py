@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict
 
 from .arcade import (
@@ -47,14 +46,19 @@ class TreasureHuntMode:
         player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        # Gameplay variety only; not used for a security decision.
-        pool = random.sample(  # nosec B311
-            TARGET_POOL_NORMAL, len(TARGET_POOL_NORMAL)
-        )
+        available = list(TARGET_POOL_NORMAL)
+        pool = []
+        while available:
+            pool.append(available.pop(state.random_index(len(available))))
         trap_count = int(options.get("traps", 5))
         special = ["gold"] * 4 + ["silver"] * 8 + ["trap"] * trap_count
         reward_types = special + ["coin"] * (len(pool) - len(special))
-        random.shuffle(reward_types)
+        for index in range(len(reward_types) - 1, 0, -1):
+            swap_index = state.random_index(index + 1)
+            reward_types[index], reward_types[swap_index] = (
+                reward_types[swap_index],
+                reward_types[index],
+            )
         hidden = {}
         for dart, reward in zip(pool, reward_types):
             hidden[zone_id(dart)] = {"dart": dart, "reward": reward, "revealed_by": None}

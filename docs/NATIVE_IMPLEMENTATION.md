@@ -19,9 +19,9 @@ Umgesetzt und lokal verifiziert:
   Metadaten, validierten Optionen, Anleitungen, Artwork-/Sound-Referenzen und
   Projector-Overlay. `GET /api/v2/modes` liefert derzeit CountUp, X01, Cricket,
   8-Ball, Heart Chase, Target Rush, Ghost Chase, Robin Hood, Candy Cannon,
-  Lightning Round, Mini Golf und Simon Says.
+  Lightning Round, Mini Golf, Simon Says und Treasure Hunt.
   Cricket, 8-Ball, Heart Chase, Target Rush, Ghost Chase, Robin Hood und Candy
-  Cannon, Lightning Round, Mini Golf sowie Simon Says laufen über
+  Cannon, Lightning Round, Mini Golf, Simon Says sowie Treasure Hunt laufen über
   denselben generischen Registry-Pfad
   und sind durch gemeinsame Python-/Rust-Golden-Fixtures belegt;
   Cricket zusätzlich durch den vollständigen SQLite-Recovery-Pfad,
@@ -66,7 +66,7 @@ Umgesetzt und lokal verifiziert:
 - Öffentliche Commands zum Korrigieren und Löschen über stabile Action-IDs für
   CountUp, X01 und alle Registry-Modi, derzeit Cricket, 8-Ball, Heart Chase,
   Target Rush, Ghost Chase, Robin Hood, Candy Cannon, Lightning Round, Mini
-  Golf und Simon Says. Der
+  Golf, Simon Says und Treasure Hunt. Der
   gemeinsame State
   liefert die
   editierbaren
