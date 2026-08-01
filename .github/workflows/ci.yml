@@ -281,6 +281,7 @@ jobs:
           assert health['schema_version'] == 6, health
           assert health['database'] == 'ok', health
           assert health['board'] == 'unavailable', health
+          assert health['companion'] == 'disabled', health
           PY
           test "$(docker inspect "$container_name" --format '{{.Config.User}}')" = dartboard
           test "$(docker inspect "$container_name" --format '{{.HostConfig.Privileged}}')" = false

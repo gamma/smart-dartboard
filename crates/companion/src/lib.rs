@@ -14,6 +14,7 @@ use thiserror::Error;
 pub const COMPANION_PROTOCOL_VERSION: u16 = 1;
 pub const PAIRING_LIFETIME_MS: u64 = 5 * 60 * 1_000;
 pub const MAX_PAIRING_ATTEMPTS: u8 = 5;
+pub const CERTIFICATE_SHA256_HEX_LENGTH: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -25,6 +26,86 @@ pub enum CompanionRole {
 pub struct PairingOffer {
     pub code: String,
     pub expires_at_ms: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct PairingBootstrap {
+    pub protocol_version: u16,
+    pub host_id: String,
+    pub certificate_sha256: String,
+    pub offer: PairingOffer,
+}
+
+impl PairingBootstrap {
+    /// Binds an offer to the TLS identity shown or scanned by the user.
+    ///
+    /// # Errors
+    ///
+    /// Rejects malformed host IDs and non-canonical SHA-256 fingerprints.
+    pub fn new(
+        host_id: impl Into<String>,
+        certificate_sha256: impl Into<String>,
+        offer: PairingOffer,
+    ) -> Result<Self, PairingError> {
+        let host_id = host_id.into();
+        let certificate_sha256 = certificate_sha256.into();
+        if host_id.is_empty()
+            || host_id.len() > 128
+            || !host_id
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+            || certificate_sha256.len() != CERTIFICATE_SHA256_HEX_LENGTH
+            || !certificate_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+            || offer.code.len() != 6
+            || !offer.code.bytes().all(|byte| byte.is_ascii_digit())
+        {
+            return Err(PairingError::InvalidIdentity);
+        }
+        Ok(Self {
+            protocol_version: COMPANION_PROTOCOL_VERSION,
+            host_id,
+            certificate_sha256,
+            offer,
+        })
+    }
+
+    #[must_use]
+    pub fn manual_fingerprint(&self) -> String {
+        let mut output = String::with_capacity(19);
+        for (index, character) in self.certificate_sha256.chars().take(16).enumerate() {
+            if index > 0 && index % 4 == 0 {
+                output.push('-');
+            }
+            output.push(character.to_ascii_uppercase());
+        }
+        output
+    }
+}
+
+#[derive(Deserialize)]
+struct PairingBootstrapWire {
+    protocol_version: u16,
+    host_id: String,
+    certificate_sha256: String,
+    offer: PairingOffer,
+}
+
+impl<'de> Deserialize<'de> for PairingBootstrap {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let wire = PairingBootstrapWire::deserialize(deserializer)?;
+        if wire.protocol_version != COMPANION_PROTOCOL_VERSION {
+            return Err(serde::de::Error::custom(
+                "incompatible companion protocol version",
+            ));
+        }
+        Self::new(wire.host_id, wire.certificate_sha256, wire.offer)
+            .map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -197,6 +278,8 @@ pub enum PairingError {
     AttemptsExhausted,
     #[error("device metadata is invalid")]
     InvalidDevice,
+    #[error("companion TLS identity is invalid")]
+    InvalidIdentity,
     #[error("secure operating-system entropy is unavailable")]
     EntropyUnavailable,
 }
@@ -372,6 +455,39 @@ mod tests {
         assert_eq!(
             authority.pair(request(&offer.code), 2_001),
             Err(PairingError::Closed)
+        );
+    }
+
+    #[test]
+    fn bootstrap_binds_pairing_to_a_canonical_tls_fingerprint() {
+        let bootstrap = PairingBootstrap::new(
+            "host-1",
+            "ab12cd34ef56ab78".repeat(4),
+            PairingOffer {
+                code: "123456".into(),
+                expires_at_ms: 42,
+            },
+        )
+        .expect("bootstrap");
+        assert_eq!(bootstrap.protocol_version, COMPANION_PROTOCOL_VERSION);
+        assert_eq!(bootstrap.manual_fingerprint(), "AB12-CD34-EF56-AB78");
+        assert!(
+            PairingBootstrap::new(
+                "host-1",
+                "AB12CD34EF56AB78".repeat(4),
+                bootstrap.offer.clone(),
+            )
+            .is_err()
+        );
+        assert!(PairingBootstrap::new("../host", "ab".repeat(32), bootstrap.offer).is_err());
+        assert!(
+            serde_json::from_value::<PairingBootstrap>(serde_json::json!({
+                "protocol_version": COMPANION_PROTOCOL_VERSION,
+                "host_id": "host-1",
+                "certificate_sha256": "not-a-fingerprint",
+                "offer": {"code": "123456", "expires_at_ms": 42}
+            }))
+            .is_err()
         );
     }
 

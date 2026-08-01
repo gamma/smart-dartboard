@@ -101,6 +101,10 @@ Implementiert und automatisiert getestet:
   ablaufenden Codes sowie Auflisten und Widerrufen persistierter Geräte. Diese
   Kommandos sind nur für die Control-WebView freigegeben; die Projector-WebView
   besitzt keine Companion-Verwaltungsrechte.
+- Headless-Default-Deny: Ohne explizite Companion-Konfiguration antworten alle
+  Pairing-, Geräte- und Projector-Routen mit `forbidden`. Bei externer
+  TLS-Terminierung muss der Upstream ausschließlich auf Loopback lauschen; der
+  kanonische Leaf-Fingerprint wird im Pairing-Bootstrap mitgeliefert.
 
 Noch offen:
 

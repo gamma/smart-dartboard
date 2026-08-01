@@ -10,7 +10,7 @@ use sdb_board::{
 };
 use sdb_companion::{
     COMPANION_PROTOCOL_VERSION, CompanionFrame, CompanionFrameKind, CompanionRole, PairedDevice,
-    PairingAuthority, PairingError, PairingGrant, PairingOffer, PairingRequest,
+    PairingAuthority, PairingBootstrap, PairingError, PairingGrant, PairingOffer, PairingRequest,
 };
 use sdb_contracts::{
     CommandEnvelope, ContractError, DartSource, Envelope, ErrorCode, MessageKind, PROTOCOL_VERSION,
@@ -41,6 +41,13 @@ struct AppState {
     board_token: Option<Arc<str>>,
     companions: Arc<Mutex<PairingAuthority>>,
     companion_changes: broadcast::Sender<()>,
+    companion_config: Option<Arc<CompanionConfig>>,
+}
+
+#[derive(Debug)]
+struct CompanionConfig {
+    host_id: String,
+    certificate_sha256: String,
 }
 
 struct BoardState {
@@ -55,6 +62,7 @@ struct Health {
     database: &'static str,
     board: BoardPhase,
     board_failure_code: Option<BoardFailureCode>,
+    companion: &'static str,
     protocol_version: u16,
     schema_version: u32,
     revision: u64,
@@ -131,14 +139,19 @@ async fn main() {
         !ble_enabled || board_token.is_some(),
         "SDB_BOARD_TOKEN must be set when SDB_ENABLE_BLE=1"
     );
-    let state =
-        AppState::new(runtime, ble_enabled, board_token).expect("restore companion device grants");
-    let app = router(state);
     let port = env::var("SDB_PORT")
         .ok()
         .and_then(|value| value.parse().ok())
         .unwrap_or(8000);
-    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
+    let bind_ip: IpAddr = env::var("SDB_BIND")
+        .unwrap_or_else(|_| Ipv4Addr::UNSPECIFIED.to_string())
+        .parse()
+        .expect("SDB_BIND must be an IP address");
+    let companion_config = companion_config(bind_ip);
+    let state = AppState::new(runtime, ble_enabled, board_token, companion_config)
+        .expect("restore companion device grants");
+    let app = router(state);
+    let address = SocketAddr::new(bind_ip, port);
     let listener = tokio::net::TcpListener::bind(address)
         .await
         .expect("bind server socket");
@@ -154,6 +167,7 @@ impl AppState {
         runtime: Runtime<SqliteRepository>,
         board_enabled: bool,
         board_token: Option<String>,
+        companion_config: Option<CompanionConfig>,
     ) -> Result<Self, sdb_storage::StorageError> {
         let (states, _) = broadcast::channel(64);
         let (companion_changes, _) = broadcast::channel(16);
@@ -174,6 +188,7 @@ impl AppState {
                 companion_devices,
             ))),
             companion_changes,
+            companion_config: companion_config.map(Arc::new),
         })
     }
 
@@ -273,6 +288,11 @@ async fn health(State(state): State<AppState>) -> Result<Json<Health>, ApiError>
         database: "ok",
         board: board_status.phase,
         board_failure_code: board_status.failure_code,
+        companion: if state.companion_config.is_some() {
+            "ready"
+        } else {
+            "disabled"
+        },
         protocol_version: PROTOCOL_VERSION,
         schema_version,
         revision: runtime.snapshot().revision,
@@ -382,15 +402,23 @@ async fn snapshot(State(state): State<AppState>) -> Result<Json<StateMessage>, A
 async fn open_pairing(
     State(state): State<AppState>,
     headers: HeaderMap,
-) -> Result<Json<PairingOffer>, ApiError> {
+) -> Result<Json<PairingBootstrap>, ApiError> {
     validate_same_origin(&headers)?;
+    let config = companion_configured(&state)?;
     let offer = state
         .companions
         .lock()
         .map_err(|_| internal_error("companion lock poisoned"))?
         .open(now_ms())
         .map_err(pairing_error)?;
-    Ok(Json(offer))
+    Ok(Json(
+        PairingBootstrap::new(
+            config.host_id.clone(),
+            config.certificate_sha256.clone(),
+            offer,
+        )
+        .map_err(pairing_error)?,
+    ))
 }
 
 async fn pair_companion(
@@ -399,6 +427,7 @@ async fn pair_companion(
     Json(request): Json<PairingRequest>,
 ) -> Result<Json<PairingGrant>, ApiError> {
     validate_same_origin(&headers)?;
+    companion_configured(&state)?;
     let mut companions = state
         .companions
         .lock()
@@ -434,6 +463,7 @@ async fn companion_devices(
     headers: HeaderMap,
 ) -> Result<Json<Vec<CompanionDeviceView>>, ApiError> {
     validate_same_origin(&headers)?;
+    companion_configured(&state)?;
     let devices = state
         .companions
         .lock()
@@ -451,6 +481,7 @@ async fn revoke_companion(
     Path(device_id): Path<String>,
 ) -> Result<StatusCode, ApiError> {
     validate_same_origin(&headers)?;
+    companion_configured(&state)?;
     let mut companions = state
         .companions
         .lock()
@@ -478,6 +509,7 @@ async fn companion_bootstrap(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<CompanionFrame>, ApiError> {
+    companion_configured(&state)?;
     authorize_companion(&state, &headers)?;
     Ok(Json(companion_snapshot(&state)?))
 }
@@ -487,6 +519,7 @@ async fn companion_websocket(
     headers: HeaderMap,
     upgrade: WebSocketUpgrade,
 ) -> Result<Response, ApiError> {
+    companion_configured(&state)?;
     let token = companion_token(&headers)?.to_owned();
     let states = state.states.subscribe();
     let companion_changes = state.companion_changes.subscribe();
@@ -786,6 +819,13 @@ fn authorize_companion(state: &AppState, headers: &HeaderMap) -> Result<(), Cont
     authenticate_companion_token(state, companion_token(headers)?)
 }
 
+fn companion_configured(state: &AppState) -> Result<&CompanionConfig, ContractError> {
+    state
+        .companion_config
+        .as_deref()
+        .ok_or_else(|| forbidden("companion transport is disabled"))
+}
+
 fn companion_token(headers: &HeaderMap) -> Result<&str, ContractError> {
     headers
         .get(header::AUTHORIZATION)
@@ -875,6 +915,33 @@ fn env_flag(name: &str, default: bool) -> bool {
     })
 }
 
+fn companion_config(bind_ip: IpAddr) -> Option<CompanionConfig> {
+    if !env_flag("SDB_ENABLE_COMPANION", false) {
+        return None;
+    }
+    assert!(
+        bind_ip.is_loopback(),
+        "SDB_ENABLE_COMPANION=1 requires loopback SDB_BIND behind TLS termination"
+    );
+    let host_id = env::var("SDB_COMPANION_HOST_ID")
+        .expect("SDB_COMPANION_HOST_ID must be set when companion transport is enabled");
+    let certificate_sha256 = env::var("SDB_COMPANION_TLS_SHA256")
+        .expect("SDB_COMPANION_TLS_SHA256 must be set when companion transport is enabled");
+    PairingBootstrap::new(
+        host_id.clone(),
+        certificate_sha256.clone(),
+        PairingOffer {
+            code: "000000".into(),
+            expires_at_ms: 0,
+        },
+    )
+    .expect("companion identity configuration must be canonical");
+    Some(CompanionConfig {
+        host_id,
+        certificate_sha256,
+    })
+}
+
 fn now_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -933,9 +1000,10 @@ fn pairing_error(error: PairingError) -> ContractError {
         PairingError::InvalidCode | PairingError::AttemptsExhausted => {
             forbidden(&error.to_string())
         }
-        PairingError::Closed | PairingError::Expired | PairingError::InvalidDevice => {
-            invalid_command(&error.to_string())
-        }
+        PairingError::Closed
+        | PairingError::Expired
+        | PairingError::InvalidDevice
+        | PairingError::InvalidIdentity => invalid_command(&error.to_string()),
         PairingError::EntropyUnavailable => internal_error(&error.to_string()),
     }
 }
@@ -977,13 +1045,22 @@ mod tests {
     fn test_app() -> Router {
         let repository = SqliteRepository::in_memory().expect("repository");
         let runtime = Runtime::restore("test-runtime", repository).expect("runtime");
-        router(AppState::new(runtime, false, None).expect("app state"))
+        router(AppState::new(runtime, false, None, None).expect("app state"))
+    }
+
+    fn test_companion_config() -> CompanionConfig {
+        CompanionConfig {
+            host_id: "test-host".into(),
+            certificate_sha256: "ab".repeat(32),
+        }
     }
 
     fn board_test_app() -> Router {
         let repository = SqliteRepository::in_memory().expect("repository");
         let runtime = Runtime::restore("test-runtime", repository).expect("runtime");
-        router(AppState::new(runtime, true, Some("test-board-token".into())).expect("app state"))
+        router(
+            AppState::new(runtime, true, Some("test-board-token".into()), None).expect("app state"),
+        )
     }
 
     async fn post_command(app: &Router, envelope: Value) -> Value {
@@ -1052,6 +1129,7 @@ mod tests {
         assert_eq!(value["status"], "ok");
         assert_eq!(value["protocol_version"], PROTOCOL_VERSION);
         assert_eq!(value["schema_version"], 6);
+        assert_eq!(value["companion"], "disabled");
 
         let bootstrap = test_app()
             .oneshot(
@@ -1218,7 +1296,8 @@ mod tests {
     async fn companion_pairing_persists_bootstraps_and_revokes_projector_access() {
         let repository = SqliteRepository::in_memory().expect("repository");
         let runtime = Runtime::restore("test-runtime", repository).expect("runtime");
-        let state = AppState::new(runtime, false, None).expect("app state");
+        let state =
+            AppState::new(runtime, false, None, Some(test_companion_config())).expect("app state");
         let app = router(state.clone());
 
         let open = app
@@ -1231,9 +1310,11 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(open.status(), StatusCode::OK);
-        let offer: PairingOffer =
+        let bootstrap: PairingBootstrap =
             serde_json::from_slice(&to_bytes(open.into_body(), usize::MAX).await.expect("body"))
-                .expect("offer");
+                .expect("bootstrap");
+        assert_eq!(bootstrap.host_id, "test-host");
+        assert_eq!(bootstrap.certificate_sha256, "ab".repeat(32));
 
         let pair = app
             .clone()
@@ -1244,7 +1325,7 @@ mod tests {
                         serde_json::json!({
                             "device_id": "ipad-projector",
                             "device_name": "Arcade iPad",
-                            "code": offer.code
+                            "code": bootstrap.offer.code
                         })
                         .to_string(),
                     ))
@@ -1398,7 +1479,12 @@ mod tests {
 
     #[tokio::test]
     async fn companion_controller_routes_reject_cross_origin_browsers() {
-        let response = test_app()
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let runtime = Runtime::restore("test-runtime", repository).expect("runtime");
+        let app = router(
+            AppState::new(runtime, false, None, Some(test_companion_config())).expect("app state"),
+        );
+        let response = app
             .oneshot(
                 Request::post("/api/v2/companion/pairing/open")
                     .header(header::HOST, "dartboard.local:8000")
@@ -1409,6 +1495,26 @@ mod tests {
             .await
             .expect("response");
         assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn companion_routes_are_closed_by_default() {
+        let response = test_app()
+            .oneshot(
+                Request::post("/api/v2/companion/pairing/open")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let error: ContractError = serde_json::from_slice(
+            &to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("error");
+        assert_eq!(error.code, ErrorCode::Forbidden);
     }
 
     #[tokio::test]
