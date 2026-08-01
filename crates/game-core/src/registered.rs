@@ -94,6 +94,17 @@ pub struct GameInstruction {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub struct GameControlLegend {
+    pub icon: &'static str,
+    pub color: &'static str,
+    pub label: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secondary_color: Option<&'static str>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<&'static str>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 pub struct GameMetadata {
     pub slug: &'static str,
     pub ruleset_version: u16,
@@ -110,6 +121,7 @@ pub struct GameMetadata {
     pub max_players: usize,
     pub options: &'static [GameOption],
     pub instructions: &'static [GameInstruction],
+    pub control_legend: &'static [GameControlLegend],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -946,6 +958,7 @@ static COUNTUP_METADATA: GameMetadata = GameMetadata {
     max_players: 8,
     options: &COUNTUP_OPTIONS,
     instructions: &COUNTUP_INSTRUCTIONS,
+    control_legend: &[],
 };
 
 static X01_START_CHOICES: [GameOptionChoice; 3] = [
@@ -1035,6 +1048,7 @@ static X01_METADATA: GameMetadata = GameMetadata {
     max_players: 8,
     options: &X01_OPTIONS,
     instructions: &X01_INSTRUCTIONS,
+    control_legend: &[],
 };
 
 static CRICKET_METADATA: GameMetadata = GameMetadata {
@@ -1053,6 +1067,7 @@ static CRICKET_METADATA: GameMetadata = GameMetadata {
     max_players: 8,
     options: &[],
     instructions: &CRICKET_INSTRUCTIONS,
+    control_legend: &[],
 };
 
 impl GameMode for CricketMode {

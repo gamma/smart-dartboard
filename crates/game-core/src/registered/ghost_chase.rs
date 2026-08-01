@@ -90,6 +90,7 @@ static METADATA: GameMetadata = GameMetadata {
     max_players: 8,
     options: &OPTIONS,
     instructions: &INSTRUCTIONS,
+    control_legend: &[],
 };
 
 pub(super) struct GhostChaseMode;

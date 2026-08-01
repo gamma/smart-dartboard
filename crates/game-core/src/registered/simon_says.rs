@@ -107,6 +107,7 @@ static METADATA: GameMetadata = GameMetadata {
     max_players: 8,
     options: &OPTIONS,
     instructions: &INSTRUCTIONS,
+    control_legend: &[],
 };
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

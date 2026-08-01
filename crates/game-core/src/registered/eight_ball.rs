@@ -37,6 +37,7 @@ static METADATA: GameMetadata = GameMetadata {
     max_players: 2,
     options: &[],
     instructions: &INSTRUCTIONS,
+    control_legend: &[],
 };
 
 pub(super) struct EightBallMode;

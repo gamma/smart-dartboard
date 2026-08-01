@@ -7,9 +7,9 @@
 mod registered;
 
 pub use registered::{
-    GameInstruction, GameMetadata, GameOption, GameOptionChoice, GameOptionValue,
-    RegisteredDartRecord, RegisteredGame, RegisteredGameState, RegisteredPlayer, game_metadata,
-    registered_game_metadata,
+    GameControlLegend, GameInstruction, GameMetadata, GameOption, GameOptionChoice,
+    GameOptionValue, RegisteredDartRecord, RegisteredGame, RegisteredGameState, RegisteredPlayer,
+    game_metadata, registered_game_metadata,
 };
 
 use sdb_contracts::DartEvent;
