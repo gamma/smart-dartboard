@@ -13,6 +13,7 @@ mod ghost_chase;
 mod heart_chase;
 mod lightning_round;
 mod mini_golf;
+mod risk_it;
 mod robin_hood;
 mod simon_says;
 mod target_rush;
@@ -26,6 +27,7 @@ use ghost_chase::GHOST_CHASE_MODE;
 use heart_chase::HEART_CHASE_MODE;
 use lightning_round::LIGHTNING_ROUND_MODE;
 use mini_golf::MINI_GOLF_MODE;
+use risk_it::RISK_IT_MODE;
 use robin_hood::ROBIN_HOOD_MODE;
 use simon_says::SIMON_SAYS_MODE;
 use target_rush::TARGET_RUSH_MODE;
@@ -747,6 +749,13 @@ fn finish_action_round_game(
         return Ok(());
     }
 
+    finish_score_game(state, winner_message)
+}
+
+fn finish_score_game(
+    state: &mut RegisteredGameState,
+    winner_message: &str,
+) -> Result<(), GameError> {
     let best_score = state
         .players
         .iter()
@@ -1137,7 +1146,7 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 13] = [
+static MODES: [&'static dyn GameMode; 14] = [
     &AVOID_BOMB_MODE,
     &CRICKET_MODE,
     &CANDY_CANNON_MODE,
@@ -1148,6 +1157,7 @@ static MODES: [&'static dyn GameMode; 13] = [
     &LIGHTNING_ROUND_MODE,
     &MINI_GOLF_MODE,
     &ROBIN_HOOD_MODE,
+    &RISK_IT_MODE,
     &SIMON_SAYS_MODE,
     &TARGET_RUSH_MODE,
     &TREASURE_HUNT_MODE,

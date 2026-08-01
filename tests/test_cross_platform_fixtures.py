@@ -57,6 +57,9 @@ AVOID_BOMB_FIXTURE = (
 COLOR_CLASH_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "color_clash_v3.json"
 )
+RISK_IT_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "risk_it_v3.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -671,6 +674,61 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                 "winner_id": state.winner_id,
                 "result_type": state.result_type,
                 "random_cursor": state.random_cursor,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_risk_it_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(RISK_IT_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_schema_version"], 1)
+        self.assertEqual(
+            fixture["ruleset_version"],
+            registry.get("risk_it").metadata.ruleset_version,
+        )
+        engine = GameEngine()
+        engine.reset(
+            "risk_it",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        player_ids = [player["id"] for player in fixture["players"]]
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "action":
+                engine.handle_action(command["action"], dict(command["payload"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "next_player":
+                engine.next_player()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]), dict(command["event"])
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            mode_state = state.mode_state
+            actual = {
+                "scores": [player.score for player in state.players],
+                "pots": {
+                    player_id: int(mode_state["pot"].get(player_id, 0))
+                    for player_id in player_ids
+                },
+                "hot_pot": mode_state["hot_pot"],
+                "final_heist": mode_state["final_heist"],
+                "banked_last": mode_state["banked_last"],
+                "last_effect": mode_state["last_effect"],
+                "effect_amount": mode_state["effect_amount"],
+                "effect_target_player_id": mode_state["effect_target_player_id"],
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_id": state.winner_id,
+                "result_type": state.result_type,
             }
             self.assertEqual(actual, step["expected"])
 

@@ -53,7 +53,7 @@ class RiskItMode:
             ),
         ],
         sound_theme="arcade",
-        ruleset_version=2,
+        ruleset_version=3,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -66,6 +66,9 @@ class RiskItMode:
             "banked_last": 0,
             "hot_pot": None,
             "final_heist": False,
+            "last_effect": "",
+            "effect_amount": 0,
+            "effect_target_player_id": None,
         }
         state.message = "Risk It: Pot füllen, banken oder Dart 3 riskieren!"
 
@@ -86,6 +89,23 @@ class RiskItMode:
     @staticmethod
     def _field(event: Dict[str, Any]) -> int:
         return int(event.get("field", 0) or 0)
+
+    @staticmethod
+    def _clear_effect(state: Any) -> None:
+        state.mode_state["last_effect"] = ""
+        state.mode_state["effect_amount"] = 0
+        state.mode_state["effect_target_player_id"] = None
+
+    @staticmethod
+    def _set_effect(
+        state: Any,
+        effect: str,
+        amount: int = 0,
+        target_player_id: Optional[str] = None,
+    ) -> None:
+        state.mode_state["last_effect"] = effect
+        state.mode_state["effect_amount"] = int(amount)
+        state.mode_state["effect_target_player_id"] = target_player_id
 
     def _finish_outcome(self, state: Any, outcome: ThrowOutcome) -> ThrowOutcome:
         winner_id, message = result_message(
@@ -138,6 +158,7 @@ class RiskItMode:
         if stolen:
             attacker.score += amount
             state.mode_state["banked_last"] = amount
+            self._set_effect(state, "risk_steal", amount, owner.id)
             if event is not None:
                 event.update({
                     "effect": "risk_steal",
@@ -148,6 +169,7 @@ class RiskItMode:
         if owner:
             owner.score += amount
             state.mode_state["banked_last"] = amount
+            self._set_effect(state, "risk_secured", amount, owner.id)
             if event is not None:
                 event.update({
                     "effect": "risk_secured",
@@ -170,6 +192,7 @@ class RiskItMode:
             "field": self._field(event),
             "label": "BULL" if self._field(event) == 25 else str(self._field(event)),
         }
+        self._set_effect(state, "risk_hot_pot", amount, player.id)
         event.update({
             "effect": "risk_hot_pot",
             "hot_pot": amount,
@@ -182,6 +205,7 @@ class RiskItMode:
         player: Any,
         event: Dict[str, Any],
     ) -> ThrowOutcome:
+        self._clear_effect(state)
         final_heist = bool(state.mode_state.get("final_heist"))
         stolen, hot_message = self._resolve_hot_pot(state, player, event)
         if final_heist:
@@ -197,13 +221,16 @@ class RiskItMode:
                     player.score += new_pot
                     state.mode_state["banked_last"] = new_pot
                     self._set_pot(state, player.id, 0)
+                    self._set_effect(state, "risk_bank", new_pot, player.id)
                     message = f"Miss · halber Pot gesichert +{new_pot}"
                 else:
                     self._set_pot(state, player.id, new_pot)
+                    self._set_effect(state, "risk_half", new_pot, player.id)
                     message = f"Miss · Pot halbiert auf {new_pot}"
                 outcome = ThrowOutcome(stolen, self._join_messages(hot_message, message))
             else:
                 self._set_pot(state, player.id, 0)
+                self._set_effect(state, "risk_pot_lost", pot, player.id)
                 outcome = ThrowOutcome(
                     stolen,
                     self._join_messages(hot_message, "Miss · eigener Pot verloren"),
@@ -218,6 +245,7 @@ class RiskItMode:
                     player.score += pot
                     state.mode_state["banked_last"] = pot
                     self._set_pot(state, player.id, 0)
+                    self._set_effect(state, "risk_bank", pot, player.id)
                     message = f"Solo Auto-Bank +{pot}"
                 else:
                     self._make_hot_pot(state, player, event, pot)
@@ -257,6 +285,7 @@ class RiskItMode:
         player.score += pot
         state.mode_state["banked_last"] = pot
         self._set_pot(state, player.id, 0)
+        self._set_effect(state, "risk_bank", pot, player.id)
         state.status = "hold"
         state.message = f"{player.name} bankt +{pot}"
         finish_action_round_game(state, "{winner} gewinnt Risk It!")
@@ -267,6 +296,7 @@ class RiskItMode:
             self._resolve_hot_pot(state, player, None)
 
     def on_turn_skipped(self, state: Any, player: Any) -> None:
+        self._clear_effect(state)
         _, hot_message = self._resolve_hot_pot(state, player, None)
         own_pot = self._pot(state, player.id)
         self._set_pot(state, player.id, 0)
@@ -274,6 +304,8 @@ class RiskItMode:
             hot_message,
             f"{player.name} überspringt · Pot {own_pot} verloren",
         )
+        if not state.mode_state.get("last_effect"):
+            self._set_effect(state, "risk_skip", own_pot, player.id)
         if state.mode_state.get("final_heist"):
             self._finish_state(state)
 
