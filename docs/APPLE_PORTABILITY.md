@@ -373,6 +373,33 @@ werden und ein widerrufbares Token erhalten.
 - Eine iPad-App mit externem Bildschirm ist möglich, aber deutlich anfälliger
   für Lifecycle-, AirPlay- und Displaywechsel als ein fester macOS-Host.
 
+Der bevorzugte mobile Arcade-Modus ist dennoch ein einzelnes iPhone oder iPad,
+das Board, Runtime, SQLite und Control UI besitzt und eine separate Projector UI
+über AirPlay oder HDMI ausgibt. System-Mirroring der Control UI reicht dafür
+nicht aus. Bis iOS/iPadOS 26 wird die nichtinteraktive externe Scene über
+`windowExternalDisplayNonInteractive` angebunden; ab Version 27 muss die App
+dafür ein External-Display-Scene-Accessory registrieren. Beide Implementierungen
+liegen hinter demselben `DisplayHost`-Vertrag.
+
+Als Fallback und zweiter Produktmodus dient ein Companion-iPad:
+
+```text
+iPhone/iPad: Controller + BLE + Runtime + SQLite
+                    ↓ lokales, gepaartes Netzwerk
+iPad:          Projector UI + Projector-Sound
+```
+
+Das Companion-iPad ist kein zweiter Host. Es entdeckt die Controller-Runtime
+über Bonjour, wird per QR- oder Einmalcode mit der Rolle `projector` gepaart und
+bezieht nach jeder Unterbrechung zuerst einen vollständigen Snapshot. Es darf
+weder BLE übernehmen noch Commands für Spiel oder Setup senden. Die
+Controller-Runtime bleibt bei Display- oder Netzwerkverlust spielfähig.
+
+Für AirPlay, HDMI und Companion werden getrennte Hardwarematrizen geführt, weil
+Displayausgabe, Audio-Routing und Laden über einen Adapter modellabhängig sind.
+Die App zeigt den aktiven Ausgabepfad und bietet bei fehlender erweiterter
+Anzeige einen klaren Wechsel zum Companion-Modus an.
+
 ### App Store und Spielplugins
 
 Die heutigen Python-Modi werden dynamisch entdeckt. In einer iOS-App dürfen
@@ -407,19 +434,23 @@ sinnvolles Vorbild.
 
 ## 9. Empfohlene Umsetzungsschritte
 
-1. Mit einem minimalen M0-Spike CoreBluetooth, zwei WebViews und eine externe
-   `windowExternalDisplayNonInteractive`-Scene auf echter Hardware beweisen.
-2. Ergebnis und Rückfallpfad für die native Hülle als ADR dokumentieren.
-3. Bestehende Python-Zustände im versionierten Golden-Fixture-Format sichern.
-4. Rust-Workspace mit Contracts, Protocol, Core und Fixtures aufbauen.
-5. CountUp und X01 mit exakter Python-/Rust-Parität portieren.
-6. Atomare Runtime, Session, SQLite, Undo, Recovery, Statistik und Replay
+1. Mit einem minimalen M0-Spike CoreBluetooth, zwei WebViews sowie eigenständige
+   Projector-Ausgabe über HDMI und AirPlay auf echter Hardware beweisen; dabei
+   sowohl die Scene-Rolle bis iOS/iPadOS 26 als auch den Scene-Accessory-Pfad ab
+   Version 27 berücksichtigen.
+2. Companion-Spike mit iPhone/iPad als autoritativem Controller und iPad als
+   gepaartem, read-only Projector beweisen.
+3. Ergebnis und Rückfallpfad für die native Hülle als ADR dokumentieren.
+4. Bestehende Python-Zustände im versionierten Golden-Fixture-Format sichern.
+5. Rust-Workspace mit Contracts, Protocol, Core und Fixtures aufbauen.
+6. CountUp und X01 mit exakter Python-/Rust-Parität portieren.
+7. Atomare Runtime, Session, SQLite, Undo, Recovery, Statistik und Replay
    portieren.
-7. Alle weiteren Modi einzeln mit Golden Fixtures übernehmen.
-8. Gemeinsamen Runtime-Client sowie Rust-REST-/WebSocket-Server anbinden.
-9. Linux-Docker-Image gegen die reale Hardware qualifizieren.
-10. macOS- und anschließend iPadOS-Hülle produktiv anbinden.
-11. TestFlight, notarisiertes macOS-Paket und spätere Store-Pakete erstellen.
+8. Alle weiteren Modi einzeln mit Golden Fixtures übernehmen.
+9. Gemeinsamen Runtime-Client sowie Rust-REST-/WebSocket-Server anbinden.
+10. Linux-Docker-Image gegen die reale Hardware qualifizieren.
+11. macOS- und anschließend iOS-/iPadOS-Hülle produktiv anbinden.
+12. TestFlight, notarisiertes macOS-Paket und spätere Store-Pakete erstellen.
 
 Details, Branch-Regeln und Meilensteine stehen in
 [CROSS_PLATFORM_ARCHITECTURE.md](CROSS_PLATFORM_ARCHITECTURE.md).
@@ -443,7 +474,7 @@ M0:       nativer BLE-/External-Display-Machbarkeitstest ohne Spielportierung
 Stufe 1:  Rust-Core mit Parität zur Python-Version
 Stufe 2:  Headless-Server und Linux-Docker-Produktionspfad
 Stufe 3:  macOS-App mit direktem CoreBluetooth
-Stufe 4:  iPadOS-App mit direktem BLE und externem Projector
+Stufe 4:  iOS-/iPadOS-App mit direktem BLE, AirPlay/HDMI und Companion
 Stufe 5:  Android, Windows und optional Steam
 ```
 
@@ -457,6 +488,9 @@ wenn der neue Container Parität und reale Hardwarestabilität bewiesen hat.
 - [Silent Shark – öffentliche Browser-Demo](https://silentshark.app/alpha/)
 - [Capacitor – Web-first Native Runtime](https://capacitorjs.com/docs)
 - [Apple Core Bluetooth](https://developer.apple.com/documentation/corebluetooth/)
+- [Apple: UIKit Scene Lifecycle und externe Displays](https://developer.apple.com/documentation/uikit/transitioning-to-the-uikit-scene-based-life-cycle)
+- [Apple: nichtinteraktive External-Display-Scene](https://developer.apple.com/documentation/uikit/uiscenesession/role-swift.struct/windowexternaldisplaynoninteractive)
+- [Apple: Bonjour-Discovery mit NWBrowser](https://developer.apple.com/documentation/network/nwbrowser)
 - [Apple: Core Bluetooth im Hintergrund](https://developer.apple.com/library/archive/documentation/NetworkingInternetWeb/Conceptual/CoreBluetooth_concepts/CoreBluetoothBackgroundProcessingForIOSApps/PerformingTasksWhileYourAppIsInTheBackground.html)
 - [Apple: Local Network Privacy](https://developer.apple.com/documentation/technotes/tn3179-understanding-local-network-privacy)
 - [Apple: App Transport Security](https://developer.apple.com/documentation/security/preventing-insecure-network-connections)

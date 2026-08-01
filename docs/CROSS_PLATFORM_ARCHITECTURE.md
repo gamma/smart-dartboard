@@ -17,14 +17,14 @@ Die Anwendung muss dort weiterhin lokal, offline und mit realem BLE-Dartboard
 funktionieren.
 
 Gleichzeitig wird der Kern so gebaut, dass später keine erneute fachliche
-Portierung für iPadOS, macOS, Android oder Windows notwendig ist:
+Portierung für iOS/iPadOS, macOS, Android oder Windows notwendig ist:
 
 ```text
 ein Spielkern
   ├─ Linux/Docker-Server
   ├─ macOS-App
   ├─ Windows-App
-  ├─ iPadOS-App
+  ├─ iOS-/iPadOS-App
   └─ Android-App
 ```
 
@@ -98,7 +98,7 @@ Scheitern der Hülle darf keinen erneuten Rewrite der Regeln auslösen.
 
 ### 2.2 Produkt-Topologien
 
-Die Runtime unterstützt genau zwei bewusst getrennte Topologien:
+Die Runtime unterstützt drei bewusst getrennte Topologien:
 
 ```text
 Hosted Mode
@@ -110,11 +110,51 @@ Standalone Mode
   Board → lokale Runtime → SQLite → native IPC/Event-Transport
                                   ├─ Control-WebView
                                   └─ Projector-WebView
+
+Companion Mode
+  Board → lokale Runtime im Controller-Gerät → SQLite
+                         ├─ IPC → lokale Control-WebView
+                         └─ gepaarter Netzwerktransport → Projector-Gerät
 ```
 
 Der Hosted Mode kann mehrere gepaarte Netzwerkclients bedienen. Im Standalone
-Mode öffnet die App keinen HTTP-Port. Beide Topologien verwenden dieselben
-Commands, Events, Zustände und fachlichen Tests.
+Mode öffnet die App keinen HTTP-Port. Der Companion Mode ist ein gezielt
+freigeschalteter lokaler Ein-Host-Betrieb: Das Controller-Gerät bleibt alleinige
+Runtime-, BLE- und Datenbankinstanz; das zweite Gerät ist nur Projector-Client.
+Alle drei Topologien verwenden dieselben Commands, Events, Zustände und
+fachlichen Tests.
+
+### 2.3 Bevorzugte iOS-/iPadOS-Anzeigemodi
+
+Die primäre Apple-Mobile-Konfiguration ist ein einzelnes iPhone oder iPad als
+Controller und Runtime. Es verbindet das Board direkt per CoreBluetooth und
+gibt eine eigenständige Projector-Ansicht über AirPlay oder einen kabelgebundenen
+HDMI-/USB-C-Displayadapter aus. Das externe Display zeigt nicht die gespiegelte
+Control UI, sondern ausschließlich die nichtinteraktive Projector-Rolle.
+
+Als sekundärer Modus wird Companion unterstützt:
+
+```text
+iPhone oder iPad                         iPad
+Controller + BLE + Runtime + SQLite  →  Projector + Sound
+```
+
+Beide Geräte verwenden dieselbe App. Beim Start wird die Rolle `Dieses Gerät`
+oder `Companion-Projektor` gewählt; ein bereits eingerichtetes Gerät merkt sich
+die Auswahl. Der Controller wird über Bonjour gefunden und per QR-Code oder
+kurzem Einmalcode gepaart. Es gibt niemals zwei autoritative Runtimes für
+dasselbe laufende Spiel.
+
+Reihenfolge der Produktpräferenz:
+
+1. iPhone/iPad als Controller mit AirPlay oder HDMI als Projector,
+2. iPhone/iPad als Controller mit iPad als Companion-Projector,
+3. vorübergehende Projector-Vorschau auf demselben Display als Fallback.
+
+Der Spielbetrieb muss beim Trennen eines externen Displays oder Companion-
+Geräts auf dem Controller weiterlaufen. Nach Wiederverbindung erhält der
+Projector zuerst einen vollständigen Snapshot und danach nur lückenlose
+Revisionen.
 
 ## 3. Warum Rust für den gemeinsamen Kern
 
@@ -448,8 +488,12 @@ Service `FFF0`.
 
 - Linux/Browser: getrennte URLs `/control` und `/projector`,
 - macOS/Windows: zwei Fenster und auswählbares Vollbilddisplay,
-- iPadOS: interaktive Hauptscene plus
-  `windowExternalDisplayNonInteractive`-Scene,
+- iOS/iPadOS bis einschließlich Version 26: interaktive Hauptscene plus
+  `windowExternalDisplayNonInteractive`-Scene für HDMI und AirPlay,
+- iOS/iPadOS ab Version 27: registriertes nichtinteraktives External-Display-
+  Scene-Accessory; der Vertrag bleibt identisch,
+- iOS/iPadOS Companion: lokale Control-WebView auf dem Runtime-Gerät und
+  gepaarte, nichtinteraktive Projector-WebView auf einem zweiten iPad,
 - Android: Haupt-Activity plus `Presentation` auf externem Display.
 
 Der Displayvertrag umfasst:
@@ -459,8 +503,23 @@ Der Displayvertrag umfasst:
 - Wiederherstellung der Projector-WebView aus dem aktuellen Snapshot,
 - Displayprofil pro stabiler Identität, Auflösung und Orientierung,
 - definierte Fallbackdarstellung ohne externes Display,
+- klare Anzeige auf dem Controller, ob HDMI/AirPlay oder ein Companion aktiv
+  ist,
 - Keep-Awake und Kiosk nur während relevanter Betriebszustände,
 - keine Spielzustandskopie im Displayadapter.
+
+AirPlay und HDMI sind unterschiedliche Hardware-Abnahmepfade, obwohl sie
+denselben Displayvertrag implementieren. Reines System-Mirroring ist kein
+Produktmodus. Unterstützt ein konkretes Gerät oder ein Adapter keine erweiterte
+Ausgabe, erklärt die App den Fallback und bietet Companion-Pairing an.
+
+Der Companion-Transport verwendet die versionierten Runtime-Contracts über
+eine lokale, authentisierte und verschlüsselte Verbindung. Bonjour dient nur
+der Discovery. Pairing-Tokens liegen im Keychain, sind widerrufbar und binden
+die Rolle `projector`; ein Companion darf keine Spiel-, Setup- oder BLE-Commands
+dispatchen. Bei Revisionslücken, App-Resume oder Hostwechsel ist ein vollständiger
+Snapshot Pflicht. Ein automatischer Hostwechsel während eines laufenden Spiels
+ist nicht zulässig.
 
 ### 10.3 Audio und Effekte
 
@@ -483,15 +542,20 @@ Core-Portierung sichtbar werden.
 Der Spike verwendet nur einen minimalen Rust-Zustand, einen simulierten Wurf
 und höchstens ein reales BLE-Paket. Er portiert keine Spielmodi.
 
-### iPadOS-Abnahme
+### iOS-/iPadOS-Abnahme
 
-- Control-WebView auf dem internen Display,
-- native nichtinteraktive Projector-Scene auf einem externen Display,
+- Control-WebView auf dem internen Display eines iPhones und eines iPads,
+- native nichtinteraktive Projector-Scene über HDMI auf echter Hardware,
+- dieselbe Projector-Scene über AirPlay auf echter Hardware,
 - eigenständiger Projector-Inhalt statt bloßer Bildschirmspiegelung,
 - beide Views zeigen denselben Rust-Zustand,
 - Projector abziehen und erneut verbinden ohne Zustandsverlust,
 - ein CoreBluetooth-Paket erreicht exakt einmal die Runtime,
 - Background/Foreground und Rotation ohne zweite Runtime,
+- iPhone/iPad als Runtime-Controller mit iPad als gepaartem Projector,
+- Companion-Discovery, Pairing, Rollenbegrenzung und Widerruf funktionieren,
+- Companion-Verbindungsverlust stoppt weder Runtime noch laufendes Spiel,
+- Companion-Reconnect beginnt mit Snapshot und setzt revisionsgenau fort,
 - signierbarer TestFlight-Debugbuild.
 
 ### Android-Abnahme
@@ -740,7 +804,7 @@ Release-Workflows laufen, bleiben aber Pflicht vor Veröffentlichung.
 Die technische Risikoprüfung und die Produkt-Releasereihenfolge sind getrennt:
 
 ```text
-M0 Native Feasibility: iPadOS + Android BLE/External Display Spikes
+M0 Native Feasibility: iOS/iPadOS + Android BLE/External Display Spikes
 A  Contracts, API-Inventar, Buildmatrix und Golden-Fixture-Format
 B  Rust Protocol + Core + CountUp/X01
 C  atomare Runtime + Sessions + SQLite + Recovery
@@ -748,7 +812,7 @@ D  alle Spielmodi mit Parität
 E  RuntimeClient + Rust REST/WebSocket-Server + bestehende UI
 F  Linux-Docker-Image und Hardware-Langzeittest
 G  macOS-App
-H  iPadOS-App mit externem Projector
+H  iOS-/iPadOS-App mit AirPlay/HDMI und Companion-Projector
 I  Android-App
 J  Windows-App
 K  optional Steam
@@ -759,7 +823,7 @@ Releasereihenfolge bleibt:
 
 1. Linux/Docker,
 2. macOS,
-3. iPadOS,
+3. iOS/iPadOS,
 4. Android,
 5. Windows,
 6. optional Steam.
