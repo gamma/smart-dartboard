@@ -1,0 +1,66 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 1,
+  "cases": [
+    {
+      "name": "completed_game_rotates_starter_but_abort_does_not_score",
+      "players": [
+        {"id": "ada", "name": "Ada", "avatar": "nova", "color": "#ff00aa"},
+        {"id": "bob", "name": "Bob", "avatar": "comet", "color": "#28e7ff"}
+      ],
+      "steps": [
+        {"command": {"type": "start_session"}, "expected": {"screen": "game_select", "session_status": "active", "selected_mode": null, "starter_id": "ada", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "prepare", "game_type": "countup", "options": {"rounds": 5}}, "expected": {"screen": "instructions", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "start_game", "game_id": "game-1"}, "expected": {"screen": "countdown", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": true, "lineup": ["ada", "bob"], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "playing"}, "expected": {"screen": "playing", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": true, "lineup": ["ada", "bob"], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "complete", "winner_ids": ["ada"], "result_type": "individual_win"}, "expected": {"screen": "game_result", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": true, "lineup": ["ada", "bob"], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "next_game"}, "expected": {"screen": "game_select", "session_status": "active", "selected_mode": null, "starter_id": "bob", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "prepare", "game_type": "x01", "options": {"start_score": 301, "out_rule": "double"}}, "expected": {"screen": "instructions", "session_status": "active", "selected_mode": "x01", "starter_id": "bob", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "start_game", "game_id": "game-2"}, "expected": {"screen": "countdown", "session_status": "active", "selected_mode": "x01", "starter_id": "bob", "starter_selection": "rotation", "game_active": true, "lineup": ["bob", "ada"], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "playing"}, "expected": {"screen": "playing", "session_status": "active", "selected_mode": "x01", "starter_id": "bob", "starter_selection": "rotation", "game_active": true, "lineup": ["bob", "ada"], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "abort"}, "expected": {"screen": "game_select", "session_status": "active", "selected_mode": null, "starter_id": "bob", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "end_session"}, "expected": {"screen": "session_summary", "session_status": "finished", "selected_mode": null, "starter_id": "bob", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}}
+      ]
+    },
+    {
+      "name": "cooperative_winners_all_receive_points",
+      "players": [
+        {"id": "ada", "name": "Ada", "avatar": "nova", "color": "#ff00aa"},
+        {"id": "bob", "name": "Bob", "avatar": "comet", "color": "#28e7ff"}
+      ],
+      "steps": [
+        {"command": {"type": "start_session"}, "expected": {"screen": "game_select", "session_status": "active", "selected_mode": null, "starter_id": "ada", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "prepare", "game_type": "space_defender", "options": {"waves": 4}}, "expected": {"screen": "instructions", "session_status": "active", "selected_mode": "space_defender", "starter_id": "ada", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "start_game", "game_id": "game-1"}, "expected": {"screen": "countdown", "session_status": "active", "selected_mode": "space_defender", "starter_id": "ada", "starter_selection": "rotation", "game_active": true, "lineup": ["ada", "bob"], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "complete", "winner_ids": ["ada", "bob"], "result_type": "team_win"}, "expected": {"screen": "game_result", "session_status": "active", "selected_mode": "space_defender", "starter_id": "ada", "starter_selection": "rotation", "game_active": true, "lineup": ["ada", "bob"], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 1, "session_points": 3}]}}
+      ]
+    },
+    {
+      "name": "draw_awards_no_points",
+      "players": [
+        {"id": "ada", "name": "Ada", "avatar": "nova", "color": "#ff00aa"},
+        {"id": "bob", "name": "Bob", "avatar": "comet", "color": "#28e7ff"}
+      ],
+      "steps": [
+        {"command": {"type": "start_session"}, "expected": {"screen": "game_select", "session_status": "active", "selected_mode": null, "starter_id": "ada", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "prepare", "game_type": "countup", "options": {"rounds": 5}}, "expected": {"screen": "instructions", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "start_game", "game_id": "game-1"}, "expected": {"screen": "countdown", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": true, "lineup": ["ada", "bob"], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "complete", "winner_ids": [], "result_type": "draw"}, "expected": {"screen": "game_result", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": true, "lineup": ["ada", "bob"], "standings": [{"id": "ada", "games": 1, "wins": 0, "session_points": 0}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}}
+      ]
+    },
+    {
+      "name": "rematch_keeps_mode_and_rotates_lineup",
+      "players": [
+        {"id": "ada", "name": "Ada", "avatar": "nova", "color": "#ff00aa"},
+        {"id": "bob", "name": "Bob", "avatar": "comet", "color": "#28e7ff"}
+      ],
+      "steps": [
+        {"command": {"type": "start_session"}, "expected": {"screen": "game_select", "session_status": "active", "selected_mode": null, "starter_id": "ada", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "prepare", "game_type": "countup", "options": {"rounds": 5}}, "expected": {"screen": "instructions", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": false, "lineup": [], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "start_game", "game_id": "game-1"}, "expected": {"screen": "countdown", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": true, "lineup": ["ada", "bob"], "standings": [{"id": "ada", "games": 0, "wins": 0, "session_points": 0}, {"id": "bob", "games": 0, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "complete", "winner_ids": ["ada"], "result_type": "individual_win"}, "expected": {"screen": "game_result", "session_status": "active", "selected_mode": "countup", "starter_id": "ada", "starter_selection": "rotation", "game_active": true, "lineup": ["ada", "bob"], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}},
+        {"command": {"type": "rematch", "game_id": "game-2"}, "expected": {"screen": "countdown", "session_status": "active", "selected_mode": "countup", "starter_id": "bob", "starter_selection": "rotation", "game_active": true, "lineup": ["bob", "ada"], "standings": [{"id": "ada", "games": 1, "wins": 1, "session_points": 3}, {"id": "bob", "games": 1, "wins": 0, "session_points": 0}]}}
+      ]
+    }
+  ]
+}

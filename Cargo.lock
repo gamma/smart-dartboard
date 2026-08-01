@@ -615,6 +615,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdb-session-core"
+version = "0.1.0"
+dependencies = [
+ "sdb-contracts",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "sdb-storage"
 version = "0.1.0"
 dependencies = [

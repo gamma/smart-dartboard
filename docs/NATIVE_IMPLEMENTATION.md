@@ -26,6 +26,9 @@ Umgesetzt und lokal verifiziert:
 - Rust-Headless-Server mit expliziter API v2, SQLite-Recovery, idempotenten
   Command-Envelopes, Snapshot-WebSocket und nicht privilegiertem
   Vorschaucontainer. Details: [RUST_SERVER_V2.md](RUST_SERVER_V2.md).
+- deterministischer Session-Core mit gemeinsamer Python-/Rust-Fixture für
+  Screenfluss, Starterrotation, Rematch, Abbruch, Draw sowie Einzel- und
+  Koop-Wertung mit drei Punkten pro gewonnenem Spiel.
 
 Noch nicht als produktionsreif nachgewiesen:
 
