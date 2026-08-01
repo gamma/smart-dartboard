@@ -2,6 +2,8 @@
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:radial-gradient(circle at 70% 25%,#123649 0,transparent 38%),#05070b}
 main{width:min(860px,92vw);text-align:center;padding:48px}
+.role-switch{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:0 auto 32px;padding:5px;width:min(460px,100%);border:1px solid #ffffff1f;border-radius:18px;background:#091019cc}.role-switch button{padding:11px 14px;border-radius:13px;background:transparent;color:#8ca0b7;font-size:14px}.role-switch button[aria-pressed="true"]{background:#123649;color:#f5f8ff;box-shadow:inset 0 0 0 1px #28e7ff55}
+.role-error{min-height:1.25em;margin:-20px auto 20px;color:#ffb27f;font-size:13px}
 .eyebrow{color:#28e7ff;font-size:13px;font-weight:900;letter-spacing:.2em}
 .mark{font-size:96px;color:#28e7ff;filter:drop-shadow(0 0 24px #28e7ff55)}
 h1{font-size:clamp(48px,8vw,104px);line-height:.92;letter-spacing:-.06em;margin:24px 0}
@@ -21,6 +23,7 @@ button:disabled{cursor:not-allowed;opacity:.42}
 .pairing-offer span,.pairing-offer small{display:block;color:#8ca0b7}.pairing-offer strong{display:block;color:#28e7ff;font-size:42px;letter-spacing:.12em;margin:4px 0}
 .pairing-offer .fingerprint{margin-top:10px}.pairing-offer .fingerprint b{color:#d7e4f2;letter-spacing:.08em}
 .device-list{display:grid;gap:10px;list-style:none;margin:18px 0 0;padding:0}.device-list li{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 14px;border:1px solid #ffffff14;border-radius:14px}.device-list span,.device-list small{display:block}.device-list small,.device-empty{color:#8ca0b7}.device-list .revoke{padding:9px 12px;border-radius:10px;background:#ffffff12;color:#f5f8ff;font-size:13px}
+.companion-projector-view{padding-top:18px}.companion-projector-view h1{font-size:clamp(56px,9vw,112px)}.companion-projector-view .display-status{margin-bottom:24px}.host-list{display:grid;gap:12px;list-style:none;margin:0 auto;padding:0;width:min(620px,100%);text-align:left}.host-list li{padding:18px;border:1px solid #28e7ff44;border-radius:18px;background:#091019cc}.host-list strong,.host-list span{display:block}.host-list span{margin-top:5px;color:#8ca0b7;font-size:13px}.host-list .incompatible{border-color:#ff9b5544}.companion-note{margin:28px auto 0;width:min(620px,100%)}body[data-app-role="companion_projector"] #controllerView{display:none}
 body[data-role="projector"] button{display:none}
 body[data-role="projector"] .board-status{display:none}
 body[data-role="projector"] .setup{display:none}

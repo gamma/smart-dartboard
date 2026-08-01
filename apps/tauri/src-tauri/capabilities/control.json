@@ -8,6 +8,7 @@
     "allow-runtime-bootstrap",
     "allow-runtime-query",
     "allow-runtime-dispatch",
+    "allow-app-role-select",
     "allow-companion-pairing-open",
     "allow-companion-devices",
     "allow-companion-revoke",

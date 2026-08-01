@@ -10,7 +10,6 @@ int main(int argc, char * argv[]) {
 		dispatch_get_main_queue(),
 		^{
 			sdb_install_projector_display_host();
-			sdb_install_board_transport_host();
 		}
 	);
 	ffi::start_app();

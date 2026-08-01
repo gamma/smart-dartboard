@@ -34,6 +34,7 @@ fn main() {
             "companion_discovery_start",
             "companion_discovered_hosts",
             "companion_discovery_stop",
+            "app_role_select",
             "projector_output_select",
         ]));
     tauri_build::try_build(attributes).expect("failed to build Tauri application");

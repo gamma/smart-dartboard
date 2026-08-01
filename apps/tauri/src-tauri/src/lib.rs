@@ -1,8 +1,8 @@
-use sdb_board::BoardStatus;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-use sdb_board::{BoardFailureCode, BoardPhase};
+use sdb_board::BoardFailureCode;
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 use sdb_board::{BoardIngress, BoardIngressOutcome};
+use sdb_board::{BoardPhase, BoardStatus};
 use sdb_companion::{
     CompanionRole, PairedDevice, PairingAuthority, PairingBootstrap, PairingGrant, PairingRequest,
 };
@@ -21,6 +21,7 @@ use uuid::Uuid;
 
 const PROJECTOR_OUTPUT_PREFERENCE: &str = "projector.output";
 const COMPANION_HOST_ID_PREFERENCE: &str = "companion.host_id";
+const APP_ROLE_PREFERENCE: &str = "app.role";
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 use std::sync::OnceLock;
@@ -47,6 +48,7 @@ struct NativeState {
     companion_identity: CompanionIdentity,
     companion_states: broadcast::Sender<PublicState>,
     companion_changes: broadcast::Sender<()>,
+    app_role: NativeAppRole,
 }
 
 type SharedNativeState = Arc<Mutex<NativeState>>;
@@ -56,6 +58,30 @@ struct CompanionIdentity {
     host_id: String,
     certificate_sha256: String,
     available: bool,
+}
+
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum NativeAppRole {
+    Controller,
+    CompanionProjector,
+}
+
+impl NativeAppRole {
+    fn parse(value: &str) -> Result<Self, String> {
+        match value {
+            "controller" => Ok(Self::Controller),
+            "companion_projector" => Ok(Self::CompanionProjector),
+            _ => Err("unsupported app role".into()),
+        }
+    }
+
+    const fn storage_value(self) -> &'static str {
+        match self {
+            Self::Controller => "controller",
+            Self::CompanionProjector => "companion_projector",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -87,6 +113,7 @@ impl ProjectorOutput {
 
 #[derive(Debug, Clone, Serialize)]
 struct PublicState {
+    app_role: NativeAppRole,
     runtime_instance_id: String,
     revision: u64,
     counter: u64,
@@ -150,6 +177,12 @@ impl NativeState {
         let companion_devices = repository
             .companion_devices()
             .map_err(|error| error.to_string())?;
+        let app_role = repository
+            .preference(APP_ROLE_PREFERENCE)
+            .map_err(|error| error.to_string())?
+            .map_or(Ok(NativeAppRole::Controller), |value| {
+                NativeAppRole::parse(&value)
+            })?;
         let projector_output = repository
             .preference(PROJECTOR_OUTPUT_PREFERENCE)
             .map_err(|error| error.to_string())?
@@ -161,7 +194,7 @@ impl NativeState {
         let runtime_instance_id = Uuid::new_v4().to_string();
         let mut runtime = Runtime::restore(runtime_instance_id.clone(), repository)
             .map_err(|error| error.to_string())?;
-        if runtime.snapshot().revision == 0 {
+        if runtime.snapshot().revision == 0 && app_role == NativeAppRole::Controller {
             runtime
                 .dispatch(
                     &runtime_instance_id,
@@ -179,12 +212,17 @@ impl NativeState {
             next_dart_seq: 1,
             #[cfg(any(target_os = "ios", target_os = "macos", test))]
             board_ingress: BoardIngress::new(),
-            board_status: BoardStatus::unavailable(),
+            board_status: if app_role == NativeAppRole::Controller {
+                BoardStatus::unavailable()
+            } else {
+                BoardStatus::disabled()
+            },
             companions: PairingAuthority::from_devices(companion_devices),
             projector_output,
             companion_identity,
             companion_states,
             companion_changes,
+            app_role,
         })
     }
 
@@ -200,6 +238,7 @@ impl NativeState {
             RuntimeGameState::X01(state) => state.players[0].score.into(),
         });
         PublicState {
+            app_role: self.app_role,
             runtime_instance_id: self.runtime.instance_id().into(),
             revision: self.runtime.snapshot().revision,
             counter,
@@ -212,7 +251,22 @@ impl NativeState {
         }
     }
 
+    fn select_app_role(&mut self, role: NativeAppRole) -> Result<PublicState, String> {
+        self.runtime
+            .repository_mut()
+            .save_preference(APP_ROLE_PREFERENCE, role.storage_value())
+            .map_err(|error| error.to_string())?;
+        self.app_role = role;
+        if role == NativeAppRole::CompanionProjector {
+            self.board_status = BoardStatus::disabled();
+        } else if self.board_status.phase == BoardPhase::Disabled {
+            self.board_status = BoardStatus::unavailable();
+        }
+        Ok(self.public())
+    }
+
     fn ingest_test_hit(&mut self) -> Result<PublicState, String> {
+        self.require_controller()?;
         let seq = self.next_dart_seq;
         self.next_dart_seq += 1;
         let runtime_instance_id = self.runtime.instance_id().to_owned();
@@ -244,6 +298,7 @@ impl NativeState {
         request: PairingRequest,
         paired_at_ms: u64,
     ) -> Result<PairingGrant, String> {
+        self.require_controller()?;
         let grant = self
             .companions
             .pair(request, paired_at_ms)
@@ -279,6 +334,7 @@ impl NativeState {
     }
 
     fn revoke_companion(&mut self, device_id: &str, revoked_at_ms: u64) -> Result<(), String> {
+        self.require_controller()?;
         if self.companions.device(device_id).is_none() {
             return Err("companion device not found".into());
         }
@@ -295,6 +351,7 @@ impl NativeState {
     }
 
     fn select_projector_output(&mut self, output: ProjectorOutput) -> Result<PublicState, String> {
+        self.require_controller()?;
         self.runtime
             .repository_mut()
             .save_preference(PROJECTOR_OUTPUT_PREFERENCE, output.storage_value())
@@ -305,6 +362,7 @@ impl NativeState {
 
     #[cfg(any(target_os = "ios", target_os = "macos", test))]
     fn ingest_board_packet(&mut self, connection_id: &str, raw: &[u8]) -> Result<bool, String> {
+        self.require_controller()?;
         let BoardIngressOutcome::Dart { event, command_id } =
             self.board_ingress.ingest(connection_id, raw)
         else {
@@ -323,6 +381,14 @@ impl NativeState {
             )
             .map_err(|error| error.to_string())?;
         Ok(true)
+    }
+
+    fn require_controller(&self) -> Result<(), String> {
+        if self.app_role == NativeAppRole::Controller {
+            Ok(())
+        } else {
+            Err("command is unavailable in Companion projector mode".into())
+        }
     }
 }
 
@@ -1207,7 +1273,7 @@ struct NativeCompanionService {
 #[allow(unsafe_code)]
 mod apple_board {
     use super::{
-        APP_HANDLE, BoardFailureCode, BoardPhase, BoardStatus, SharedNativeState,
+        APP_HANDLE, BoardFailureCode, BoardPhase, BoardStatus, NativeAppRole, SharedNativeState,
         publish_public_state,
     };
     use std::ffi::{CStr, c_char};
@@ -1224,6 +1290,7 @@ mod apple_board {
             7 => BoardPhase::Ready,
             8 => BoardPhase::Reconnecting,
             9 => BoardPhase::Error,
+            10 => BoardPhase::Disabled,
             _ => BoardPhase::Unavailable,
         }
     }
@@ -1274,13 +1341,18 @@ mod apple_board {
             let Ok(mut state) = state.lock() else {
                 return;
             };
-            state.board_status = BoardStatus {
-                enabled: true,
-                phase: phase(phase_value),
-                failure_code: failure(failure_value),
-                detail,
-                connection_id,
-            };
+            if state.app_role == NativeAppRole::CompanionProjector {
+                state.board_status = BoardStatus::disabled();
+            } else {
+                let phase = phase(phase_value);
+                state.board_status = BoardStatus {
+                    enabled: phase != BoardPhase::Disabled,
+                    phase,
+                    failure_code: failure(failure_value),
+                    detail,
+                    connection_id,
+                };
+            }
             state.public()
         };
         publish_public_state(app, &public);
@@ -1312,6 +1384,9 @@ mod apple_board {
             let Ok(mut state) = state.lock() else {
                 return;
             };
+            if state.app_role == NativeAppRole::CompanionProjector {
+                return;
+            }
             match state.ingest_board_packet(&connection_id, raw) {
                 Ok(true) => state.public(),
                 Ok(false) => return,
@@ -1326,16 +1401,58 @@ mod apple_board {
     }
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 #[allow(unsafe_code)]
-mod macos_board_host {
+mod apple_board_host {
+    #[cfg(target_os = "ios")]
+    use std::ffi::{CStr, c_void};
+
+    type BoardHostAction = unsafe extern "C" fn();
+
+    #[cfg(target_os = "macos")]
     #[link(name = "sdb_apple_board_transport", kind = "static")]
     unsafe extern "C" {
         fn sdb_install_board_transport_host();
+        fn sdb_stop_board_transport_host();
+    }
+
+    #[cfg(target_os = "ios")]
+    fn lookup(symbol: &CStr) -> Option<BoardHostAction> {
+        let address = unsafe { libc::dlsym(libc::RTLD_DEFAULT, symbol.as_ptr()) };
+        (!address.is_null())
+            .then(|| unsafe { std::mem::transmute::<*mut c_void, BoardHostAction>(address) })
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn install_function() -> Option<BoardHostAction> {
+        Some(sdb_install_board_transport_host)
+    }
+
+    #[cfg(target_os = "ios")]
+    fn install_function() -> Option<BoardHostAction> {
+        lookup(c"sdb_install_board_transport_host")
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn stop_function() -> Option<BoardHostAction> {
+        Some(sdb_stop_board_transport_host)
+    }
+
+    #[cfg(target_os = "ios")]
+    fn stop_function() -> Option<BoardHostAction> {
+        lookup(c"sdb_stop_board_transport_host")
     }
 
     pub fn install() {
-        unsafe { sdb_install_board_transport_host() };
+        if let Some(install) = install_function() {
+            unsafe { install() };
+        }
+    }
+
+    pub fn stop() {
+        if let Some(stop) = stop_function() {
+            unsafe { stop() };
+        }
     }
 }
 
@@ -1384,6 +1501,7 @@ fn runtime_query(state: State<'_, SharedNativeState>) -> Result<PublicState, Str
 #[tauri::command]
 fn companion_pairing_open(state: State<'_, SharedNativeState>) -> Result<PairingBootstrap, String> {
     let mut state = state.lock().map_err(|error| error.to_string())?;
+    state.require_controller()?;
     if !state.companion_identity.available {
         return Err("Companion ist auf diesem Gerät derzeit nicht verfügbar".into());
     }
@@ -1406,10 +1524,9 @@ fn companion_pairing_open(state: State<'_, SharedNativeState>) -> Result<Pairing
 fn companion_devices(
     state: State<'_, SharedNativeState>,
 ) -> Result<Vec<CompanionDeviceView>, String> {
-    state
-        .lock()
-        .map(|state| state.companion_devices())
-        .map_err(|error| error.to_string())
+    let state = state.lock().map_err(|error| error.to_string())?;
+    state.require_controller()?;
+    Ok(state.companion_devices())
 }
 
 #[tauri::command]
@@ -1424,25 +1541,39 @@ fn companion_revoke(
 
 #[tauri::command]
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-fn companion_discovery_start() -> Result<(), String> {
+fn companion_discovery_start(state: State<'_, SharedNativeState>) -> Result<(), String> {
+    let state = state.lock().map_err(|error| error.to_string())?;
+    if state.app_role != NativeAppRole::CompanionProjector {
+        return Err("select Companion projector mode before discovery".into());
+    }
+    drop(state);
     apple_bonjour::browser_start()
 }
 
 #[tauri::command]
 #[cfg(not(any(target_os = "ios", target_os = "macos")))]
-fn companion_discovery_start() -> Result<(), String> {
+fn companion_discovery_start(_state: State<'_, SharedNativeState>) -> Result<(), String> {
     Err("native Companion discovery is not available on this platform".into())
 }
 
 #[tauri::command]
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-fn companion_discovered_hosts() -> Result<Vec<DiscoveredCompanionHost>, String> {
+fn companion_discovered_hosts(
+    state: State<'_, SharedNativeState>,
+) -> Result<Vec<DiscoveredCompanionHost>, String> {
+    let state = state.lock().map_err(|error| error.to_string())?;
+    if state.app_role != NativeAppRole::CompanionProjector {
+        return Err("Companion discovery is not active in Controller mode".into());
+    }
+    drop(state);
     apple_bonjour::browser_snapshot()
 }
 
 #[tauri::command]
 #[cfg(not(any(target_os = "ios", target_os = "macos")))]
-fn companion_discovered_hosts() -> Result<Vec<DiscoveredCompanionHost>, String> {
+fn companion_discovered_hosts(
+    _state: State<'_, SharedNativeState>,
+) -> Result<Vec<DiscoveredCompanionHost>, String> {
     Err("native Companion discovery is not available on this platform".into())
 }
 
@@ -1455,6 +1586,77 @@ fn companion_discovery_stop() {
 #[tauri::command]
 #[cfg(not(any(target_os = "ios", target_os = "macos")))]
 fn companion_discovery_stop() {}
+
+#[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+async fn app_role_select(
+    app: tauri::AppHandle,
+    state: State<'_, SharedNativeState>,
+    service: State<'_, NativeCompanionService>,
+    role: String,
+) -> Result<PublicState, String> {
+    let role = NativeAppRole::parse(&role)?;
+    let shared_state = state.inner().clone();
+    let transport = service.transport.clone();
+    if role == NativeAppRole::CompanionProjector {
+        apple_bonjour::browser_start()?;
+        match shared_state
+            .lock()
+            .map_err(|error| error.to_string())?
+            .select_app_role(role)
+        {
+            Ok(_) => {}
+            Err(error) => {
+                apple_bonjour::browser_stop();
+                return Err(error);
+            }
+        };
+        if let Some(transport) = transport {
+            transport.stop().await;
+        }
+        apple_board_host::stop();
+        let public = shared_state
+            .lock()
+            .map_err(|error| error.to_string())?
+            .public();
+        publish_public_state(&app, &public);
+        return Ok(public);
+    }
+
+    let public = shared_state
+        .lock()
+        .map_err(|error| error.to_string())?
+        .select_app_role(role)?;
+    apple_bonjour::browser_stop();
+    apple_board_host::install();
+    if public.projector_output == ProjectorOutput::Companion
+        && let Some(transport) = transport
+    {
+        transport.start(shared_state).await?;
+    }
+    let public = state.lock().map_err(|error| error.to_string())?.public();
+    publish_public_state(&app, &public);
+    Ok(public)
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn app_role_select(
+    app: tauri::AppHandle,
+    state: State<'_, SharedNativeState>,
+    role: String,
+) -> Result<PublicState, String> {
+    let role = NativeAppRole::parse(&role)?;
+    if role == NativeAppRole::CompanionProjector {
+        return Err("native Companion mode is not available on this platform".into());
+    }
+    let public = state
+        .lock()
+        .map_err(|error| error.to_string())?
+        .select_app_role(role)?;
+    publish_public_state(&app, &public);
+    Ok(public)
+}
 
 #[tauri::command]
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -1635,7 +1837,10 @@ pub fn run() {
                 .map_err(std::io::Error::other)?;
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let restore_companion = native_state.projector_output == ProjectorOutput::Companion
+                && native_state.app_role == NativeAppRole::Controller
                 && companion_transport.is_some();
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            let app_role = native_state.app_role;
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             if native_state.projector_output == ProjectorOutput::Companion
                 && companion_transport.is_none()
@@ -1658,8 +1863,15 @@ pub fn run() {
                     }
                 }
             }
-            #[cfg(target_os = "macos")]
-            macos_board_host::install();
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            match app_role {
+                NativeAppRole::Controller => apple_board_host::install(),
+                NativeAppRole::CompanionProjector => {
+                    if let Err(error) = apple_bonjour::browser_start() {
+                        eprintln!("Companion discovery startup failed: {error}");
+                    }
+                }
+            }
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             if restore_companion {
                 let app_handle = app.handle().clone();
@@ -1707,6 +1919,7 @@ pub fn run() {
             companion_discovery_start,
             companion_discovered_hosts,
             companion_discovery_stop,
+            app_role_select,
             projector_output_select
         ])
         .run(tauri::generate_context!())
@@ -1754,6 +1967,46 @@ mod tests {
         let public = state.public();
         assert_eq!(public.revision, 2);
         assert_eq!(public.counter, 40);
+    }
+
+    #[test]
+    fn companion_role_is_persisted_and_cannot_mutate_the_local_runtime() {
+        let path = std::env::temp_dir().join(format!("sdb-native-role-{}.sqlite", Uuid::new_v4()));
+        let revision = {
+            let repository = SqliteRepository::open(&path).expect("repository");
+            let mut state =
+                NativeState::restore(repository, test_companion_identity()).expect("native state");
+            let revision = state.public().revision;
+            let public = state
+                .select_app_role(NativeAppRole::CompanionProjector)
+                .expect("select Companion role");
+            assert_eq!(public.app_role, NativeAppRole::CompanionProjector);
+            assert_eq!(public.board.phase, BoardPhase::Disabled);
+            assert!(state.ingest_test_hit().is_err());
+            assert!(state.ingest_board_packet("stale-board", &[0; 10]).is_err());
+            revision
+        };
+
+        let repository = SqliteRepository::open(&path).expect("reopened repository");
+        let state =
+            NativeState::restore(repository, test_companion_identity()).expect("restored state");
+        assert_eq!(state.app_role, NativeAppRole::CompanionProjector);
+        assert_eq!(state.public().revision, revision);
+        assert_eq!(state.public().board.phase, BoardPhase::Disabled);
+        std::fs::remove_file(path).expect("remove test database");
+    }
+
+    #[test]
+    fn fresh_companion_role_does_not_bootstrap_an_authoritative_game() {
+        let mut repository = SqliteRepository::in_memory().expect("repository");
+        repository
+            .save_preference(APP_ROLE_PREFERENCE, "companion_projector")
+            .expect("persist role");
+        let state =
+            NativeState::restore(repository, test_companion_identity()).expect("native state");
+        assert_eq!(state.app_role, NativeAppRole::CompanionProjector);
+        assert_eq!(state.runtime.snapshot().revision, 0);
+        assert!(state.runtime.snapshot().game.is_none());
     }
 
     #[test]

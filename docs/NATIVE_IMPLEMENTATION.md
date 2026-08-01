@@ -104,8 +104,15 @@ Umgesetzt und lokal verifiziert:
   UUID-Host-IDs und TLS-markierte Dienste. Der macOS-Test startet Listener und
   Advertiser, entdeckt den Dienst wirklich per DNS-SD und gleicht Host-ID,
   Protokollversion und dynamischen Port ab. Die Symbole sind auch im
-  iOS-Simulator-Bundle exportiert; Rollen- und Auswahl-UI folgen im nächsten
-  Slice.
+  iOS-Simulator-Bundle exportiert.
+- persistierte, point-and-click-fähige Rollenwahl in derselben Apple-App. Die
+  Standardrolle `Dieses Gerät` behält Runtime, Board und direkte
+  Projector-Ausgabe. `Companion-Projektor` startet bei einer frischen
+  Installation kein lokales Spiel, lehnt mutierende Runtime-, Board-, Setup-
+  und Host-Pairing-Pfade serverseitig ab, stoppt CoreBluetooth und den
+  HTTPS/WSS-Host und zeigt ausschließlich die Discovery-Ansicht. Der Rückweg
+  startet CoreBluetooth wieder. Persistenz und Autoritätsgrenze sind per Rust
+  getestet; Layout und Neustart wurden im iPhone-17-Pro-Simulator geprüft.
 - natives Board-Setup für den Controller: Pairing-Fenster öffnen, gruppierten
   Einmalcode mit Live-Countdown anzeigen, persistierte Projector-Geräte ohne
   Token-Hash auflisten und Grants widerrufen. Nur das Control-Fenster besitzt
@@ -124,9 +131,9 @@ Noch nicht als produktionsreif nachgewiesen:
   implementiert, aber noch nicht mit der realen Scheibe qualifiziert,
 - reale AirPlay-, HDMI- und Audio-Hardware,
 - External-Display-Scene-Accessory ab iOS/iPadOS 27,
-- iPhone/iPad-zu-iPad-Companion mit Client-Token im Keychain, Rollenwahl,
-  Pairing-UI und Projector-Client; Host-Advertiser, Browser und eingehender
-  TLS-Transport sind implementiert,
+- iPhone/iPad-zu-iPad-Companion mit Client-Token im Keychain, sicherer
+  Hostauswahl, Pairing-UI und Projector-Client; Rollenwahl, Host-Advertiser,
+  Browser und eingehender TLS-Transport sind implementiert,
 - vollständige Portierung aller Spielmodi sowie Heatmap, Modusstatistiken,
   Export und Trainingsempfehlungen,
 - vollständige Docker-Parität zur Python-Anwendung,

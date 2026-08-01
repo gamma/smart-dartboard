@@ -27,6 +27,7 @@ typedef NS_ENUM(uint32_t, SDBBoardPhase) {
   SDBBoardPhaseReady = 7,
   SDBBoardPhaseReconnecting = 8,
   SDBBoardPhaseError = 9,
+  SDBBoardPhaseDisabled = 10,
 };
 
 typedef NS_ENUM(int32_t, SDBBoardFailure) {
@@ -80,6 +81,21 @@ typedef NS_ENUM(int32_t, SDBBoardFailure) {
   self.central = [[CBCentralManager alloc] initWithDelegate:self
                                                        queue:dispatch_get_main_queue()
                                                      options:options];
+}
+
+- (void)stop {
+  [self.central stopScan];
+  if (self.peripheral != nil) {
+    [self.central cancelPeripheralConnection:self.peripheral];
+    self.peripheral.delegate = nil;
+  }
+  self.central.delegate = nil;
+  self.central = nil;
+  self.peripheral = nil;
+  self.connectionID = nil;
+  [self publishPhase:SDBBoardPhaseDisabled
+              failure:SDBBoardFailureNone
+               detail:nil];
 }
 
 - (void)publishPhase:(SDBBoardPhase)phase
@@ -310,5 +326,11 @@ typedef NS_ENUM(int32_t, SDBBoardFailure) {
 void sdb_install_board_transport_host(void) {
   dispatch_async(dispatch_get_main_queue(), ^{
     [[SDBBoardTransportHost sharedHost] install];
+  });
+}
+
+void sdb_stop_board_transport_host(void) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [[SDBBoardTransportHost sharedHost] stop];
   });
 }

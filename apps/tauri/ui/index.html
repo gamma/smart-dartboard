@@ -9,6 +9,12 @@
 </head>
 <body>
   <main>
+    <nav class="role-switch" aria-label="Geräterolle">
+      <button type="button" data-app-role="controller">Dieses Gerät</button>
+      <button type="button" data-app-role="companion_projector">Companion-Projektor</button>
+    </nav>
+    <p id="roleError" class="role-error" role="status"></p>
+    <div id="controllerView">
     <p class="eyebrow">NATIVE M0 · <span id="role">CONTROL</span></p>
     <div class="mark" aria-hidden="true">◎</div>
     <h1>Eine Runtime.<br>Zwei Screens.</h1>
@@ -45,6 +51,16 @@
         <small class="fingerprint">TLS-Vergleich: <b id="pairingFingerprint">0000-0000-0000-0000</b></small>
       </div>
       <ul id="companionDevices" class="device-list" aria-live="polite"></ul>
+    </section>
+    </div>
+    <section id="companionProjectorView" class="companion-projector-view" aria-labelledby="companionProjectorTitle" hidden>
+      <p class="eyebrow">COMPANION · PROJECTOR</p>
+      <div class="mark" aria-hidden="true">◎</div>
+      <h1 id="companionProjectorTitle">Controller<br>finden.</h1>
+      <p class="subtitle">Wähle das iPhone oder iPad, auf dem Board und Spiel laufen.</p>
+      <p id="discoveryStatus" class="display-status">Lokales Netzwerk wird durchsucht …</p>
+      <ul id="discoveredHosts" class="host-list" aria-live="polite"></ul>
+      <p class="setup-copy companion-note">Bonjour zeigt nur Geräte in der Nähe. Die sichere Identität wird vor dem Eingeben des Einmalcodes separat verglichen.</p>
     </section>
   </main>
   <script src="./main.js"></script>

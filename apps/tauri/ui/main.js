@@ -5,11 +5,81 @@ document.body.dataset.role=role;
 document.querySelector('#role').textContent=role.toUpperCase();
 
 function render(payload){
+  renderAppRole(payload.app_role ?? 'controller');
   document.querySelector('#counter').textContent=String(payload.counter ?? 0);
   document.querySelector('#status').textContent=`Runtime ${payload.runtime_instance_id} · Revision ${payload.revision}`;
   renderBoardStatus(payload.board);
   renderDisplayStatus(payload.external_display_count ?? 0);
   renderProjectorOutput(payload.projector_output ?? 'external_display',payload.external_display_count ?? 0,payload.counter ?? 0,payload.companion_port ?? null,payload.companion_available ?? false);
+}
+
+let currentAppRole='controller';
+let discoveryTimer;
+
+function renderAppRole(appRole){
+  currentAppRole=appRole;
+  document.body.dataset.appRole=appRole;
+  for(const button of document.querySelectorAll('[data-app-role]')){
+    button.setAttribute('aria-pressed',String(button.dataset.appRole===appRole));
+  }
+  document.querySelector('#companionProjectorView').hidden=appRole!=='companion_projector';
+  document.querySelector('#roleError').textContent='';
+}
+
+function renderDiscoveredHosts(hosts=[]){
+  const list=document.querySelector('#discoveredHosts');
+  list.replaceChildren();
+  const status=document.querySelector('#discoveryStatus');
+  status.dataset.connected=String(hosts.length>0);
+  status.textContent=hosts.length>0
+    ? `${hosts.length} Controller gefunden`
+    : 'Lokales Netzwerk wird durchsucht …';
+  for(const host of hosts){
+    const item=document.createElement('li');
+    const name=document.createElement('strong');
+    const details=document.createElement('span');
+    const compatible=host.protocol_version===1&&host.tls===true;
+    name.textContent=host.service_name;
+    details.textContent=compatible
+      ? `${host.host_name} · sicherer Dienst`
+      : `Nicht kompatible Protokollversion ${host.protocol_version}`;
+    if(!compatible) item.className='incompatible';
+    item.append(name,details);
+    list.append(item);
+  }
+}
+
+async function pollDiscovery(){
+  if(currentAppRole!=='companion_projector') return;
+  try{
+    renderDiscoveredHosts(await tauri.core.invoke('companion_discovered_hosts'));
+  }catch(error){
+    const status=document.querySelector('#discoveryStatus');
+    status.dataset.connected='false';
+    status.textContent=String(error);
+  }
+}
+
+async function startDiscovery(){
+  clearInterval(discoveryTimer);
+  await tauri.core.invoke('companion_discovery_start');
+  await pollDiscovery();
+  discoveryTimer=setInterval(pollDiscovery,1000);
+}
+
+async function stopDiscovery(){
+  clearInterval(discoveryTimer);
+  discoveryTimer=undefined;
+  await tauri.core.invoke('companion_discovery_stop');
+}
+
+async function applyRoleLifecycle(){
+  if(currentAppRole==='companion_projector'){
+    await startDiscovery();
+  }else{
+    await stopDiscovery();
+    renderCompanionDevices(await tauri.core.invoke('companion_devices'));
+  }
 }
 
 function renderBoardStatus(board={}){
@@ -107,10 +177,26 @@ function renderPairingOffer(bootstrap){
 }
 
 async function setupCompanions(){
-  renderCompanionDevices(await tauri.core.invoke('companion_devices'));
   document.querySelector('#openPairing').addEventListener('click',async()=>{
     renderPairingOffer(await tauri.core.invoke('companion_pairing_open'));
   });
+}
+
+function setupAppRole(){
+  for(const button of document.querySelectorAll('[data-app-role]')){
+    button.addEventListener('click',async()=>{
+      if(button.dataset.appRole===currentAppRole) return;
+      for(const roleButton of document.querySelectorAll('[data-app-role]')) roleButton.disabled=true;
+      try{
+        render(await tauri.core.invoke('app_role_select',{role:button.dataset.appRole}));
+        await applyRoleLifecycle();
+      }catch(error){
+        document.querySelector('#roleError').textContent=String(error);
+      }finally{
+        for(const roleButton of document.querySelectorAll('[data-app-role]')) roleButton.disabled=false;
+      }
+    });
+  }
 }
 
 function setupProjectorOutput(){
@@ -126,15 +212,18 @@ async function start(){
     document.querySelector('#status').textContent='Native Tauri Bridge fehlt';
     return;
   }
-  render(await tauri.core.invoke('runtime_bootstrap'));
+  const initial=await tauri.core.invoke('runtime_bootstrap');
+  render(initial);
   await tauri.event.listen('runtime-state',event=>render(event.payload));
   await tauri.event.listen('display-status',event=>renderDisplayStatus(event.payload.external_display_count ?? 0));
   document.querySelector('#increment').addEventListener('click',async()=>{
     render(await tauri.core.invoke('runtime_dispatch',{action:'increment'}));
   });
   if(role==='control'){
+    setupAppRole();
     setupProjectorOutput();
     await setupCompanions();
+    await applyRoleLifecycle();
   }
 }
 

@@ -120,15 +120,21 @@ Implementiert und automatisiert getestet:
   UUID-Host-ID, TLS-Merkmal und Port verlassen die FFI-Grenze. Ein echter
   macOS-DNS-SD-Test entdeckt den parallel veröffentlichten TLS-Host samt
   Protokollversion und dynamischem Port.
+- persistierte Apple-Rollenwahl zwischen `Controller` und
+  `Companion-Projektor`. Die Companion-Rolle startet keine neue autoritative
+  Spielruntime, nimmt weder BLE- noch Testwürfe an, stoppt den Board- und
+  Host-Transport und aktiviert ausschließlich Discovery. Beim Wechsel zurück
+  wird der Board-Host wieder gestartet. Rust-Tests belegen Persistenz und die
+  Command-Sperren; iPhone-WebKit wurde im Simulator visuell geprüft.
 
 Noch offen:
 
 - Tokenablage des Companion-Clients im Apple Keychain beziehungsweise Android
   Keystore; die persistente lokale Apple-TLS-Identität des Controller-Hosts
   liegt bereits im Keychain,
-- Rollen-UI und Auswahl eines vom implementierten Bonjour-Browser gefundenen
-  Controller-Hosts,
+- Auswahl, TLS-Fingerprint-Vergleich und Einmalcode-Pairing eines vom
+  implementierten Bonjour-Browser gefundenen Controller-Hosts,
 - signierte iOS-/iPadOS-Hardwareabnahme der nativen TLS-Identität; der
   lokal getestete unsigned Simulator stellte keinen nutzbaren Keychain bereit,
-- Rollenwahl und Pairing-UI auf Controller und Companion,
+- Pairing-UI auf dem Companion,
 - echte iPhone/iPad-zu-iPad-Abnahme mit Disconnect, Resume und Widerruf.
