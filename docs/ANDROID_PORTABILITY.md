@@ -2,6 +2,12 @@
 
 Stand: 2026-08-01
 
+Status: **Unterstützende Plattformanalyse, nicht normativ.** Die verbindliche
+Zielarchitektur, Verträge, Sicherheitsregeln und Meilensteine stehen in
+[CROSS_PLATFORM_ARCHITECTURE.md](CROSS_PLATFORM_ARCHITECTURE.md). Capacitor,
+Chaquopy und der eingebettete Python-Core sind ausschließlich optionale,
+isolierte Spike-Alternativen und nicht die gewählte Produktarchitektur.
+
 ## 1. Produktziel
 
 Das bevorzugte Bedienmodell ist nicht dauerhaft ein verteilter Serveraufbau,
@@ -427,9 +433,25 @@ das reale Board mit einem Android-Tablet zuverlässig funktionieren.
 
 ## 11. Empfohlener Prototyp
 
-Ein optionaler Android-Spike sollte bewusst nur das technische Risiko prüfen
-und noch keine Produktmigration sein. Er beginnt erst, wenn er die
-Apple-Arbeiten nicht verzögert:
+Ein Android-M0-Spike prüft bewusst nur das technische Risiko und ist keine
+Produktmigration. Er läuft früh parallel zum Contract-/Fixture-Aufbau, damit
+BLE, externe Anzeige und App-Lifecycle bewiesen sind, bevor alle Spielregeln
+portiert werden. Der normative Spike verwendet einen minimalen Rust-Zustand und
+die vorgesehene Tauri-/Kotlin-Grenze:
+
+1. Minimale Tauri-App mit Control-WebView und Rust-Zählerzustand erzeugen.
+2. Auf einem echten Android-Tablet BLE-Berechtigung anfordern.
+3. `SDB-BT` finden, verbinden und `FFF1` abonnieren.
+4. Ein Rohpaket exakt einmal in die Rust-Runtime übernehmen.
+5. Zweite Projector-WebView über HDMI-`Presentation` öffnen.
+6. Zustand gleichzeitig und revisionsgeordnet in beide Views verteilen.
+7. HDMI trennen, wieder verbinden und den aktuellen Snapshot herstellen.
+8. Activity neu erstellen sowie App in Hintergrund und Vordergrund bewegen.
+9. Sicherstellen, dass nie eine zweite autoritative Runtime entsteht.
+10. Einen installierbaren signierten Debugbuild erzeugen.
+
+Ein separater Capacitor-/Chaquopy-Versuch ist nur ein Rückfall- oder
+Vergleichsspike. Falls er ausdrücklich beschlossen wird, gilt für ihn:
 
 1. Minimale Capacitor-App mit bestehender Control UI erzeugen.
 2. Auf einem echten Android-Tablet BLE-Berechtigung anfordern.
@@ -442,8 +464,8 @@ Apple-Arbeiten nicht verzögert:
 9. Zweite Projector-WebView über HDMI-`Presentation` öffnen.
 10. Tablet neu starten und laufendes Spiel wiederherstellen.
 
-Erst wenn diese zehn Punkte stabil funktionieren, werden Packaging,
-vollständige UI-Einbettung und alle Modi übernommen.
+Erst nach erfolgreichem M0 und dokumentierter Hüllenentscheidung werden
+Packaging, vollständige UI-Einbettung und Spielmodi für Android übernommen.
 
 ## 12. Test- und Abnahmematrix
 

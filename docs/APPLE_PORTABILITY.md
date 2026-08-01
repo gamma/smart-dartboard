@@ -2,6 +2,13 @@
 
 Stand: 2026-08-01
 
+Status: **Unterstützende Plattformanalyse, nicht normativ.** Die verbindliche
+Zielarchitektur, Verträge, Sicherheitsregeln und Meilensteine stehen in
+[CROSS_PLATFORM_ARCHITECTURE.md](CROSS_PLATFORM_ARCHITECTURE.md). Die hier
+beschriebenen Alternativen sind verworfene Optionen oder begrenzte
+Machbarkeitstests, sofern die zentrale Spezifikation sie nicht ausdrücklich
+übernimmt.
+
 ## 1. Ergebnis und Priorität
 
 Smart Dartboard ist bereits gut für einen nativen macOS-Host vorbereitet. Die
@@ -400,17 +407,19 @@ sinnvolles Vorbild.
 
 ## 9. Empfohlene Umsetzungsschritte
 
-1. Cross-Platform-Rewrite-Branch anlegen und bestehende Python-Zustände als Golden Fixtures
-   sichern.
-2. Rust-Workspace mit Contracts, Protocol, Core und Golden Fixtures aufbauen.
-3. CountUp und X01 mit exakter Python-/Rust-Parität portieren.
-4. Session, SQLite, Undo, Recovery, Statistik und Replay portieren.
-5. Alle weiteren Modi einzeln mit Golden Fixtures übernehmen.
-6. Rust-REST-/WebSocket-Server mit der bestehenden UI verbinden.
-7. Linux-Docker-Image gegen die reale Hardware qualifizieren.
-8. macOS- und anschließend iPadOS-Tauri-Hülle anbinden.
-9. Android- und Windows-Adapter ergänzen.
-10. TestFlight, notarisiertes macOS-Paket und spätere Store-Pakete erstellen.
+1. Mit einem minimalen M0-Spike CoreBluetooth, zwei WebViews und eine externe
+   `windowExternalDisplayNonInteractive`-Scene auf echter Hardware beweisen.
+2. Ergebnis und Rückfallpfad für die native Hülle als ADR dokumentieren.
+3. Bestehende Python-Zustände im versionierten Golden-Fixture-Format sichern.
+4. Rust-Workspace mit Contracts, Protocol, Core und Fixtures aufbauen.
+5. CountUp und X01 mit exakter Python-/Rust-Parität portieren.
+6. Atomare Runtime, Session, SQLite, Undo, Recovery, Statistik und Replay
+   portieren.
+7. Alle weiteren Modi einzeln mit Golden Fixtures übernehmen.
+8. Gemeinsamen Runtime-Client sowie Rust-REST-/WebSocket-Server anbinden.
+9. Linux-Docker-Image gegen die reale Hardware qualifizieren.
+10. macOS- und anschließend iPadOS-Hülle produktiv anbinden.
+11. TestFlight, notarisiertes macOS-Paket und spätere Store-Pakete erstellen.
 
 Details, Branch-Regeln und Meilensteine stehen in
 [CROSS_PLATFORM_ARCHITECTURE.md](CROSS_PLATFORM_ARCHITECTURE.md).
@@ -430,11 +439,12 @@ Plattform nur BLE, Displays, Lifecycle und Packaging adaptiert.
 Die empfohlenen Produktstufen sind daher:
 
 ```text
-Stufe 1: Rust-Core mit Parität zur Python-Version
-Stufe 2: Headless-Server und Linux-Docker-Produktionspfad
-Stufe 3: macOS-App mit direktem CoreBluetooth
-Stufe 4: iPadOS-App mit direktem BLE und externem Projector
-Stufe 5: Android, Windows und optional Steam
+M0:       nativer BLE-/External-Display-Machbarkeitstest ohne Spielportierung
+Stufe 1:  Rust-Core mit Parität zur Python-Version
+Stufe 2:  Headless-Server und Linux-Docker-Produktionspfad
+Stufe 3:  macOS-App mit direktem CoreBluetooth
+Stufe 4:  iPadOS-App mit direktem BLE und externem Projector
+Stufe 5:  Android, Windows und optional Steam
 ```
 
 Der bestehende Python-/FastAPI-Host bleibt währenddessen als funktionsfähige
