@@ -23,6 +23,9 @@ Umgesetzt und lokal verifiziert:
   kanonisches `T20`-Event läuft durch den gemeinsamen CountUp-Core und die
   revisionsgesicherte Runtime. Control und Projector zeigten im
   iPad-Pro-Simulator übereinstimmend Score 60 bei Revision 2.
+- Rust-Headless-Server mit expliziter API v2, SQLite-Recovery, idempotenten
+  Command-Envelopes, Snapshot-WebSocket und nicht privilegiertem
+  Vorschaucontainer. Details: [RUST_SERVER_V2.md](RUST_SERVER_V2.md).
 
 Noch nicht als produktionsreif nachgewiesen:
 
@@ -31,7 +34,7 @@ Noch nicht als produktionsreif nachgewiesen:
 - External-Display-Scene-Accessory ab iOS/iPadOS 27,
 - iPhone/iPad-zu-iPad-Companion mit Pairing,
 - vollständige Portierung aller Spielmodi, Sessions und Statistiken,
-- Rust-Headless-Server und Docker-Parität zur Python-Anwendung.
+- vollständige Docker-Parität zur Python-Anwendung.
 
 ## Lokale Befehle
 

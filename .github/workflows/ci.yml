@@ -200,3 +200,112 @@ jobs:
           python -c 'import json; state=json.load(open("/tmp/health.json")); assert state["status"] == "ok", state'
           curl --fail --silent --show-error http://127.0.0.1:18080/control >/dev/null
           curl --fail --silent --show-error http://127.0.0.1:18080/projector >/dev/null
+
+  rust-container-preview:
+    name: Rust container preview
+    needs: rust-core
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build Rust preview image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.rust
+          load: true
+          push: false
+          tags: smart-dartboard:rust-preview-ci
+          cache-from: type=gha,scope=rust-preview
+          cache-to: type=gha,mode=max,scope=rust-preview
+
+      - name: Smoke-test recovery and container isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          container_name="smart-dartboard-rust-${GITHUB_RUN_ID}"
+          volume_name="smart-dartboard-rust-${GITHUB_RUN_ID}"
+          cleanup() {
+            docker rm -f "$container_name" >/dev/null 2>&1 || true
+            docker volume rm "$volume_name" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          docker volume create "$volume_name" >/dev/null
+          docker run --detach \
+            --name "$container_name" \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --mount "source=$volume_name,target=/data" \
+            --publish 127.0.0.1:18081:8000 \
+            smart-dartboard:rust-preview-ci
+
+          ready=0
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:18081/api/v2/health > /tmp/rust-health.json; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs "$container_name"
+            exit 1
+          fi
+
+          python - <<'PY'
+          import json
+          health = json.load(open('/tmp/rust-health.json'))
+          assert health['status'] == 'ok', health
+          assert health['database'] == 'ok', health
+          assert health['board'] == 'disabled', health
+          PY
+          test "$(docker inspect "$container_name" --format '{{.Config.User}}')" = dartboard
+          test "$(docker inspect "$container_name" --format '{{.HostConfig.Privileged}}')" = false
+          python - <<'PY'
+          import json
+          import urllib.request
+          base = 'http://127.0.0.1:18081'
+          bootstrap = json.load(urllib.request.urlopen(base + '/api/v2/runtime/bootstrap'))
+          command = {
+              'protocol_version': 1,
+              'command_id': 'ci-start',
+              'runtime_instance_id': bootstrap['runtime_instance_id'],
+              'expected_revision': 0,
+              'command': {
+                  'type': 'start_game',
+                  'game_type': 'x01',
+                  'player_ids': ['ci-player'],
+                  'options': {'start_score': 301, 'out_rule': 'double'},
+              },
+          }
+          request = urllib.request.Request(
+              base + '/api/v2/runtime/commands',
+              data=json.dumps(command).encode(),
+              headers={'content-type': 'application/json'},
+          )
+          result = json.load(urllib.request.urlopen(request))
+          assert result['revision'] == 1, result
+          open('/tmp/rust-instance-before', 'w').write(bootstrap['runtime_instance_id'])
+          PY
+          docker restart "$container_name" >/dev/null
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:18081/api/v2/runtime/bootstrap > /tmp/rust-recovered.json; then
+              break
+            fi
+            sleep 1
+          done
+          python - <<'PY'
+          import json
+          recovered = json.load(open('/tmp/rust-recovered.json'))
+          previous_instance = open('/tmp/rust-instance-before').read()
+          assert recovered['revision'] == 1, recovered
+          assert recovered['payload']['game']['game_type'] == 'x01', recovered
+          assert recovered['runtime_instance_id'] != previous_instance, recovered
+          PY

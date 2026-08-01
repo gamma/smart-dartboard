@@ -1,0 +1,19 @@
+name: smart-dartboard-rust-preview
+
+services:
+  dartboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.rust
+    image: smart-dartboard:rust-preview
+    ports:
+      - "8001:8000"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - ./data-rust:/data
+    environment:
+      SDB_ENABLE_BLE: "0"
+    restart: unless-stopped

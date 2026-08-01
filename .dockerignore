@@ -9,6 +9,7 @@ __pycache__
 .coverage
 .DS_Store
 data
+data-rust
 tests
 docs
 dist
@@ -19,3 +20,5 @@ scripts
 .env.*
 docker-compose.yml
 compose*.yml
+target
+apps
