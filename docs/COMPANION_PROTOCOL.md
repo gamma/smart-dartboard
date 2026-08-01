@@ -82,12 +82,16 @@ Implementiert und automatisiert getestet:
 - 256-Bit-Token, Hashspeicherung, Projector-Rolle und Widerruf,
 - Snapshotpflicht, Runtimewechsel, Duplikate, Stale Frames und Revisionslücken,
 - persistente, widerrufbare Geräte in SQLite-Schema 5; die Datenbank erhält nur
-  den Token-Hash und behält den Widerrufszeitpunkt als lokale Auditspur.
+  den Token-Hash und behält den Widerrufszeitpunkt als lokale Auditspur,
+- Headless-Pairing-API sowie Bearer-authentisierte Bootstrap- und
+  WebSocket-Endpunkte. Jeder Socket beginnt mit einem Vollsnapshot, schließt bei
+  einer Broadcast-Lücke und wird durch einen Gerätewiderruf aktiv beendet.
 
 Noch offen:
 
 - Tokenablage im Apple Keychain beziehungsweise Android Keystore,
 - Bonjour-Advertiser und -Browser,
-- authentisierter TLS-/WebSocket-Transport,
+- native TLS-Terminierung beziehungsweise abgesicherte HTTPS/WSS-Auslieferung;
+  der Rust-WebSocket ist implementiert, Klartext-LAN bleibt gesperrt,
 - Rollenwahl und Pairing-UI auf Controller und Companion,
 - echte iPhone/iPad-zu-iPad-Abnahme mit Disconnect, Resume und Widerruf.

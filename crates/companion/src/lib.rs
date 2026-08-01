@@ -162,6 +162,11 @@ impl PairingAuthority {
         devices
     }
 
+    #[must_use]
+    pub fn device(&self, device_id: &str) -> Option<&PairedDevice> {
+        self.devices.get(device_id)
+    }
+
     fn open_with_entropy(&mut self, now_ms: u64, entropy: [u8; 20]) -> PairingOffer {
         let number = u32::from_le_bytes(entropy[..4].try_into().expect("four bytes")) % 1_000_000;
         let code = format!("{number:06}");

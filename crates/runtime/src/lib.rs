@@ -267,6 +267,11 @@ impl<R: Repository> Runtime<R> {
         &self.repository
     }
 
+    #[must_use]
+    pub const fn repository_mut(&mut self) -> &mut R {
+        &mut self.repository
+    }
+
     /// Validates and applies one transport-neutral command envelope.
     ///
     /// # Errors

@@ -56,6 +56,12 @@ Produktionspfad.
 | `GET` | `/api/v2/runtime/snapshot` | erneuter Snapshot nach Lücke oder Reconnect |
 | `POST` | `/api/v2/runtime/commands` | ein `CommandEnvelope` atomar anwenden |
 | `GET` | `/api/v2/runtime/events` | WebSocket mit initialem und folgenden Snapshots |
+| `POST` | `/api/v2/companion/pairing/open` | fünfminütiges Einmalcode-Fenster am Controller öffnen |
+| `POST` | `/api/v2/companion/pairing` | Code einmalig gegen einen Projector-Grant tauschen |
+| `GET` | `/api/v2/companion/devices` | gekoppelte Projector-Geräte ohne Token-Hashes auflisten |
+| `DELETE` | `/api/v2/companion/devices/{device_id}` | Projector-Grant persistent widerrufen |
+| `GET` | `/api/v2/companion/runtime/bootstrap` | authentisierter Projector-Vollsnapshot |
+| `GET` | `/api/v2/companion/runtime/events` | authentisierter Projector-WebSocket ab Vollsnapshot |
 | `POST` | `/api/v2/board/status` | interner, authentisierter Gateway-Status |
 | `POST` | `/api/v2/board/packets` | interner, authentisierter FFF1-Rohpaket-Ingress |
 | `GET` | `/api/v2/players` | persistente Spielerprofile |
@@ -75,6 +81,20 @@ Die beiden Board-Endpunkte sind keine Browser-API. Sie verlangen
 Server ohne Token nicht. `connection_id` bindet Pakete an genau eine
 Transportverbindung; veraltete Links, falsche Paketlänge und ungültige
 Checksummen ändern den Spielzustand nicht.
+
+Die Controller-seitigen Pairing- und Geräte-Endpunkte unterliegen ebenfalls
+dem Same-Origin-Schutz. Ein nativer Companion ohne `Origin` darf nur den
+Einmalcode einlösen. Bootstrap und Live-Stream verlangen danach
+`Authorization: Bearer <companion-token>` und liefern ausschließlich die
+Projector-Rolle. Der Klartext-Token wird nur in der einmaligen Pairing-Antwort
+ausgegeben. Eine Revisionslücke schließt den Stream und erzwingt einen neuen
+Vollsnapshot; ein Widerruf schließt auch einen bereits verbundenen Socket.
+
+Der Rust-Host stellt derzeit selbst kein Zertifikat aus. Companion-Zugriff ist
+daher bis zum nativen TLS-Adapter beziehungsweise zu einer korrekt
+konfigurierten HTTPS/WSS-Terminierung nur ein lokaler Entwicklungsbaustein und
+kein freigegebener Klartext-LAN-Produktpfad. Bearer-Tokens gehören weder in
+Query-Strings noch in Logs.
 
 ## Aktueller Funktionsumfang
 
@@ -106,6 +126,9 @@ Checksummen ändern den Spielzustand nicht.
 - nach Prozessneustart ausschließlich den letzten Commit wiederherstellen,
 - neue `runtime_instance_id` bei jedem Prozessstart,
 - vollständige Snapshots per WebSocket publizieren.
+- Projector-Companions per kurzlebigem Einmalcode koppeln, Grants ausschließlich
+  als Hash persistieren, authentisierte Snapshots und Folgerevisionen streamen
+  sowie aktive Verbindungen beim Widerruf schließen.
 
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 

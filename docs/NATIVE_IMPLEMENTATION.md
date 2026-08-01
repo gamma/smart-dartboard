@@ -71,8 +71,11 @@ Umgesetzt und lokal verifiziert:
   vorgesehen.
 - plattformneutraler Companion-Kern für fünf Minuten gültige sechsstellige
   Einmalcodes, Versuchslimit, 256-Bit-Projector-Tokens, Hashspeicherung,
-  Widerruf und strikt revisionsgenaue Snapshot-Replikation. Transport und UI
-  sind noch offen; Details: [COMPANION_PROTOCOL.md](COMPANION_PROTOCOL.md).
+  Widerruf und strikt revisionsgenaue Snapshot-Replikation. Der Headless-Host
+  bietet den authentisierten Pairing-, Bootstrap- und WebSocket-Transport an
+  und schließt aktive Verbindungen beim Widerruf oder einer Revisionslücke.
+  Native Discovery, TLS/Keychain und UI sind noch offen; Details:
+  [COMPANION_PROTOCOL.md](COMPANION_PROTOCOL.md).
 
 Noch nicht als produktionsreif nachgewiesen:
 

@@ -10,6 +10,7 @@ repository.workspace = true
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
 sdb-board = { path = "../board" }
+sdb-companion = { path = "../companion" }
 sdb-contracts = { path = "../contracts" }
 sdb-runtime = { path = "../runtime" }
 sdb-storage = { path = "../storage" }
@@ -20,6 +21,8 @@ tower-http = { version = "0.6", features = ["set-header"] }
 uuid = { version = "1.18", features = ["v4"] }
 
 [dev-dependencies]
+futures-util = "0.3"
+tokio-tungstenite = "0.29"
 tower = { version = "0.5", features = ["util"] }
 
 [lints]

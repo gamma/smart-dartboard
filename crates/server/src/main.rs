@@ -3,10 +3,14 @@ use axum::{
     extract::{Path, State, WebSocketUpgrade, ws::Message},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
-    routing::{get, post},
+    routing::{delete, get, post},
 };
 use sdb_board::{
     BoardFailureCode, BoardIngress, BoardIngressOutcome, BoardPhase, BoardRejectReason, BoardStatus,
+};
+use sdb_companion::{
+    COMPANION_PROTOCOL_VERSION, CompanionFrame, CompanionFrameKind, CompanionRole, PairedDevice,
+    PairingAuthority, PairingError, PairingGrant, PairingOffer, PairingRequest,
 };
 use sdb_contracts::{
     CommandEnvelope, ContractError, DartSource, Envelope, ErrorCode, MessageKind, PROTOCOL_VERSION,
@@ -20,6 +24,7 @@ use std::{
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
     sync::{Arc, Mutex},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::broadcast;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -34,6 +39,8 @@ struct AppState {
     states: broadcast::Sender<StateMessage>,
     board: Arc<Mutex<BoardState>>,
     board_token: Option<Arc<str>>,
+    companions: Arc<Mutex<PairingAuthority>>,
+    companion_changes: broadcast::Sender<()>,
 }
 
 struct BoardState {
@@ -89,6 +96,25 @@ enum BoardPacketResponse {
     RuntimeRejected { error: ContractError },
 }
 
+#[derive(Debug, Serialize)]
+struct CompanionDeviceView {
+    device_id: String,
+    device_name: String,
+    role: CompanionRole,
+    paired_at_ms: u64,
+}
+
+impl From<PairedDevice> for CompanionDeviceView {
+    fn from(device: PairedDevice) -> Self {
+        Self {
+            device_id: device.device_id,
+            device_name: device.device_name,
+            role: device.role,
+            paired_at_ms: device.paired_at_ms,
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let data_dir = PathBuf::from(env::var("SDB_DATA_DIR").unwrap_or_else(|_| "data".into()));
@@ -105,7 +131,8 @@ async fn main() {
         !ble_enabled || board_token.is_some(),
         "SDB_BOARD_TOKEN must be set when SDB_ENABLE_BLE=1"
     );
-    let state = AppState::new(runtime, ble_enabled, board_token);
+    let state =
+        AppState::new(runtime, ble_enabled, board_token).expect("restore companion device grants");
     let app = router(state);
     let port = env::var("SDB_PORT")
         .ok()
@@ -127,9 +154,11 @@ impl AppState {
         runtime: Runtime<SqliteRepository>,
         board_enabled: bool,
         board_token: Option<String>,
-    ) -> Self {
+    ) -> Result<Self, sdb_storage::StorageError> {
         let (states, _) = broadcast::channel(64);
-        Self {
+        let (companion_changes, _) = broadcast::channel(16);
+        let companion_devices = runtime.repository().companion_devices()?;
+        Ok(Self {
             runtime: Arc::new(Mutex::new(runtime)),
             states,
             board: Arc::new(Mutex::new(BoardState {
@@ -141,7 +170,11 @@ impl AppState {
                 ingress: BoardIngress::new(),
             })),
             board_token: board_token.map(Arc::from),
-        }
+            companions: Arc::new(Mutex::new(PairingAuthority::from_devices(
+                companion_devices,
+            ))),
+            companion_changes,
+        })
     }
 
     fn snapshot(&self, message_id: impl Into<String>) -> Result<StateMessage, ContractError> {
@@ -167,6 +200,21 @@ fn router(state: AppState) -> Router {
         .route("/api/v2/runtime/snapshot", get(snapshot))
         .route("/api/v2/runtime/commands", post(command))
         .route("/api/v2/runtime/events", get(websocket))
+        .route("/api/v2/companion/pairing/open", post(open_pairing))
+        .route("/api/v2/companion/pairing", post(pair_companion))
+        .route("/api/v2/companion/devices", get(companion_devices))
+        .route(
+            "/api/v2/companion/devices/{device_id}",
+            delete(revoke_companion),
+        )
+        .route(
+            "/api/v2/companion/runtime/bootstrap",
+            get(companion_bootstrap),
+        )
+        .route(
+            "/api/v2/companion/runtime/events",
+            get(companion_websocket),
+        )
         .route("/api/v2/board/status", post(board_status))
         .route("/api/v2/board/packets", post(board_packet))
         .route("/api/v2/players", get(players))
@@ -331,6 +379,131 @@ async fn snapshot(State(state): State<AppState>) -> Result<Json<StateMessage>, A
     Ok(Json(state.snapshot(Uuid::new_v4().to_string())?))
 }
 
+async fn open_pairing(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<PairingOffer>, ApiError> {
+    validate_same_origin(&headers)?;
+    let offer = state
+        .companions
+        .lock()
+        .map_err(|_| internal_error("companion lock poisoned"))?
+        .open(now_ms())
+        .map_err(pairing_error)?;
+    Ok(Json(offer))
+}
+
+async fn pair_companion(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<PairingRequest>,
+) -> Result<Json<PairingGrant>, ApiError> {
+    validate_same_origin(&headers)?;
+    let mut companions = state
+        .companions
+        .lock()
+        .map_err(|_| internal_error("companion lock poisoned"))?;
+    let grant = companions.pair(request, now_ms()).map_err(pairing_error)?;
+    let device = companions
+        .device(&grant.device_id)
+        .cloned()
+        .ok_or_else(|| internal_error("paired companion is missing"))?;
+    let mut runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    if runtime
+        .repository_mut()
+        .save_companion_device(&device)
+        .is_err()
+    {
+        let persisted = runtime
+            .repository()
+            .companion_devices()
+            .map_err(|_| internal_error("companion persistence recovery failed"))?;
+        *companions = PairingAuthority::from_devices(persisted);
+        return Err(internal_error("companion grant persistence failed").into());
+    }
+    drop(runtime);
+    let _ = state.companion_changes.send(());
+    Ok(Json(grant))
+}
+
+async fn companion_devices(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<Vec<CompanionDeviceView>>, ApiError> {
+    validate_same_origin(&headers)?;
+    let devices = state
+        .companions
+        .lock()
+        .map_err(|_| internal_error("companion lock poisoned"))?
+        .devices()
+        .into_iter()
+        .map(CompanionDeviceView::from)
+        .collect();
+    Ok(Json(devices))
+}
+
+async fn revoke_companion(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(device_id): Path<String>,
+) -> Result<StatusCode, ApiError> {
+    validate_same_origin(&headers)?;
+    let mut companions = state
+        .companions
+        .lock()
+        .map_err(|_| internal_error("companion lock poisoned"))?;
+    if companions.device(&device_id).is_none() {
+        return Err(not_found("companion device not found").into());
+    }
+    let mut runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let revoked = runtime
+        .repository_mut()
+        .revoke_companion_device(&device_id, now_ms())
+        .map_err(|_| internal_error("companion revocation persistence failed"))?;
+    if !revoked || !companions.revoke(&device_id) {
+        return Err(internal_error("companion grant state is inconsistent").into());
+    }
+    drop(runtime);
+    let _ = state.companion_changes.send(());
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn companion_bootstrap(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<CompanionFrame>, ApiError> {
+    authorize_companion(&state, &headers)?;
+    Ok(Json(companion_snapshot(&state)?))
+}
+
+async fn companion_websocket(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> Result<Response, ApiError> {
+    let token = companion_token(&headers)?.to_owned();
+    let states = state.states.subscribe();
+    let companion_changes = state.companion_changes.subscribe();
+    authenticate_companion_token(&state, &token)?;
+    let initial = companion_snapshot(&state)?;
+    Ok(upgrade.on_upgrade(move |socket| {
+        stream_companion_states(
+            socket,
+            initial,
+            states,
+            companion_changes,
+            state.companions,
+            token,
+        )
+    }))
+}
+
 async fn players(
     State(state): State<AppState>,
 ) -> Result<Json<Vec<sdb_storage::PlayerProfile>>, ApiError> {
@@ -447,8 +620,8 @@ async fn websocket(
     upgrade: WebSocketUpgrade,
 ) -> Result<Response, ApiError> {
     validate_websocket_origin(&headers)?;
-    let initial = state.snapshot(Uuid::new_v4().to_string())?;
     let receiver = state.states.subscribe();
+    let initial = state.snapshot(Uuid::new_v4().to_string())?;
     Ok(upgrade.on_upgrade(move |socket| stream_states(socket, initial, receiver)))
 }
 
@@ -460,11 +633,23 @@ async fn stream_states(
     if send_state(&mut socket, &initial).await.is_err() {
         return;
     }
+    let runtime_instance_id = initial.runtime_instance_id;
+    let mut revision = initial.revision;
     while let Ok(message) = receiver.recv().await {
+        if message.runtime_instance_id != runtime_instance_id
+            || message.revision > revision.saturating_add(1)
+        {
+            break;
+        }
+        if message.revision <= revision {
+            continue;
+        }
         if send_state(&mut socket, &message).await.is_err() {
             break;
         }
+        revision = message.revision;
     }
+    let _ = socket.send(Message::Close(None)).await;
 }
 
 async fn send_state(
@@ -473,6 +658,88 @@ async fn send_state(
 ) -> Result<(), axum::Error> {
     let json = serde_json::to_string(state).map_err(axum::Error::new)?;
     socket.send(Message::Text(json.into())).await
+}
+
+async fn stream_companion_states(
+    mut socket: axum::extract::ws::WebSocket,
+    initial: CompanionFrame,
+    mut states: broadcast::Receiver<StateMessage>,
+    mut companion_changes: broadcast::Receiver<()>,
+    companions: Arc<Mutex<PairingAuthority>>,
+    token: String,
+) {
+    if send_companion_frame(&mut socket, &initial).await.is_err() {
+        return;
+    }
+    let runtime_instance_id = initial.runtime_instance_id.clone();
+    let mut revision = initial.revision;
+    loop {
+        tokio::select! {
+            state = states.recv() => {
+                let Ok(state) = state else {
+                    break;
+                };
+                if !companion_token_is_active(&companions, &token) {
+                    break;
+                }
+                let Ok(frame) = companion_state_frame(state) else {
+                    break;
+                };
+                if frame.runtime_instance_id != runtime_instance_id
+                    || frame.revision > revision.saturating_add(1)
+                {
+                    break;
+                }
+                if frame.revision <= revision {
+                    continue;
+                }
+                if send_companion_frame(&mut socket, &frame).await.is_err() {
+                    return;
+                }
+                revision = frame.revision;
+            }
+            changed = companion_changes.recv() => {
+                if changed.is_err() || !companion_token_is_active(&companions, &token) {
+                    break;
+                }
+            }
+        }
+    }
+    let _ = socket.send(Message::Close(None)).await;
+}
+
+async fn send_companion_frame(
+    socket: &mut axum::extract::ws::WebSocket,
+    frame: &CompanionFrame,
+) -> Result<(), axum::Error> {
+    let json = serde_json::to_string(frame).map_err(axum::Error::new)?;
+    socket.send(Message::Text(json.into())).await
+}
+
+fn companion_snapshot(state: &AppState) -> Result<CompanionFrame, ContractError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    Ok(CompanionFrame {
+        protocol_version: COMPANION_PROTOCOL_VERSION,
+        runtime_instance_id: runtime.instance_id().to_owned(),
+        revision: runtime.snapshot().revision,
+        kind: CompanionFrameKind::Snapshot,
+        payload: serde_json::to_value(runtime.snapshot())
+            .map_err(|_| internal_error("companion snapshot serialization failed"))?,
+    })
+}
+
+fn companion_state_frame(state: StateMessage) -> Result<CompanionFrame, ContractError> {
+    Ok(CompanionFrame {
+        protocol_version: COMPANION_PROTOCOL_VERSION,
+        runtime_instance_id: state.runtime_instance_id,
+        revision: state.revision,
+        kind: CompanionFrameKind::State,
+        payload: serde_json::to_value(state.payload)
+            .map_err(|_| internal_error("companion state serialization failed"))?,
+    })
 }
 
 fn validate_websocket_origin(headers: &HeaderMap) -> Result<(), ContractError> {
@@ -513,6 +780,36 @@ fn authorize_board(state: &AppState, headers: &HeaderMap) -> Result<(), Contract
         return Err(forbidden("invalid board ingress token"));
     }
     Ok(())
+}
+
+fn authorize_companion(state: &AppState, headers: &HeaderMap) -> Result<(), ContractError> {
+    authenticate_companion_token(state, companion_token(headers)?)
+}
+
+fn companion_token(headers: &HeaderMap) -> Result<&str, ContractError> {
+    headers
+        .get(header::AUTHORIZATION)
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.strip_prefix("Bearer "))
+        .filter(|value| !value.is_empty())
+        .ok_or_else(|| forbidden("missing companion token"))
+}
+
+fn authenticate_companion_token(state: &AppState, token: &str) -> Result<(), ContractError> {
+    let companions = state
+        .companions
+        .lock()
+        .map_err(|_| internal_error("companion lock poisoned"))?;
+    if companions.authenticate(token).is_none() {
+        return Err(forbidden("invalid companion token"));
+    }
+    Ok(())
+}
+
+fn companion_token_is_active(companions: &Mutex<PairingAuthority>, token: &str) -> bool {
+    companions
+        .lock()
+        .is_ok_and(|authority| authority.authenticate(token).is_some())
 }
 
 fn constant_time_token_eq(expected: &str, supplied: &str) -> bool {
@@ -578,6 +875,15 @@ fn env_flag(name: &str, default: bool) -> bool {
     })
 }
 
+fn now_ms() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .try_into()
+        .unwrap_or(u64::MAX)
+}
+
 async fn shutdown_signal() {
     let _ = tokio::signal::ctrl_c().await;
 }
@@ -622,6 +928,18 @@ fn not_found(message: &str) -> ContractError {
     }
 }
 
+fn pairing_error(error: PairingError) -> ContractError {
+    match error {
+        PairingError::InvalidCode | PairingError::AttemptsExhausted => {
+            forbidden(&error.to_string())
+        }
+        PairingError::Closed | PairingError::Expired | PairingError::InvalidDevice => {
+            invalid_command(&error.to_string())
+        }
+        PairingError::EntropyUnavailable => internal_error(&error.to_string()),
+    }
+}
+
 struct ApiError(ContractError);
 
 impl From<ContractError> for ApiError {
@@ -651,23 +969,21 @@ mod tests {
         body::{Body, to_bytes},
         http::{Method, Request},
     };
+    use futures_util::StreamExt;
     use serde_json::Value;
+    use tokio_tungstenite::{connect_async, tungstenite::client::IntoClientRequest};
     use tower::ServiceExt;
 
     fn test_app() -> Router {
         let repository = SqliteRepository::in_memory().expect("repository");
         let runtime = Runtime::restore("test-runtime", repository).expect("runtime");
-        router(AppState::new(runtime, false, None))
+        router(AppState::new(runtime, false, None).expect("app state"))
     }
 
     fn board_test_app() -> Router {
         let repository = SqliteRepository::in_memory().expect("repository");
         let runtime = Runtime::restore("test-runtime", repository).expect("runtime");
-        router(AppState::new(
-            runtime,
-            true,
-            Some("test-board-token".into()),
-        ))
+        router(AppState::new(runtime, true, Some("test-board-token".into())).expect("app state"))
     }
 
     async fn post_command(app: &Router, envelope: Value) -> Value {
@@ -895,6 +1211,204 @@ mod tests {
         .await;
         assert_eq!(status, StatusCode::BAD_REQUEST);
         assert_eq!(error["code"], "board_unavailable");
+    }
+
+    #[tokio::test]
+    #[allow(clippy::too_many_lines)] // Covers the complete one-time grant and live revocation flow.
+    async fn companion_pairing_persists_bootstraps_and_revokes_projector_access() {
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let runtime = Runtime::restore("test-runtime", repository).expect("runtime");
+        let state = AppState::new(runtime, false, None).expect("app state");
+        let app = router(state.clone());
+
+        let open = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v2/companion/pairing/open")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(open.status(), StatusCode::OK);
+        let offer: PairingOffer =
+            serde_json::from_slice(&to_bytes(open.into_body(), usize::MAX).await.expect("body"))
+                .expect("offer");
+
+        let pair = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v2/companion/pairing")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({
+                            "device_id": "ipad-projector",
+                            "device_name": "Arcade iPad",
+                            "code": offer.code
+                        })
+                        .to_string(),
+                    ))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(pair.status(), StatusCode::OK);
+        let grant: PairingGrant =
+            serde_json::from_slice(&to_bytes(pair.into_body(), usize::MAX).await.expect("body"))
+                .expect("grant");
+        assert_eq!(grant.role, CompanionRole::Projector);
+
+        let devices = app
+            .clone()
+            .oneshot(
+                Request::get("/api/v2/companion/devices")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        let device_json: Value = serde_json::from_slice(
+            &to_bytes(devices.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("devices");
+        assert_eq!(device_json[0]["device_id"], "ipad-projector");
+        assert!(device_json[0].get("token_hash").is_none());
+
+        let persisted = state
+            .runtime
+            .lock()
+            .expect("runtime")
+            .repository()
+            .companion_devices()
+            .expect("persisted devices");
+        assert_eq!(persisted.len(), 1);
+        assert_ne!(persisted[0].token_hash, grant.token);
+
+        let bootstrap = app
+            .clone()
+            .oneshot(
+                Request::get("/api/v2/companion/runtime/bootstrap")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", grant.token))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(bootstrap.status(), StatusCode::OK);
+        let frame: CompanionFrame = serde_json::from_slice(
+            &to_bytes(bootstrap.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("frame");
+        assert_eq!(frame.kind, CompanionFrameKind::Snapshot);
+        assert_eq!(frame.runtime_instance_id, "test-runtime");
+
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .expect("listener");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(axum::serve(listener, app.clone()).into_future());
+        let mut request = format!("ws://{address}/api/v2/companion/runtime/events")
+            .into_client_request()
+            .expect("WebSocket request");
+        request.headers_mut().insert(
+            header::AUTHORIZATION,
+            format!("Bearer {}", grant.token)
+                .parse()
+                .expect("authorization"),
+        );
+        let (mut projector, _) = connect_async(request).await.expect("connect projector");
+        let initial: CompanionFrame = serde_json::from_str(
+            projector
+                .next()
+                .await
+                .expect("initial frame")
+                .expect("initial message")
+                .to_text()
+                .expect("text frame"),
+        )
+        .expect("initial snapshot");
+        assert_eq!(initial.kind, CompanionFrameKind::Snapshot);
+        assert_eq!(initial.revision, 0);
+
+        post_command(
+            &app,
+            serde_json::json!({
+                "protocol_version": 1,
+                "command_id": "companion-live-state",
+                "runtime_instance_id": "test-runtime",
+                "expected_revision": 0,
+                "command": {
+                    "type": "start_session",
+                    "session_id": "companion-session",
+                    "players": [{
+                        "id": "ada", "name": "Ada", "avatar": "nova", "color": "#ff00aa"
+                    }]
+                }
+            }),
+        )
+        .await;
+        let live: CompanionFrame = serde_json::from_str(
+            projector
+                .next()
+                .await
+                .expect("live frame")
+                .expect("live message")
+                .to_text()
+                .expect("text frame"),
+        )
+        .expect("live state");
+        assert_eq!(live.kind, CompanionFrameKind::State);
+        assert_eq!(live.revision, 1);
+
+        let revoke = app
+            .clone()
+            .oneshot(
+                Request::delete("/api/v2/companion/devices/ipad-projector")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(revoke.status(), StatusCode::NO_CONTENT);
+        assert!(
+            projector
+                .next()
+                .await
+                .expect("revocation close")
+                .expect("close message")
+                .is_close()
+        );
+
+        let denied = app
+            .oneshot(
+                Request::get("/api/v2/companion/runtime/bootstrap")
+                    .header(header::AUTHORIZATION, format!("Bearer {}", grant.token))
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(denied.status(), StatusCode::FORBIDDEN);
+        server.abort();
+    }
+
+    #[tokio::test]
+    async fn companion_controller_routes_reject_cross_origin_browsers() {
+        let response = test_app()
+            .oneshot(
+                Request::post("/api/v2/companion/pairing/open")
+                    .header(header::HOST, "dartboard.local:8000")
+                    .header(header::ORIGIN, "https://attacker.example")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]
