@@ -287,6 +287,9 @@ POST /api/throw/delete
 POST /api/throw/manual
 POST /api/correction/lock
 POST /api/calibration
+POST /api/sound/settings
+POST /api/sound/status
+POST /api/sound/test
 WS   /ws
 ```
 
@@ -348,7 +351,9 @@ SVG-Geometrie hervorgehoben.
 
 Die Sound-Engine nutzt Web Audio und erzeugt getrennte Cues für Treffer,
 Double/Triple, Miss, Spielerwechsel, Countdown, Sieg und Boardfehler. Im
-Kioskmodus sollte Browser-Autoplay freigeschaltet werden.
+persistierten Runtime-Setting `sound.output` wird `controller`, `projector`
+oder `both` gewählt; jeder Browser spielt nur die für ihn bestimmten Cues. Im
+Projektor-Kioskmodus sollte Browser-Autoplay freigeschaltet werden.
 
 ---
 

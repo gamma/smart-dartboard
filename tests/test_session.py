@@ -135,24 +135,28 @@ class SessionControllerTests(unittest.TestCase):
                 self.assertEqual(0.0, calibration["offset_x"])
                 self.assertEqual(0.0, calibration["offset_y"])
 
-    def test_projector_sound_setting_and_status_are_persisted(self):
-        self.controller.set_sound_enabled(True)
+    def test_sound_setting_output_and_status_are_persisted(self):
+        self.controller.set_sound_settings(True, "both")
         self.assertEqual(
-            {"enabled": True, "status": "starting"},
+            {"enabled": True, "output": "both", "status": "starting"},
             self.controller.public_state()["sound"],
         )
         self.controller.report_sound_status("ready")
         self.controller.close()
         self.controller = SessionController(self.database)
         self.assertEqual(
-            {"enabled": True, "status": "starting"},
+            {"enabled": True, "output": "both", "status": "starting"},
             self.controller.public_state()["sound"],
         )
         self.controller.set_sound_enabled(False)
         self.assertEqual(
-            {"enabled": False, "status": "disabled"},
+            {"enabled": False, "output": "both", "status": "disabled"},
             self.controller.public_state()["sound"],
         )
+
+    def test_sound_output_is_validated(self):
+        with self.assertRaisesRegex(ValueError, "Unknown sound output"):
+            self.controller.set_sound_settings(True, "arcade_roof")
 
     def test_art_theme_is_validated_and_persisted(self):
         self.controller.set_art_theme("neon")

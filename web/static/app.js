@@ -31,6 +31,8 @@ const appState = {
   scoreCountdownFrame: null,
   selectedLanguage: storedUiLanguage(),
   localView: null,
+  settingsReturnView: null,
+  calibrationReturn: null,
   history: {
     sessions: [], players: [], modes: [], heatmap: null,
     session: null, game: null, replay: null, replayIndex: 0,
@@ -332,7 +334,7 @@ function updateExperience(experience, event){
   }else{
     appState.rematchArmedUntil=0;
   }
-  if(isProjector() && experience.sound?.enabled){
+  if(audioEnabledHere(experience)){
     ensureAudio(true);
   }
   const previousPlayer=previous?.game?.current_player_id;
@@ -424,6 +426,12 @@ function renderConnection(){
   });
   const projectorLink=document.querySelector('.icon-button[href="/projector"]');
   if(projectorLink) projectorLink.setAttribute('title',t('open_projector'));
+  const settingsButton=document.querySelector('.settings-button');
+  if(settingsButton){
+    settingsButton.setAttribute('title',t('settings'));
+    settingsButton.setAttribute('aria-label',t('settings'));
+    settingsButton.setAttribute('aria-pressed',String(appState.localView==='settings'));
+  }
   const hardware=appState.experience?.hardware;
   const boardReady=!hardware?.enabled || hardware.status==='connected';
   const cssClass=!appState.wsOk?'':boardReady?'online':'searching';
@@ -451,6 +459,10 @@ function actionButton(label, actionName, kind = 'primary', extra = ''){
 function renderControl(){
   const root = $('controlRoot');
   if(!root) return;
+  if(appState.localView==='settings'){
+    root.innerHTML=controlSettings();
+    return;
+  }
   if(appState.localView==='history'){
     root.innerHTML=controlHistory();
     if($('historyHeatmapBoard')){
@@ -1130,7 +1142,7 @@ function controlCalibration(){
     ${soundSetup()}
     <p class="calibration-note">${t('calibration_note',{width:`<b>${geometry.width}`,height:`${geometry.height}</b>`})}</p>
     <footer class="sticky-actions">
-      ${actionButton(t('cancel'),'home','ghost')}
+      ${actionButton(t('cancel'),'close-calibration','ghost')}
       ${actionButton(t('reset_center'),'reset-calibration','secondary')}
       ${actionButton(t('save_calibration'),'save-calibration')}
     </footer>
@@ -1147,7 +1159,8 @@ function artThemeSetup(){
   </section>`;
 }
 function soundSetup(){
-  const sound=appState.experience.sound || {enabled:false,status:'disabled'};
+  const sound=appState.experience.sound || {enabled:false,output:'projector',status:'disabled'};
+  const output=sound.output || 'projector';
   const statusLabels={
     disabled:language()==='en'?'OFF':'AUS',
     starting:language()==='en'?'STARTING':'WIRD GESTARTET',
@@ -1156,12 +1169,37 @@ function soundSetup(){
     unavailable:language()==='en'?'UNAVAILABLE':'NICHT VERFÜGBAR',
   };
   return `<section class="sound-setup ${sound.enabled?'enabled':''}">
-    <div><span>${t('projector_sound')}</span><h2>${sound.enabled?t('enabled'):t('disabled')}</h2><p>${t('status')}: <b>${statusLabels[sound.status] || escapeHtml(sound.status)}</b></p></div>
+    <div><span>${t('game_sound')}</span><h2>${sound.enabled?t('enabled'):t('disabled')}</h2><p>${t('playback_on')}: <b>${t(`sound_output_${output}`)}</b> · ${t('status')}: <b>${statusLabels[sound.status] || escapeHtml(sound.status)}</b></p></div>
     <div class="sound-setup-actions">
       ${actionButton(sound.enabled?t('sound_off'):t('sound_on'),sound.enabled?'sound-disable':'sound-enable',sound.enabled?'ghost':'primary')}
       ${actionButton(t('test_tone'),'sound-test','secondary',sound.enabled?'':'disabled')}
     </div>
+    <div class="sound-output-options">
+      <div class="choice-label">${t('sound_output')}</div>
+      <div class="segmented">
+        ${['controller','projector','both'].map(value=>`<button class="${output===value?'selected':''}" data-action="sound-output" data-output="${value}">${t(`sound_output_${value}`)}</button>`).join('')}
+      </div>
+      <small>${t('sound_output_help')}</small>
+    </div>
     ${sound.status==='blocked'?`<small>${t('autoplay_help')}</small>`:''}
+  </section>`;
+}
+
+function controlSettings(){
+  return `<section class="control-scene settings-control">
+    ${sceneHeader(t('settings_kicker'),t('settings'),t('settings_copy'))}
+    <div class="settings-stack">
+      ${soundSetup()}
+      ${artThemeSetup()}
+      <section class="settings-link-card">
+        <div><span>${t('board_setup')}</span><h2>${t('calibrate_title')}</h2><p>${t('calibrate_settings_copy')}</p></div>
+        ${actionButton(t('calibrate'),'calibrate','secondary')}
+      </section>
+    </div>
+    <footer class="sticky-actions">
+      ${actionButton(t('back'),'close-settings','ghost')}
+      <div>${t('settings_saved_immediately')}</div>
+    </footer>
   </section>`;
 }
 
@@ -1692,13 +1730,19 @@ async function reportProjectorGeometry(){
 }
 
 async function reportAudioStatus(status){
-  if(!isProjector() || status===appState.reportedAudioStatus) return;
+  if(!audioEnabledHere() || status===appState.reportedAudioStatus) return;
   appState.reportedAudioStatus=status;
   try{
     await action('/api/sound/status',{status});
   }catch(error){
     appState.reportedAudioStatus='';
   }
+}
+function audioEnabledHere(experience=appState.experience){
+  const sound=experience?.sound;
+  if(!sound?.enabled) return false;
+  const output=sound.output || 'projector';
+  return output==='both' || output===(isProjector()?'projector':'controller');
 }
 function ensureAudio(reportStatus=false){
   if(!appState.audio){
@@ -1719,7 +1763,7 @@ function ensureAudio(reportStatus=false){
   return appState.audio;
 }
 function tone(frequency,duration=0.12,delay=0,type='sine',gain=0.12){
-  if(!isProjector() || !appState.experience?.sound?.enabled) return;
+  if(!audioEnabledHere()) return;
   const context=ensureAudio();
   if(!context || context.state!=='running') return;
   const oscillator=context.createOscillator(), volume=context.createGain();
@@ -1731,7 +1775,7 @@ function tone(frequency,duration=0.12,delay=0,type='sine',gain=0.12){
   oscillator.start(context.currentTime+delay); oscillator.stop(context.currentTime+delay+duration+0.02);
 }
 function playEventCue(event,experience){
-  if(!isProjector() || !experience.sound?.enabled) return;
+  if(!audioEnabledHere(experience)) return;
   const key=`${event.type}:${event.seq ?? event.action ?? Date.now()}`;
   if(key===appState.lastCueKey) return;
   appState.lastCueKey=key;
@@ -1805,7 +1849,7 @@ function startCountdown(){
   const tick=()=>{
     const element=$('countdownValue');
     if(element) element.textContent=value>0?value:'GO';
-    if(isProjector()) tone(value>0?330+(3-value)*110:660,.16,0,'triangle',.12);
+    tone(value>0?330+(3-value)*110:660,.16,0,'triangle',.12);
     if(value<0){
       clearInterval(appState.countdownTimer);
       if(!isProjector() && appState.experience?.screen==='countdown') action('/api/game/live');
@@ -1851,6 +1895,23 @@ document.addEventListener('click',async event=>{
     return;
   }
   if(name==='open-history'){ await openHistory(); return; }
+  if(name==='open-settings'){
+    if(appState.localView==='settings'){
+      appState.localView=appState.settingsReturnView;
+      appState.settingsReturnView=null;
+    }else{
+      appState.settingsReturnView=appState.localView;
+      appState.localView='settings';
+    }
+    renderControl();
+    return;
+  }
+  if(name==='close-settings'){
+    appState.localView=appState.settingsReturnView;
+    appState.settingsReturnView=null;
+    renderControl();
+    return;
+  }
   if(name==='close-history'){
     appState.localView=null;
     renderControl();
@@ -1924,10 +1985,24 @@ document.addEventListener('click',async event=>{
   }
   if(name==='choose-players'){ await action('/api/navigation/players'); return; }
   if(name==='home'){
+    if(appState.localView==='settings'){
+      appState.localView=appState.settingsReturnView;
+      appState.settingsReturnView=null;
+      renderControl();
+      return;
+    }
     if(appState.localView){ appState.localView=null; renderControl(); return; }
     appState.selectedPlayers.clear(); await action('/api/session/close'); return;
   }
-  if(name==='calibrate'){ await action('/api/navigation',{screen:'calibration'}); return; }
+  if(name==='calibrate'){
+    appState.calibrationReturn={
+      screen:appState.experience.screen,
+      localView:appState.localView,
+    };
+    appState.localView=null;
+    await action('/api/navigation',{screen:'calibration'});
+    return;
+  }
   if(name==='toggle-player'){
     appState.selectedPlayers.has(target.dataset.id) ? appState.selectedPlayers.delete(target.dataset.id) : appState.selectedPlayers.add(target.dataset.id);
     renderControl(); return;
@@ -2025,17 +2100,40 @@ document.addEventListener('click',async event=>{
   if(name==='save-calibration'){
     const corners=appState.experience.calibration.corners;
     await action('/api/calibration',{...appState.experience.calibration,corners});
-    await action('/api/session/close'); return;
+    await closeCalibration(); return;
   }
+  if(name==='close-calibration'){ await closeCalibration(); return; }
   if(name==='reset-calibration'){
     await action('/api/calibration/reset');
     return;
   }
-  if(name==='sound-enable'){ await action('/api/sound/settings',{enabled:true}); return; }
-  if(name==='sound-disable'){ await action('/api/sound/settings',{enabled:false}); return; }
-  if(name==='sound-test'){ await action('/api/sound/test'); return; }
+  if(name==='sound-enable'){
+    ensureAudio(true);
+    await action('/api/sound/settings',{enabled:true,output:appState.experience.sound?.output || 'projector'});
+    return;
+  }
+  if(name==='sound-disable'){
+    await action('/api/sound/settings',{enabled:false,output:appState.experience.sound?.output || 'projector'});
+    return;
+  }
+  if(name==='sound-output'){
+    const output=target.dataset.output;
+    if(output==='controller' || output==='both') ensureAudio(true);
+    await action('/api/sound/settings',{enabled:Boolean(appState.experience.sound?.enabled),output});
+    return;
+  }
+  if(name==='sound-test'){
+    ensureAudio(true);
+    await action('/api/sound/test'); return;
+  }
   if(name==='art-theme'){ await action('/api/art-theme',{theme:target.dataset.theme}); return; }
 });
+async function closeCalibration(){
+  const destination=appState.calibrationReturn || {screen:'attract',localView:null};
+  appState.calibrationReturn=null;
+  appState.localView=destination.localView || null;
+  await action('/api/navigation',{screen:destination.screen || 'attract'});
+}
 document.addEventListener('submit',async event=>{
   if(event.target.id!=='newPlayerForm') return;
   event.preventDefault();

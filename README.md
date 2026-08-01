@@ -54,7 +54,8 @@ Zum Release:
 - perspektivische Vierpunkt-Projektorkalibrierung mit automatischem,
   seitenverhältnisabhängigem Rund-und-mittig-Reset
 - synthetisierte Treffer-, Miss-, Wechsel-, Countdown- und Siegersounds
-- zentrale Projektor-Soundsteuerung samt Testton im Board-Setup
+- persistente Soundausgabe auf Controller, Projektor oder beiden Geräten samt Testton
+- jederzeit erreichbare Einstellungen, ohne Session oder Spielzustand zu verlassen
 - Healthcheck und Docker-/Raspberry-Pi-Betrieb
 
 ## Schnellstart ohne Dartboard

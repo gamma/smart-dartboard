@@ -62,7 +62,11 @@ class SessionController:
             "offset_y": 0.0,
         }
         self.projector_geometry = {"width": 1600, "height": 900}
-        self.sound = {"enabled": False, "status": "disabled"}
+        self.sound = {
+            "enabled": False,
+            "output": "projector",
+            "status": "disabled",
+        }
         self.art_theme = "cartoon"
         self.ui_language = "de"
         self.hardware: Dict[str, Any] = {"enabled": False, "status": "disabled"}
@@ -93,8 +97,14 @@ class SessionController:
         self.calibration = self.store.get_runtime_value("calibration", self.calibration)
         stored_sound = self.store.get_runtime_value("sound", self.sound)
         sound_enabled = bool(stored_sound.get("enabled", False))
+        sound_output = stored_sound.get("output", "projector")
         self.sound = {
             "enabled": sound_enabled,
+            "output": (
+                sound_output
+                if sound_output in {"controller", "projector", "both"}
+                else "projector"
+            ),
             "status": "starting" if sound_enabled else "disabled",
         }
         stored_theme = self.store.get_runtime_value("art_theme", "cartoon")
@@ -799,8 +809,17 @@ class SessionController:
         return self.calibration
 
     def set_sound_enabled(self, enabled: bool) -> None:
+        self.set_sound_settings(enabled=enabled)
+
+    def set_sound_settings(
+        self, enabled: bool, output: Optional[str] = None
+    ) -> None:
+        selected_output = output or self.sound.get("output", "projector")
+        if selected_output not in {"controller", "projector", "both"}:
+            raise ValueError(f"Unknown sound output: {selected_output}")
         self.sound = {
             "enabled": bool(enabled),
+            "output": selected_output,
             "status": "starting" if enabled else "disabled",
         }
         self.store.set_runtime_value("sound", self.sound)

@@ -188,6 +188,7 @@ class ProjectorGeometryRequest(BaseModel):
 
 class SoundSettingsRequest(BaseModel):
     enabled: bool
+    output: Optional[Literal["controller", "projector", "both"]] = None
 
 
 class SoundStatusRequest(BaseModel):
@@ -471,8 +472,14 @@ async def projector_geometry(req: ProjectorGeometryRequest):
 
 @app.post("/api/sound/settings")
 async def sound_settings(req: SoundSettingsRequest):
-    controller.set_sound_enabled(req.enabled)
-    await publish_state({"type": "sound_settings", "enabled": req.enabled})
+    controller.set_sound_settings(req.enabled, req.output)
+    await publish_state(
+        {
+            "type": "sound_settings",
+            "enabled": req.enabled,
+            "output": controller.sound["output"],
+        }
+    )
     return controller.public_state()
 
 

@@ -85,10 +85,12 @@ den ersten Start sollte die Adresse leer bleiben, damit das Board über
    starten und den erfolgreichen Healthcheck abwarten.
 6. `http://<host>:8000/control` auf dem Tablet öffnen.
 7. `http://localhost:8000/projector` auf dem Projektorrechner öffnen.
-8. Über **Projektor kalibrieren** das Board-Setup öffnen, die Scheibe
-   deckungsgleich ausrichten, das gewünschte Artwork-Theme auswählen und dort
-   **Projektor-Sound einschalten**.
-9. Den **Testton** im Board-Setup auslösen und den Status `BEREIT` prüfen.
+8. Über **Projektor kalibrieren** das Board-Setup öffnen und die Scheibe
+   deckungsgleich ausrichten.
+9. Über das Zahnrad im Controller **Einstellungen** öffnen, Artwork-Theme und
+   Soundausgabe (**Controller**, **Projektor** oder **Beide**) wählen und den
+   **Testton** auslösen. Die Einstellungen bleiben auch während einer Session
+   erreichbar und verändern den aktuellen Spielscreen nicht.
 
 Ohne verbundenes BLE-Board läuft die Projektoransicht im Testmodus. In diesem
 Modus erzeugt ein Klick auf ein Scheibensegment den entsprechenden Treffer;
@@ -125,7 +127,8 @@ chromium \
 `--autoplay-policy=no-user-gesture-required` erlaubt Sound nach einem
 automatischen Neustart. Ohne diese Option kann der Projektor-Browser die
 automatische Audioausgabe blockieren. Der Status erscheint dann als
-`AUTOPLAY BLOCKIERT` im Board-Setup auf dem Controller; auf dem Projektor
+`AUTOPLAY BLOCKIERT` in den Einstellungen auf dem Controller. Bei Ausgabe nur
+auf dem Controller ist diese Projektorfreigabe nicht nötig; auf dem Projektor
 selbst gibt es bewusst keine Sound-Schaltfläche.
 
 ## Autostart
