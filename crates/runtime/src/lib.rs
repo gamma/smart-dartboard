@@ -4,7 +4,9 @@
 //! and only then installed as visible in-memory state. This preserves the
 //! product's state when persistence fails between a dart and its broadcast.
 
-use sdb_contracts::DartEvent;
+use sdb_contracts::{
+    CommandEnvelope, ContractError, DartEvent, ErrorCode, PROTOCOL_VERSION, RuntimeCommand,
+};
 use sdb_game_core::{CountUpGame, CountUpState, GameError, OutRule, X01Game, X01State};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -186,6 +188,37 @@ impl<R: Repository> Runtime<R> {
         &self.snapshot
     }
 
+    /// Validates and applies one transport-neutral command envelope.
+    ///
+    /// # Errors
+    ///
+    /// Returns a stable contract error for incompatible protocol versions,
+    /// stale clients, unsupported commands, invalid options or persistence
+    /// failures.
+    pub fn dispatch_envelope(
+        &mut self,
+        envelope: CommandEnvelope,
+    ) -> Result<CommandResult, ContractError> {
+        if envelope.protocol_version != PROTOCOL_VERSION {
+            return Err(contract_error(
+                ErrorCode::IncompatibleProtocol,
+                "incompatible protocol version",
+                Some(format!(
+                    "expected {PROTOCOL_VERSION}, got {}",
+                    envelope.protocol_version
+                )),
+            ));
+        }
+        let action = command_to_action(envelope.command)?;
+        self.dispatch(
+            &envelope.runtime_instance_id,
+            &envelope.command_id,
+            envelope.expected_revision,
+            action,
+        )
+        .map_err(|error| runtime_contract_error(&error))
+    }
+
     /// Applies, commits and then publishes one command result.
     ///
     /// # Errors
@@ -263,6 +296,88 @@ impl<R: Repository> Runtime<R> {
     pub fn into_repository(self) -> R {
         self.repository
     }
+}
+
+fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractError> {
+    match command {
+        RuntimeCommand::IngestDart { event } => Ok(RuntimeAction::Dart { event }),
+        RuntimeCommand::StartGame {
+            game_type,
+            player_ids,
+            options,
+        } => {
+            let players = player_ids.into_iter().map(|id| (id.clone(), id)).collect();
+            match game_type.as_str() {
+                "countup" => {
+                    let rounds = option_u64(&options, "rounds", 8)?;
+                    let rounds = u16::try_from(rounds).map_err(|_| {
+                        invalid_command("countup rounds must fit into an unsigned 16-bit integer")
+                    })?;
+                    Ok(RuntimeAction::StartCountUp { players, rounds })
+                }
+                "x01" => {
+                    let start_score = option_u64(&options, "start_score", 501)?;
+                    let start_score = u32::try_from(start_score).map_err(|_| {
+                        invalid_command("X01 start_score must fit into an unsigned 32-bit integer")
+                    })?;
+                    let out_rule = match options
+                        .get("out_rule")
+                        .and_then(serde_json::Value::as_str)
+                        .unwrap_or("straight")
+                    {
+                        "straight" => OutRule::Straight,
+                        "double" => OutRule::Double,
+                        _ => {
+                            return Err(invalid_command("X01 out_rule must be straight or double"));
+                        }
+                    };
+                    Ok(RuntimeAction::StartX01 {
+                        players,
+                        start_score,
+                        out_rule,
+                    })
+                }
+                _ => Err(invalid_command("unsupported game type")),
+            }
+        }
+        RuntimeCommand::ContinueTurn | RuntimeCommand::NextPlayer => Ok(RuntimeAction::Continue),
+        RuntimeCommand::Undo => Ok(RuntimeAction::Undo),
+        RuntimeCommand::GameAction { .. } | RuntimeCommand::AbortGame => Err(invalid_command(
+            "command is not implemented by this runtime slice",
+        )),
+    }
+}
+
+fn option_u64(options: &serde_json::Value, name: &str, default: u64) -> Result<u64, ContractError> {
+    options.get(name).map_or(Ok(default), |value| {
+        value
+            .as_u64()
+            .ok_or_else(|| invalid_command(&format!("{name} must be an unsigned integer")))
+    })
+}
+
+fn invalid_command(message: &str) -> ContractError {
+    contract_error(ErrorCode::InvalidCommand, message, None)
+}
+
+fn contract_error(code: ErrorCode, message: &str, details: Option<String>) -> ContractError {
+    ContractError {
+        code,
+        message: message.into(),
+        details,
+    }
+}
+
+fn runtime_contract_error(error: &RuntimeError) -> ContractError {
+    let code = match error {
+        RuntimeError::WrongRuntimeInstance => ErrorCode::WrongRuntimeInstance,
+        RuntimeError::StaleRevision { .. } => ErrorCode::StaleRevision,
+        RuntimeError::Persistence(_) => ErrorCode::PersistenceFailed,
+        RuntimeError::NoGame | RuntimeError::Game(_) | RuntimeError::InvalidPersistedData(_) => {
+            ErrorCode::InvalidCommand
+        }
+    };
+    contract_error(code, &error.to_string(), None)
 }
 
 fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result<(), RuntimeError> {
@@ -433,5 +548,75 @@ mod tests {
         assert_eq!(result.revision, 2);
         assert_eq!(state.winner_id.as_deref(), Some("ada"));
         assert_eq!(state.players[0].score, 0);
+    }
+
+    #[test]
+    fn command_envelope_validates_protocol_and_dispatches_x01() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        let incompatible = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION + 1,
+                command_id: "bad-version".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(0),
+                command: RuntimeCommand::Undo,
+            })
+            .expect_err("protocol must be rejected");
+        assert_eq!(incompatible.code, ErrorCode::IncompatibleProtocol);
+
+        let started = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "start".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(0),
+                command: RuntimeCommand::StartGame {
+                    game_type: "x01".into(),
+                    player_ids: vec!["ada".into()],
+                    options: serde_json::json!({
+                        "start_score": 301,
+                        "out_rule": "double"
+                    }),
+                },
+            })
+            .expect("start X01");
+        assert_eq!(started.revision, 1);
+        let Some(RuntimeGameState::X01(state)) = started.state else {
+            panic!("wrong game type");
+        };
+        assert_eq!(state.start_score, 301);
+        assert_eq!(state.out_rule, OutRule::Double);
+    }
+
+    #[test]
+    fn command_envelope_returns_stable_revision_and_instance_errors() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        let wrong_instance = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "wrong-instance".into(),
+                runtime_instance_id: "other".into(),
+                expected_revision: Some(0),
+                command: RuntimeCommand::Undo,
+            })
+            .expect_err("instance must be rejected");
+        assert_eq!(wrong_instance.code, ErrorCode::WrongRuntimeInstance);
+
+        let stale = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "stale".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(7),
+                command: RuntimeCommand::StartGame {
+                    game_type: "countup".into(),
+                    player_ids: vec!["ada".into()],
+                    options: serde_json::json!({"rounds": 8}),
+                },
+            })
+            .expect_err("revision must be rejected");
+        assert_eq!(stale.code, ErrorCode::StaleRevision);
     }
 }
