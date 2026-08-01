@@ -2149,7 +2149,7 @@ impl Repository for SqliteRepository {
 mod tests {
     use super::*;
     use sdb_contracts::{DartEvent, PlayerRef, Ring};
-    use sdb_game_core::GameStatus;
+    use sdb_game_core::{GameStatus, seed_from_id};
     use sdb_runtime::{Runtime, RuntimeAction};
     use sdb_session_core::Screen;
 
@@ -2752,6 +2752,7 @@ mod tests {
         };
         assert_eq!(game.state().status, GameStatus::Finished);
         assert_eq!(game.state().winner_ids, vec!["ada"]);
+        assert_eq!(game.state().random_seed, seed_from_id("game-cricket"));
     }
 
     #[test]

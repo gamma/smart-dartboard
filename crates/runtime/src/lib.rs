@@ -10,7 +10,7 @@ use sdb_contracts::{
 };
 use sdb_game_core::{
     CountUpGame, CountUpState, GameError, GameStatus, OutRule, RegisteredGame, RegisteredGameState,
-    X01Game, X01State, game_metadata,
+    X01Game, X01State, game_metadata, seed_from_id,
 };
 use sdb_session_core::{Screen, SessionCore, SessionError, SessionState};
 use serde::{Deserialize, Serialize};
@@ -56,6 +56,7 @@ pub enum RuntimeAction {
         game_type: String,
         players: Vec<(String, String)>,
         options: serde_json::Value,
+        random_seed: u64,
     },
     Dart {
         event: DartEvent,
@@ -466,6 +467,10 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
             player_ids,
             options,
         } => {
+            let random_seed = seed_from_id(&format!(
+                "direct:{game_type}:{}:{options}",
+                player_ids.join("\u{1f}")
+            ));
             let players = player_ids.into_iter().map(|id| (id.clone(), id)).collect();
             match game_type.as_str() {
                 "countup" => {
@@ -501,6 +506,7 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
                     game_type,
                     players,
                     options,
+                    random_seed,
                 }),
                 _ => Err(invalid_command("unsupported game type")),
             }
@@ -665,8 +671,12 @@ fn start_direct_game(
             game_type,
             players,
             options,
-        } => RuntimeGame::Registered(Box::new(RegisteredGame::new(
-            &game_type, players, &options,
+            random_seed,
+        } => RuntimeGame::Registered(Box::new(RegisteredGame::new_seeded(
+            &game_type,
+            players,
+            &options,
+            random_seed,
         )?)),
         _ => unreachable!("start_direct_game only accepts direct game actions"),
     });
@@ -678,6 +688,7 @@ fn start_prepared_game(
     game_id: String,
     rematch: bool,
 ) -> Result<(), RuntimeError> {
+    let random_seed = seed_from_id(&game_id);
     let prepared = snapshot
         .session
         .state()
@@ -693,6 +704,7 @@ fn start_prepared_game(
         &prepared.game_type,
         ordered,
         &prepared.options,
+        random_seed,
     )?);
     Ok(())
 }
@@ -701,6 +713,7 @@ fn game_from_options(
     game_type: &str,
     players: Vec<PlayerRef>,
     options: &serde_json::Value,
+    random_seed: u64,
 ) -> Result<RuntimeGame, RuntimeError> {
     let players = players
         .into_iter()
@@ -747,7 +760,7 @@ fn game_from_options(
             )?)))
         }
         _ if game_metadata(game_type).is_some() => Ok(RuntimeGame::Registered(Box::new(
-            RegisteredGame::new(game_type, players, options)?,
+            RegisteredGame::new_seeded(game_type, players, options, random_seed)?,
         ))),
         _ => Err(RuntimeError::InvalidGameOptions(format!(
             "unsupported game type: {game_type}"
@@ -1123,6 +1136,8 @@ mod tests {
         };
         assert_eq!(state.game_type, "cricket");
         assert_eq!(state.ruleset_version, 1);
+        assert_ne!(state.random_seed, 0);
+        let random_seed = state.random_seed;
         assert_eq!(state.players[0].marks.get("20"), Some(&0));
         assert_eq!(
             state.overlay["prompt"],
@@ -1168,6 +1183,7 @@ mod tests {
             panic!("registered game was not restored");
         };
         assert_eq!(game.state().players[0].marks.get("20"), Some(&3));
+        assert_eq!(game.state().random_seed, random_seed);
         assert_eq!(restored.snapshot().revision, 2);
     }
 

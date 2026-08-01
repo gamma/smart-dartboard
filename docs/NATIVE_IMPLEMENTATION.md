@@ -20,6 +20,11 @@ Umgesetzt und lokal verifiziert:
   und 8-Ball. Cricket und 8-Ball laufen über denselben generischen
   Registry-Pfad und sind durch gemeinsame Python-/Rust-Golden-Fixtures belegt;
   Cricket zusätzlich durch den vollständigen SQLite-Recovery-Pfad,
+- injizierter, plattformneutraler Zufallskontext für Registry-Modi. Reguläre
+  Sessions leiten den Seed stabil aus der persistierten Spiel-ID ab; Seed und
+  Cursor gehören zum Runtime-Snapshot. Damit reproduzieren Recovery, Undo und
+  Wurfkorrektur dieselbe Arcade-Zielsequenz. Golden-Fixtures können einen Seed
+  direkt vorgeben,
 - Web-UI hinter `HostedRuntimeClient` und `TauriRuntimeClient`,
 - macOS-Tauri-App mit Control- und Projector-Fenster,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,

@@ -1,4 +1,4 @@
-use crate::{GameError, GameStatus, with_seq};
+use crate::{GameError, GameStatus, seed_from_id, with_seq};
 use sdb_contracts::{DartEvent, Ring};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value, json};
@@ -114,7 +114,37 @@ pub struct RegisteredGameState {
     #[serde(default)]
     pub editable_darts: Vec<RegisteredDartRecord>,
     #[serde(default)]
+    pub random_seed: u64,
+    #[serde(default)]
+    pub random_cursor: u64,
+    #[serde(default)]
     pub mode_state: Value,
+}
+
+impl RegisteredGameState {
+    /// Returns a deterministic index and advances the persisted random cursor.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`GameError::InvalidOptions`] when `upper_bound` is zero.
+    pub fn random_index(&mut self, upper_bound: usize) -> Result<usize, GameError> {
+        if upper_bound == 0 {
+            return Err(GameError::InvalidOptions(
+                "random upper bound must be greater than zero".into(),
+            ));
+        }
+        self.random_cursor = self.random_cursor.wrapping_add(1);
+        let mut value = self
+            .random_seed
+            .wrapping_add(0x9e37_79b9_7f4a_7c15_u64.wrapping_mul(self.random_cursor));
+        value = (value ^ (value >> 30)).wrapping_mul(0xbf58_476d_1ce4_e5b9);
+        value = (value ^ (value >> 27)).wrapping_mul(0x94d0_49bb_1331_11eb);
+        value ^= value >> 31;
+        let bound = u64::try_from(upper_bound)
+            .map_err(|_| GameError::InvalidOptions("random upper bound exceeds u64".into()))?;
+        usize::try_from(value % bound)
+            .map_err(|_| GameError::InvalidOptions("random index exceeds usize".into()))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -177,6 +207,26 @@ impl RegisteredGame {
         players: Vec<(String, String)>,
         options: &Value,
     ) -> Result<Self, GameError> {
+        let player_ids = players
+            .iter()
+            .map(|(id, _)| id.as_str())
+            .collect::<Vec<_>>()
+            .join("\u{1f}");
+        let seed = seed_from_id(&format!("{game_type}\u{1e}{player_ids}\u{1e}{options}"));
+        Self::new_seeded(game_type, players, options, seed)
+    }
+
+    /// Creates a registered game with an injected deterministic random seed.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an unknown mode, invalid players or invalid options.
+    pub fn new_seeded(
+        game_type: &str,
+        players: Vec<(String, String)>,
+        options: &Value,
+        random_seed: u64,
+    ) -> Result<Self, GameError> {
         if players.is_empty() {
             return Err(GameError::NoPlayers);
         }
@@ -214,6 +264,8 @@ impl RegisteredGame {
             overlay: Value::Null,
             last_event: None,
             editable_darts: Vec::new(),
+            random_seed,
+            random_cursor: 0,
             mode_state: Value::Object(Map::new()),
         };
         mode.initialize(&mut state)?;
@@ -1132,5 +1184,28 @@ mod tests {
             .apply_throw(&hit(2, 19, Ring::Triple, 3, "T19"))
             .expect("new timeline action");
         assert_eq!(restored.state().editable_darts[0].action_id, 1);
+    }
+
+    #[test]
+    fn injected_random_seed_is_reproducible_and_cursor_is_serialized() {
+        let players = vec![("ada".into(), "Ada".into()), ("bob".into(), "Bob".into())];
+        let mut first = RegisteredGame::new_seeded("eight_ball", players.clone(), &json!({}), 42)
+            .expect("first");
+        let mut second =
+            RegisteredGame::new_seeded("eight_ball", players, &json!({}), 42).expect("second");
+        let first_sequence = (0..8)
+            .map(|_| first.state.random_index(97).expect("random index"))
+            .collect::<Vec<_>>();
+        let second_sequence = (0..8)
+            .map(|_| second.state.random_index(97).expect("random index"))
+            .collect::<Vec<_>>();
+        assert_eq!(first_sequence, second_sequence);
+        assert_eq!(first.state.random_cursor, 8);
+
+        let restored: RegisteredGame =
+            serde_json::from_str(&serde_json::to_string(&first).expect("serialize"))
+                .expect("restore");
+        assert_eq!(restored.state().random_seed, 42);
+        assert_eq!(restored.state().random_cursor, 8);
     }
 }

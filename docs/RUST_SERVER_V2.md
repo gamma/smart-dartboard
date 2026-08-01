@@ -128,6 +128,9 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
   generische, statische Modus-Registry statt neuer Runtime- oder Serverzweige,
 - Modusmetadaten einschließlich validierter Optionen, Anleitungen,
   Artwork-/Sound-Referenzen und Regelsatz-Version über `/api/v2/modes` liefern,
+- den deterministischen Registry-Zufall aus der stabilen Spiel-ID ableiten und
+  Seed sowie Cursor mit jedem Snapshot persistieren, sodass Replay und
+  Recovery keine neuen Zielsequenzen erzeugen,
 - Session mit vollständigen Spielerreferenzen starten, Modus vorbereiten und
   Startspieler festlegen,
 - Countdown, Spiel, Ergebnis, nächste Spielauswahl, Rematch und

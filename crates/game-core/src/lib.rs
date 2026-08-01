@@ -16,6 +16,16 @@ use sdb_contracts::DartEvent;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+/// Derives a stable non-cryptographic game seed from a persisted identifier.
+#[must_use]
+pub fn seed_from_id(identifier: &str) -> u64 {
+    const OFFSET: u64 = 0xcbf2_9ce4_8422_2325;
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+    identifier.as_bytes().iter().fold(OFFSET, |hash, byte| {
+        (hash ^ u64::from(*byte)).wrapping_mul(PRIME)
+    })
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GameStatus {
