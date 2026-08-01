@@ -221,6 +221,7 @@ pub enum ErrorCode {
     Forbidden,
     PersistenceFailed,
     BoardUnavailable,
+    NotFound,
     Internal,
 }
 

@@ -48,6 +48,9 @@ Umgesetzt und lokal verifiziert:
   Der gemeinsame State liefert die editierbaren Darts der aktuellen und
   vorherigen Aufnahme. Replay, Sessionpunkte, Gewinner, kanonische `throws`
   und append-only Korrekturevents werden atomar synchronisiert.
+- API-v2-Details für Sessions und Spiele sowie ein vollständiges Replay-Envelope
+  mit Initialzustand, Finalzustand, Frames, unwirksam gemachten Originalevents
+  und Korrekturverkettung. Unbekannte IDs liefern stabil `not_found`/HTTP 404.
 
 Noch nicht als produktionsreif nachgewiesen:
 
@@ -55,8 +58,8 @@ Noch nicht als produktionsreif nachgewiesen:
 - reale AirPlay-, HDMI- und Audio-Hardware,
 - External-Display-Scene-Accessory ab iOS/iPadOS 27,
 - iPhone/iPad-zu-iPad-Companion mit Pairing,
-- vollständige Portierung aller Spielmodi sowie Replay, Heatmap,
-  Modusstatistiken, Export und Trainingsempfehlungen,
+- vollständige Portierung aller Spielmodi sowie Heatmap, Modusstatistiken,
+  Export und Trainingsempfehlungen,
 - vollständige Docker-Parität zur Python-Anwendung.
 
 ## Lokale Befehle

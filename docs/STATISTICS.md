@@ -89,6 +89,11 @@ GET /api/training/{player_id}/recommendations
 GET /api/data/export
 ```
 
+Der parallele Rust-Migrationspfad stellt die bereits portierten Leseverträge
+versioniert unter `/api/v2/history/...` und `/api/v2/statistics/players` bereit.
+Sessiondetail, Spieldetail und Replay enthalten dort auch die unveränderliche
+Korrektur- und Löschkette.
+
 Die Statistikendpunkte akzeptieren bei Bedarf `include_test=true`. Die Heatmap
 kann zusätzlich nach `player_id`, `session_id` und `game_type` gefiltert
 werden.

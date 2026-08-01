@@ -69,6 +69,89 @@ pub struct PlayerStatistics {
     pub win_rate: f64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct GamePlayerHistory {
+    pub id: String,
+    pub name: String,
+    pub avatar: String,
+    pub color: String,
+    pub position: u64,
+    pub final_score: Option<u64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GameHistory {
+    pub id: String,
+    pub session_id: String,
+    pub game_type: String,
+    pub status: String,
+    pub options: serde_json::Value,
+    pub winner_ids: Vec<String>,
+    pub result_type: String,
+    pub finish_reason: String,
+    pub ruleset_version: u64,
+    pub app_version: String,
+    pub environment: String,
+    pub initial_state: Option<serde_json::Value>,
+    pub final_state: Option<serde_json::Value>,
+    pub started_at: String,
+    pub ended_at: Option<String>,
+    pub players: Vec<GamePlayerHistory>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SessionDetail {
+    pub session: SessionHistory,
+    pub players: Vec<PlayerProfile>,
+    pub games: Vec<GameHistory>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ThrowHistory {
+    pub id: u64,
+    pub action_id: Option<u64>,
+    pub seq: u64,
+    pub player_id: Option<String>,
+    pub event: serde_json::Value,
+    pub score_after: u64,
+    pub round_number: u64,
+    pub dart_in_turn: u64,
+    pub outcome: String,
+    pub source: String,
+    pub event_id: Option<u64>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GameEventHistory {
+    pub id: u64,
+    pub ordinal: u64,
+    pub event_type: String,
+    pub player_id: Option<String>,
+    pub source: String,
+    pub payload: serde_json::Value,
+    pub task: Option<serde_json::Value>,
+    pub frame: Option<serde_json::Value>,
+    pub effective: bool,
+    pub corrects_event_id: Option<u64>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GameDetail {
+    pub game: GameHistory,
+    pub throws: Vec<ThrowHistory>,
+    pub events: Vec<GameEventHistory>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct GameReplay {
+    pub game_id: String,
+    pub initial_state: Option<serde_json::Value>,
+    pub final_state: Option<serde_json::Value>,
+    pub events: Vec<GameEventHistory>,
+}
+
 #[derive(Debug)]
 pub struct SqliteRepository {
     connection: Connection,
@@ -309,6 +392,389 @@ impl SqliteRepository {
         })
         .collect()
     }
+
+    /// Loads one session with its ordered profiles and games.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when projected rows are invalid or cannot be queried.
+    pub fn session_detail(&self, session_id: &str) -> Result<Option<SessionDetail>, StorageError> {
+        let Some(session) = load_session_history(&self.connection, session_id)? else {
+            return Ok(None);
+        };
+        Ok(Some(SessionDetail {
+            session,
+            players: load_session_players(&self.connection, session_id)?,
+            games: load_session_games(&self.connection, session_id)?,
+        }))
+    }
+
+    /// Loads a game with its canonical throws and immutable event history.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when projected rows are invalid or cannot be queried.
+    pub fn game_detail(&self, game_id: &str) -> Result<Option<GameDetail>, StorageError> {
+        let Some(game) = load_game_history(&self.connection, game_id)? else {
+            return Ok(None);
+        };
+        Ok(Some(GameDetail {
+            game,
+            throws: load_throws(&self.connection, game_id)?,
+            events: load_game_events(&self.connection, game_id)?,
+        }))
+    }
+
+    /// Loads the complete replay envelope including ineffective audit events.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when stored JSON is invalid or cannot be queried.
+    pub fn game_replay(&self, game_id: &str) -> Result<Option<GameReplay>, StorageError> {
+        let Some(game) = load_game_history(&self.connection, game_id)? else {
+            return Ok(None);
+        };
+        Ok(Some(GameReplay {
+            game_id: game.id,
+            initial_state: game.initial_state,
+            final_state: game.final_state,
+            events: load_game_events(&self.connection, game_id)?,
+        }))
+    }
+}
+
+fn load_session_history(
+    connection: &Connection,
+    session_id: &str,
+) -> Result<Option<SessionHistory>, StorageError> {
+    let row = connection
+        .query_row(
+            "SELECT s.id, s.status, s.language, s.started_at, s.ended_at,
+                    COUNT(DISTINCT g.id),
+                    COUNT(DISTINCT CASE WHEN g.status='finished' THEN g.id END),
+                    COUNT(DISTINCT sp.player_id)
+             FROM sessions s
+             LEFT JOIN session_players sp ON sp.session_id=s.id
+             LEFT JOIN games g ON g.session_id=s.id
+             WHERE s.id=?1 GROUP BY s.id",
+            [session_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, Option<String>>(4)?,
+                    row.get::<_, i64>(5)?,
+                    row.get::<_, i64>(6)?,
+                    row.get::<_, i64>(7)?,
+                ))
+            },
+        )
+        .optional()?;
+    row.map(
+        |(id, status, language, started_at, ended_at, games, finished, players)| {
+            Ok(SessionHistory {
+                id,
+                status,
+                language,
+                started_at,
+                ended_at,
+                games: nonnegative(games, "session game count")?,
+                finished_games: nonnegative(finished, "finished game count")?,
+                player_count: nonnegative(players, "session player count")?,
+            })
+        },
+    )
+    .transpose()
+}
+
+fn load_session_players(
+    connection: &Connection,
+    session_id: &str,
+) -> Result<Vec<PlayerProfile>, StorageError> {
+    let mut statement = connection.prepare(
+        "SELECT p.id, p.name, p.avatar, p.color, p.created_at
+         FROM session_players sp JOIN players p ON p.id=sp.player_id
+         WHERE sp.session_id=?1 ORDER BY sp.position, p.id",
+    )?;
+    let rows = statement.query_map([session_id], |row| {
+        Ok(PlayerProfile {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            avatar: row.get(2)?,
+            color: row.get(3)?,
+            created_at: row.get(4)?,
+        })
+    })?;
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(StorageError::from)
+}
+
+fn load_session_games(
+    connection: &Connection,
+    session_id: &str,
+) -> Result<Vec<GameHistory>, StorageError> {
+    let mut statement =
+        connection.prepare("SELECT id FROM games WHERE session_id=?1 ORDER BY started_at, id")?;
+    let ids = statement
+        .query_map([session_id], |row| row.get::<_, String>(0))?
+        .collect::<Result<Vec<_>, _>>()?;
+    ids.into_iter()
+        .map(|id| {
+            load_game_history(connection, &id)?.ok_or_else(|| {
+                StorageError::Integrity(format!("session references missing game {id}"))
+            })
+        })
+        .collect()
+}
+
+#[allow(clippy::type_complexity)]
+fn load_game_history(
+    connection: &Connection,
+    game_id: &str,
+) -> Result<Option<GameHistory>, StorageError> {
+    let row = connection
+        .query_row(
+            "SELECT id, session_id, game_type, status, options_json, result_type,
+                    finish_reason, ruleset_version, app_version, environment,
+                    initial_state_json, final_state_json, started_at, ended_at
+             FROM games WHERE id=?1",
+            [game_id],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, String>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, i64>(7)?,
+                    row.get::<_, String>(8)?,
+                    row.get::<_, String>(9)?,
+                    row.get::<_, Option<String>>(10)?,
+                    row.get::<_, Option<String>>(11)?,
+                    row.get::<_, String>(12)?,
+                    row.get::<_, Option<String>>(13)?,
+                ))
+            },
+        )
+        .optional()?;
+    let Some((
+        id,
+        session_id,
+        game_type,
+        status,
+        options,
+        result_type,
+        finish_reason,
+        ruleset_version,
+        app_version,
+        environment,
+        initial_state,
+        final_state,
+        started_at,
+        ended_at,
+    )) = row
+    else {
+        return Ok(None);
+    };
+    Ok(Some(GameHistory {
+        winner_ids: load_winner_ids(connection, game_id)?,
+        players: load_game_players(connection, game_id)?,
+        id,
+        session_id,
+        game_type,
+        status,
+        options: parse_json(&options, "game options")?,
+        result_type,
+        finish_reason,
+        ruleset_version: nonnegative(ruleset_version, "ruleset version")?,
+        app_version,
+        environment,
+        initial_state: parse_optional_json(initial_state, "initial game state")?,
+        final_state: parse_optional_json(final_state, "final game state")?,
+        started_at,
+        ended_at,
+    }))
+}
+
+fn load_winner_ids(connection: &Connection, game_id: &str) -> Result<Vec<String>, StorageError> {
+    let mut statement = connection
+        .prepare("SELECT player_id FROM game_winners WHERE game_id=?1 ORDER BY player_id")?;
+    statement
+        .query_map([game_id], |row| row.get(0))?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(StorageError::from)
+}
+
+fn load_game_players(
+    connection: &Connection,
+    game_id: &str,
+) -> Result<Vec<GamePlayerHistory>, StorageError> {
+    let mut statement = connection.prepare(
+        "SELECT p.id, p.name, p.avatar, p.color, gp.position, gp.final_score
+         FROM game_players gp JOIN players p ON p.id=gp.player_id
+         WHERE gp.game_id=?1 ORDER BY gp.position, p.id",
+    )?;
+    let rows = statement.query_map([game_id], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, String>(3)?,
+            row.get::<_, i64>(4)?,
+            row.get::<_, Option<i64>>(5)?,
+        ))
+    })?;
+    rows.map(|row| {
+        let (id, name, avatar, color, position, final_score) = row?;
+        Ok(GamePlayerHistory {
+            id,
+            name,
+            avatar,
+            color,
+            position: nonnegative(position, "game player position")?,
+            final_score: final_score
+                .map(|score| nonnegative(score, "game final score"))
+                .transpose()?,
+        })
+    })
+    .collect()
+}
+
+#[allow(clippy::type_complexity)]
+fn load_throws(connection: &Connection, game_id: &str) -> Result<Vec<ThrowHistory>, StorageError> {
+    let mut statement = connection.prepare(
+        "SELECT id, action_id, seq, player_id, event_json, score_after,
+                round_number, dart_in_turn, outcome, source, event_id, created_at
+         FROM throws WHERE game_id=?1 ORDER BY id",
+    )?;
+    let rows = statement.query_map([game_id], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, Option<i64>>(1)?,
+            row.get::<_, i64>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, i64>(5)?,
+            row.get::<_, i64>(6)?,
+            row.get::<_, i64>(7)?,
+            row.get::<_, String>(8)?,
+            row.get::<_, String>(9)?,
+            row.get::<_, Option<i64>>(10)?,
+            row.get::<_, String>(11)?,
+        ))
+    })?;
+    rows.map(|row| {
+        let (
+            id,
+            action_id,
+            seq,
+            player_id,
+            event,
+            score,
+            round,
+            dart,
+            outcome,
+            source,
+            event_id,
+            created_at,
+        ) = row?;
+        Ok(ThrowHistory {
+            id: nonnegative(id, "throw ID")?,
+            action_id: optional_nonnegative(action_id, "dart action ID")?,
+            seq: nonnegative(seq, "dart sequence")?,
+            player_id,
+            event: parse_json(&event, "dart event")?,
+            score_after: nonnegative(score, "score after dart")?,
+            round_number: nonnegative(round, "dart round")?,
+            dart_in_turn: nonnegative(dart, "dart in turn")?,
+            outcome,
+            source,
+            event_id: optional_nonnegative(event_id, "throw event ID")?,
+            created_at,
+        })
+    })
+    .collect()
+}
+
+#[allow(clippy::type_complexity)]
+fn load_game_events(
+    connection: &Connection,
+    game_id: &str,
+) -> Result<Vec<GameEventHistory>, StorageError> {
+    let mut statement = connection.prepare(
+        "SELECT id, ordinal, event_type, player_id, source, payload_json,
+                task_json, frame_json, effective, corrects_event_id, created_at
+         FROM game_events WHERE game_id=?1 ORDER BY ordinal",
+    )?;
+    let rows = statement.query_map([game_id], |row| {
+        Ok((
+            row.get::<_, i64>(0)?,
+            row.get::<_, i64>(1)?,
+            row.get::<_, String>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, String>(4)?,
+            row.get::<_, String>(5)?,
+            row.get::<_, Option<String>>(6)?,
+            row.get::<_, Option<String>>(7)?,
+            row.get::<_, i64>(8)?,
+            row.get::<_, Option<i64>>(9)?,
+            row.get::<_, String>(10)?,
+        ))
+    })?;
+    rows.map(|row| {
+        let (
+            id,
+            ordinal,
+            event_type,
+            player_id,
+            source,
+            payload,
+            task,
+            frame,
+            effective,
+            corrects,
+            created_at,
+        ) = row?;
+        if !matches!(effective, 0 | 1) {
+            return Err(StorageError::Integrity(
+                "event effective flag is invalid".into(),
+            ));
+        }
+        Ok(GameEventHistory {
+            id: nonnegative(id, "game event ID")?,
+            ordinal: nonnegative(ordinal, "game event ordinal")?,
+            event_type,
+            player_id,
+            source,
+            payload: parse_json(&payload, "game event payload")?,
+            task: parse_optional_json(task, "game event task")?,
+            frame: parse_optional_json(frame, "game event frame")?,
+            effective: effective == 1,
+            corrects_event_id: optional_nonnegative(corrects, "corrected event ID")?,
+            created_at,
+        })
+    })
+    .collect()
+}
+
+fn parse_json(value: &str, label: &str) -> Result<serde_json::Value, StorageError> {
+    serde_json::from_str(value)
+        .map_err(|error| StorageError::Integrity(format!("invalid {label}: {error}")))
+}
+
+fn parse_optional_json(
+    value: Option<String>,
+    label: &str,
+) -> Result<Option<serde_json::Value>, StorageError> {
+    value.map(|json| parse_json(&json, label)).transpose()
+}
+
+fn optional_nonnegative(value: Option<i64>, label: &str) -> Result<Option<u64>, StorageError> {
+    value.map(|number| nonnegative(number, label)).transpose()
 }
 
 fn nonnegative(value: i64, label: &str) -> Result<u64, StorageError> {
@@ -1985,6 +2451,45 @@ mod tests {
             )
             .expect("audit");
         assert_eq!(audit, (4, 2, 1, 1));
+        let session = repository
+            .session_detail("edit-session")
+            .expect("session detail")
+            .expect("session");
+        assert_eq!(session.players[0].id, "ada");
+        assert_eq!(session.games.len(), 1);
+        assert_eq!(session.games[0].id, "edit-game");
+        let detail = repository
+            .game_detail("edit-game")
+            .expect("game detail")
+            .expect("game");
+        assert_eq!(detail.game.players[0].id, "ada");
+        assert_eq!(detail.throws.len(), 1);
+        assert_eq!(detail.throws[0].action_id, Some(1));
+        assert_eq!(detail.throws[0].event["label"], "T20");
+        assert_eq!(detail.events.len(), 4);
+        assert_eq!(
+            detail.events.iter().filter(|event| event.effective).count(),
+            2
+        );
+        let replay = repository
+            .game_replay("edit-game")
+            .expect("replay")
+            .expect("game");
+        assert!(replay.initial_state.is_some());
+        assert!(replay.final_state.is_none());
+        assert_eq!(replay.events.len(), 4);
+        assert!(
+            repository
+                .session_detail("missing")
+                .expect("missing")
+                .is_none()
+        );
+        assert!(
+            repository
+                .game_detail("missing")
+                .expect("missing")
+                .is_none()
+        );
     }
 
     #[test]

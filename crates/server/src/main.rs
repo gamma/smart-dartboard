@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{State, WebSocketUpgrade, ws::Message},
+    extract::{Path, State, WebSocketUpgrade, ws::Message},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -122,6 +122,12 @@ fn router(state: AppState) -> Router {
         .route("/api/v2/runtime/events", get(websocket))
         .route("/api/v2/players", get(players))
         .route("/api/v2/history/sessions", get(session_history))
+        .route("/api/v2/history/sessions/{session_id}", get(session_detail))
+        .route("/api/v2/history/games/{game_id}", get(game_detail))
+        .route(
+            "/api/v2/history/games/{game_id}/replay",
+            get(game_replay),
+        )
         .route("/api/v2/statistics/players", get(player_statistics))
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,
@@ -218,6 +224,54 @@ async fn player_statistics(
         .player_statistics()
         .map_err(|_| internal_error("player statistics query failed"))?;
     Ok(Json(statistics))
+}
+
+async fn session_detail(
+    State(state): State<AppState>,
+    Path(session_id): Path<String>,
+) -> Result<Json<sdb_storage::SessionDetail>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let detail = runtime
+        .repository()
+        .session_detail(&session_id)
+        .map_err(|_| internal_error("session detail query failed"))?
+        .ok_or_else(|| not_found("session not found"))?;
+    Ok(Json(detail))
+}
+
+async fn game_detail(
+    State(state): State<AppState>,
+    Path(game_id): Path<String>,
+) -> Result<Json<sdb_storage::GameDetail>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let detail = runtime
+        .repository()
+        .game_detail(&game_id)
+        .map_err(|_| internal_error("game detail query failed"))?
+        .ok_or_else(|| not_found("game not found"))?;
+    Ok(Json(detail))
+}
+
+async fn game_replay(
+    State(state): State<AppState>,
+    Path(game_id): Path<String>,
+) -> Result<Json<sdb_storage::GameReplay>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let replay = runtime
+        .repository()
+        .game_replay(&game_id)
+        .map_err(|_| internal_error("game replay query failed"))?
+        .ok_or_else(|| not_found("game not found"))?;
+    Ok(Json(replay))
 }
 
 async fn command(
@@ -324,6 +378,14 @@ fn internal_error(message: &str) -> ContractError {
     }
 }
 
+fn not_found(message: &str) -> ContractError {
+    ContractError {
+        code: ErrorCode::NotFound,
+        message: message.into(),
+        details: None,
+    }
+}
+
 struct ApiError(ContractError);
 
 impl From<ContractError> for ApiError {
@@ -339,6 +401,7 @@ impl IntoResponse for ApiError {
             ErrorCode::WrongRuntimeInstance | ErrorCode::StaleRevision => StatusCode::CONFLICT,
             ErrorCode::InvalidCommand | ErrorCode::BoardUnavailable => StatusCode::BAD_REQUEST,
             ErrorCode::Forbidden => StatusCode::FORBIDDEN,
+            ErrorCode::NotFound => StatusCode::NOT_FOUND,
             ErrorCode::PersistenceFailed | ErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self.0)).into_response()
@@ -507,6 +570,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::too_many_lines)] // Covers commands, history, replay and 404 as one API flow.
     async fn correction_commands_replay_x01_through_the_public_contract() {
         let app = test_app();
         let commands = [
@@ -574,6 +638,50 @@ mod tests {
         assert_eq!(result["session"]["standings"][0]["session_points"], 0);
         assert_eq!(result["state"]["state"]["players"][0]["score"], 40);
         assert_eq!(result["state"]["state"]["darts_in_turn"], 0);
+
+        for (path, assertion) in [
+            ("/api/v2/history/sessions/session-edit", ("games", 1_usize)),
+            ("/api/v2/history/games/game-edit", ("events", 3_usize)),
+            (
+                "/api/v2/history/games/game-edit/replay",
+                ("events", 3_usize),
+            ),
+        ] {
+            let response = app
+                .clone()
+                .oneshot(Request::get(path).body(Body::empty()).expect("request"))
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::OK, "{path}");
+            let value: Value = serde_json::from_slice(
+                &to_bytes(response.into_body(), usize::MAX)
+                    .await
+                    .expect("body"),
+            )
+            .expect("history JSON");
+            assert_eq!(
+                value[assertion.0].as_array().map(Vec::len),
+                Some(assertion.1),
+                "{path}"
+            );
+        }
+
+        let missing = app
+            .oneshot(
+                Request::get("/api/v2/history/games/missing")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(missing.status(), StatusCode::NOT_FOUND);
+        let error: ContractError = serde_json::from_slice(
+            &to_bytes(missing.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("error JSON");
+        assert_eq!(error.code, ErrorCode::NotFound);
     }
 
     #[test]

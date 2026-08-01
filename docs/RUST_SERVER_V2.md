@@ -37,6 +37,9 @@ Der Container läuft ohne Root, ohne `privileged` und ohne Linux-Capabilities.
 | `GET` | `/api/v2/runtime/events` | WebSocket mit initialem und folgenden Snapshots |
 | `GET` | `/api/v2/players` | persistente Spielerprofile |
 | `GET` | `/api/v2/history/sessions` | Sessionhistorie; optional `?limit=` |
+| `GET` | `/api/v2/history/sessions/{session_id}` | Session, Teilnehmer und enthaltene Spiele |
+| `GET` | `/api/v2/history/games/{game_id}` | Spiel, kanonische Würfe und vollständige Auditkette |
+| `GET` | `/api/v2/history/games/{game_id}/replay` | Initial-/Finalzustand und alle Replay-Frames einschließlich Korrekturen |
 | `GET` | `/api/v2/statistics/players` | Langzeitstatistik aus gewerteten Produktionsspielen |
 
 Browser-POSTs und WebSockets akzeptieren nur dieselbe Origin. Clients ohne
@@ -75,8 +78,7 @@ Fehlercodes und passende HTTP-Statuscodes.
 
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
-- Teammodell sowie vollständige History-, Replay-, Heatmap-, Modusstatistik-
-  und Exportabfragen,
+- Teammodell sowie Heatmap-, Modusstatistik-, Export- und Trainingsabfragen,
 - restliche Spielmodi und deklarative Effects,
 - Bleak-/BlueZ-Gateway und reale Boardqualifizierung,
 - Migration vorhandener Python-Datenbanken,

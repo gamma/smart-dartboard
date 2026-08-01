@@ -273,25 +273,46 @@ jobs:
           import urllib.request
           base = 'http://127.0.0.1:18081'
           bootstrap = json.load(urllib.request.urlopen(base + '/api/v2/runtime/bootstrap'))
-          command = {
-              'protocol_version': 1,
-              'command_id': 'ci-start',
-              'runtime_instance_id': bootstrap['runtime_instance_id'],
-              'expected_revision': 0,
-              'command': {
-                  'type': 'start_game',
-                  'game_type': 'x01',
-                  'player_ids': ['ci-player'],
-                  'options': {'start_score': 301, 'out_rule': 'double'},
-              },
-          }
-          request = urllib.request.Request(
-              base + '/api/v2/runtime/commands',
-              data=json.dumps(command).encode(),
-              headers={'content-type': 'application/json'},
-          )
-          result = json.load(urllib.request.urlopen(request))
-          assert result['revision'] == 1, result
+          commands = [
+              ('session', {
+                  'type': 'start_session',
+                  'session_id': 'ci-session',
+                  'players': [{
+                      'id': 'ci-player', 'name': 'CI Player',
+                      'avatar': 'target', 'color': '#28e7ff',
+                  }],
+              }),
+              ('prepare', {
+                  'type': 'prepare_game', 'game_type': 'x01',
+                  'options': {'start_score': 40, 'out_rule': 'double'},
+              }),
+              ('start', {'type': 'start_prepared_game', 'game_id': 'ci-game'}),
+              ('playing', {'type': 'mark_game_playing'}),
+              ('checkout', {
+                  'type': 'ingest_dart',
+                  'event': {
+                      'type': 'hit', 'seq': 1, 'field': 20, 'ring': 'double',
+                      'multiplier': 2, 'label': 'D20', 'score': 40,
+                  },
+              }),
+          ]
+          revision = 0
+          for command_id, command in commands:
+              envelope = {
+                  'protocol_version': 1,
+                  'command_id': f'ci-{command_id}',
+                  'runtime_instance_id': bootstrap['runtime_instance_id'],
+                  'expected_revision': revision,
+                  'command': command,
+              }
+              request = urllib.request.Request(
+                  base + '/api/v2/runtime/commands',
+                  data=json.dumps(envelope).encode(),
+                  headers={'content-type': 'application/json'},
+              )
+              result = json.load(urllib.request.urlopen(request))
+              revision = result['revision']
+          assert revision == 5, result
           open('/tmp/rust-instance-before', 'w').write(bootstrap['runtime_instance_id'])
           PY
           docker restart "$container_name" >/dev/null
@@ -304,9 +325,23 @@ jobs:
           done
           python - <<'PY'
           import json
+          import urllib.request
           recovered = json.load(open('/tmp/rust-recovered.json'))
           previous_instance = open('/tmp/rust-instance-before').read()
-          assert recovered['revision'] == 1, recovered
+          assert recovered['revision'] == 5, recovered
           assert recovered['payload']['game']['game_type'] == 'x01', recovered
           assert recovered['runtime_instance_id'] != previous_instance, recovered
+          detail = json.load(urllib.request.urlopen(
+              'http://127.0.0.1:18081/api/v2/history/games/ci-game'
+          ))
+          replay = json.load(urllib.request.urlopen(
+              'http://127.0.0.1:18081/api/v2/history/games/ci-game/replay'
+          ))
+          statistics = json.load(urllib.request.urlopen(
+              'http://127.0.0.1:18081/api/v2/statistics/players'
+          ))
+          assert detail['game']['status'] == 'finished', detail
+          assert detail['throws'][0]['event']['label'] == 'D20', detail
+          assert len(replay['events']) == 1, replay
+          assert statistics[0]['wins'] == 1, statistics
           PY
