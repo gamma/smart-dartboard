@@ -3,9 +3,10 @@ use sdb_board::BoardFailureCode;
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 use sdb_board::{BoardIngress, BoardIngressOutcome};
 use sdb_board::{BoardPhase, BoardStatus};
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+use sdb_companion::{COMPANION_PROTOCOL_VERSION, CompanionFrame, ReplicaCursor, ReplicaDecision};
 use sdb_companion::{
-    COMPANION_PROTOCOL_VERSION, CompanionRole, PairedDevice, PairingAuthority, PairingBootstrap,
-    PairingGrant, PairingRequest,
+    CompanionRole, PairedDevice, PairingAuthority, PairingBootstrap, PairingGrant, PairingRequest,
 };
 use sdb_companion_transport::{
     SecretStore, TlsIdentity, certificate_sha256, load_identity, load_or_create_identity,
@@ -18,14 +19,22 @@ use std::{
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+use tauri::async_runtime::JoinHandle;
 use tauri::{Emitter, Manager, State};
-use tokio::sync::{Mutex as AsyncMutex, broadcast};
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+use tokio::sync::Mutex as AsyncMutex;
+use tokio::sync::broadcast;
 use uuid::Uuid;
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 use zeroize::{Zeroize, Zeroizing};
 
 const PROJECTOR_OUTPUT_PREFERENCE: &str = "projector.output";
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 const COMPANION_HOST_ID_PREFERENCE: &str = "companion.host_id";
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 const COMPANION_CLIENT_DEVICE_ID_PREFERENCE: &str = "companion.client_device_id";
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 const COMPANION_CLIENT_HOST_ID_PREFERENCE: &str = "companion.client_host_id";
 const APP_ROLE_PREFERENCE: &str = "app.role";
 
@@ -92,7 +101,7 @@ impl NativeAppRole {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 enum ProjectorOutput {
     ExternalDisplay,
@@ -119,7 +128,7 @@ impl ProjectorOutput {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
 struct PublicState {
     app_role: NativeAppRole,
     runtime_instance_id: String,
@@ -164,6 +173,19 @@ struct CompanionClientView {
     host_id: String,
     service_name: String,
     paired: bool,
+    phase: CompanionClientPhase,
+    runtime_instance_id: Option<String>,
+    revision: Option<u64>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum CompanionClientPhase {
+    Discovering,
+    Connecting,
+    Connected,
+    Reconnecting,
+    PairingRequired,
 }
 
 fn is_valid_mdns_hostname(host_name: &str) -> bool {
@@ -963,6 +985,11 @@ mod native_companion_transport {
         }
         let runtime_instance_id = initial.runtime_instance_id.clone();
         let mut revision = initial.revision;
+        let mut heartbeat = tokio::time::interval_at(
+            tokio::time::Instant::now() + Duration::from_secs(10),
+            Duration::from_secs(10),
+        );
+        let mut awaiting_pong = false;
         loop {
             tokio::select! {
                 state = states.recv() => {
@@ -992,6 +1019,26 @@ mod native_companion_transport {
                     if changed.is_err() || !token_is_active(&native, &token) {
                         break;
                     }
+                }
+                incoming = socket.recv() => {
+                    match incoming {
+                        Some(Ok(Message::Pong(_))) => awaiting_pong = false,
+                        Some(Ok(Message::Ping(payload))) => {
+                            if socket.send(Message::Pong(payload)).await.is_err() {
+                                break;
+                            }
+                        }
+                        Some(Ok(Message::Close(_))) | Some(Err(_)) | None => break,
+                        Some(Ok(Message::Text(_) | Message::Binary(_))) => {}
+                    }
+                }
+                _ = heartbeat.tick() => {
+                    if awaiting_pong
+                        || socket.send(Message::Ping(now_ms().to_be_bytes().to_vec().into())).await.is_err()
+                    {
+                        break;
+                    }
+                    awaiting_pong = true;
                 }
             }
         }
@@ -1309,9 +1356,11 @@ mod native_companion_transport {
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 mod native_companion_client {
     use super::{
-        DiscoveredCompanionHost, PairingGrant, PairingRequest, certificate_sha256, now_ms,
+        CompanionFrame, DiscoveredCompanionHost, PairingGrant, PairingRequest, ReplicaCursor,
+        ReplicaDecision, certificate_sha256, now_ms,
     };
     use base64::{Engine as _, engine::general_purpose::STANDARD};
+    use futures_util::{SinkExt, StreamExt};
     use serde::{Deserialize, Serialize};
     use std::sync::{Arc, Mutex as StdMutex};
     use tokio::{
@@ -1327,12 +1376,22 @@ mod native_companion_client {
             pki_types::{CertificateDer, ServerName, UnixTime},
         },
     };
+    use tokio_tungstenite::{
+        Connector, client_async_tls_with_config,
+        tungstenite::{
+            Message,
+            client::IntoClientRequest,
+            http::{HeaderValue, header::AUTHORIZATION},
+            protocol::WebSocketConfig,
+        },
+    };
     use zeroize::{Zeroize, Zeroizing};
 
     pub(super) const CLIENT_GRANT_KEY: &str = "companion.client.grant.v1";
     const PROBE_LIFETIME_MS: u64 = 5 * 60 * 1_000;
     const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
     const MAX_HTTP_RESPONSE_BYTES: u64 = 128 * 1_024;
+    const MAX_WEBSOCKET_MESSAGE_BYTES: usize = 256 * 1_024;
 
     #[derive(Clone)]
     pub(super) struct ProbedTarget {
@@ -1342,10 +1401,17 @@ mod native_companion_client {
         pub expires_at_ms: u64,
     }
 
+    #[derive(Clone)]
     pub(super) struct ActiveGrant {
         pub host_id: String,
         pub certificate_der: Vec<u8>,
         pub token: Zeroizing<String>,
+    }
+
+    #[derive(Debug, PartialEq, Eq)]
+    pub(super) enum SessionError {
+        Authorization,
+        Retry(String),
     }
 
     impl ActiveGrant {
@@ -1494,18 +1560,7 @@ mod native_companion_client {
         path: &str,
         body: &[u8],
     ) -> Result<Vec<u8>, String> {
-        let mut roots = RootCertStore::empty();
-        roots
-            .add(CertificateDer::from(certificate_der.to_vec()))
-            .map_err(|_| "invalid pinned Companion certificate")?;
-        let provider = Arc::new(rustls::crypto::ring::default_provider());
-        let mut config = ClientConfig::builder_with_provider(provider)
-            .with_safe_default_protocol_versions()
-            .map_err(|_| "Companion TLS protocol setup failed")?
-            .with_root_certificates(roots)
-            .with_no_client_auth();
-        config.alpn_protocols = vec![b"http/1.1".to_vec()];
-        let mut tls = connect(host, Arc::new(config)).await?;
+        let mut tls = connect(host, verified_client_config(certificate_der)?).await?;
         let authority = format!("{}.local", host.host_id);
         let header = format!(
             "POST {path} HTTP/1.1\r\nHost: {authority}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
@@ -1525,20 +1580,202 @@ mod native_companion_client {
         if response.len() as u64 > MAX_HTTP_RESPONSE_BYTES {
             return Err("Companion response exceeds size limit".into());
         }
-        parse_http_response(&response)
+        let parsed = parse_http_response(&response);
+        response.zeroize();
+        let (status, body) = parsed?;
+        if status != 200 {
+            return Err("pairing was rejected by the Controller".into());
+        }
+        Ok(body)
+    }
+
+    pub(super) async fn replicate<F>(
+        host: &DiscoveredCompanionHost,
+        grant: &ActiveGrant,
+        mut apply: F,
+    ) -> Result<(), SessionError>
+    where
+        F: FnMut(super::PublicState) + Send,
+    {
+        if host.host_id != grant.host_id
+            || host.protocol_version != sdb_companion::COMPANION_PROTOCOL_VERSION
+            || !host.tls
+        {
+            return Err(SessionError::Retry(
+                "discovered Controller identity changed".into(),
+            ));
+        }
+        let bootstrap = get_bootstrap(host, grant).await?;
+        let mut cursor = ReplicaCursor::default();
+        apply_frame(&mut cursor, bootstrap, &mut apply)?;
+
+        let tcp = connect_tcp(host).await.map_err(SessionError::Retry)?;
+        let authority = format!("{}.local", host.host_id);
+        let url = format!(
+            "wss://{authority}:{}/api/v2/companion/runtime/events",
+            host.port
+        );
+        let mut request = url
+            .into_client_request()
+            .map_err(|_| SessionError::Retry("invalid Companion WebSocket request".into()))?;
+        let mut authorization = Zeroizing::new(format!("Bearer {}", grant.token.as_str()));
+        let header = HeaderValue::from_str(&authorization)
+            .map_err(|_| SessionError::Retry("invalid Companion authorization".into()))?;
+        authorization.zeroize();
+        request.headers_mut().insert(AUTHORIZATION, header);
+        let config = WebSocketConfig::default()
+            .read_buffer_size(16 * 1_024)
+            .write_buffer_size(4 * 1_024)
+            .max_write_buffer_size(32 * 1_024)
+            .max_message_size(Some(MAX_WEBSOCKET_MESSAGE_BYTES))
+            .max_frame_size(Some(MAX_WEBSOCKET_MESSAGE_BYTES));
+        let connector = Connector::Rustls(
+            verified_client_config(&grant.certificate_der).map_err(SessionError::Retry)?,
+        );
+        let (mut socket, _) = timeout(
+            CONNECT_TIMEOUT,
+            client_async_tls_with_config(request, tcp, Some(config), Some(connector)),
+        )
+        .await
+        .map_err(|_| SessionError::Retry("Companion WebSocket timed out".into()))?
+        .map_err(|error| match error {
+            tokio_tungstenite::tungstenite::Error::Http(response)
+                if matches!(response.status().as_u16(), 401 | 403) =>
+            {
+                SessionError::Authorization
+            }
+            _ => SessionError::Retry("Companion WebSocket failed".into()),
+        })?;
+
+        let mut first = true;
+        while let Some(message) = socket.next().await {
+            match message.map_err(|_| SessionError::Retry("Companion stream closed".into()))? {
+                Message::Text(text) => {
+                    let frame: CompanionFrame = serde_json::from_str(&text).map_err(|_| {
+                        SessionError::Retry("invalid Companion stream frame".into())
+                    })?;
+                    if first && frame.kind != sdb_companion::CompanionFrameKind::Snapshot {
+                        return Err(SessionError::Retry(
+                            "Companion stream did not begin with a snapshot".into(),
+                        ));
+                    }
+                    first = false;
+                    apply_frame(&mut cursor, frame, &mut apply)?;
+                }
+                Message::Ping(payload) => socket
+                    .send(Message::Pong(payload))
+                    .await
+                    .map_err(|_| SessionError::Retry("Companion stream closed".into()))?,
+                Message::Close(_) => {
+                    return Err(SessionError::Retry("Companion stream closed".into()));
+                }
+                Message::Binary(_) | Message::Pong(_) | Message::Frame(_) => {}
+            }
+        }
+        Err(SessionError::Retry("Companion stream closed".into()))
+    }
+
+    fn apply_frame<F>(
+        cursor: &mut ReplicaCursor,
+        frame: CompanionFrame,
+        apply: &mut F,
+    ) -> Result<(), SessionError>
+    where
+        F: FnMut(super::PublicState),
+    {
+        let previous = (
+            cursor.runtime_instance_id().map(str::to_owned),
+            cursor.revision(),
+        );
+        let decision = cursor
+            .accept(&frame)
+            .map_err(|error| SessionError::Retry(error.to_string()))?;
+        if decision == ReplicaDecision::Duplicate
+            || previous
+                == (
+                    Some(frame.runtime_instance_id.clone()),
+                    Some(frame.revision),
+                )
+        {
+            return Ok(());
+        }
+        let state: super::PublicState = serde_json::from_value(frame.payload)
+            .map_err(|_| SessionError::Retry("invalid Companion state payload".into()))?;
+        if state.runtime_instance_id != frame.runtime_instance_id
+            || state.revision != frame.revision
+            || state.app_role != super::NativeAppRole::Controller
+        {
+            return Err(SessionError::Retry(
+                "Companion state metadata does not match its frame".into(),
+            ));
+        }
+        apply(state);
+        Ok(())
+    }
+
+    async fn get_bootstrap(
+        host: &DiscoveredCompanionHost,
+        grant: &ActiveGrant,
+    ) -> Result<CompanionFrame, SessionError> {
+        let config = verified_client_config(&grant.certificate_der).map_err(SessionError::Retry)?;
+        let mut tls = connect(host, config).await.map_err(SessionError::Retry)?;
+        let authority = format!("{}.local", host.host_id);
+        let mut request = Zeroizing::new(format!(
+            "GET /api/v2/companion/runtime/bootstrap HTTP/1.1\r\nHost: {authority}\r\nAuthorization: Bearer {}\r\nConnection: close\r\n\r\n",
+            grant.token.as_str()
+        ));
+        tls.write_all(request.as_bytes())
+            .await
+            .map_err(|_| SessionError::Retry("Companion bootstrap request failed".into()))?;
+        request.zeroize();
+        let mut response = Vec::new();
+        tls.take(MAX_HTTP_RESPONSE_BYTES + 1)
+            .read_to_end(&mut response)
+            .await
+            .map_err(|_| SessionError::Retry("Companion bootstrap response failed".into()))?;
+        if response.len() as u64 > MAX_HTTP_RESPONSE_BYTES {
+            response.zeroize();
+            return Err(SessionError::Retry(
+                "Companion bootstrap response exceeds size limit".into(),
+            ));
+        }
+        let parsed = parse_http_response(&response).map_err(SessionError::Retry);
+        response.zeroize();
+        let (status, mut body) = parsed?;
+        if matches!(status, 401 | 403) {
+            body.zeroize();
+            return Err(SessionError::Authorization);
+        }
+        if status != 200 {
+            body.zeroize();
+            return Err(SessionError::Retry("Companion bootstrap rejected".into()));
+        }
+        let frame = serde_json::from_slice(&body)
+            .map_err(|_| SessionError::Retry("invalid Companion bootstrap frame".into()));
+        body.zeroize();
+        frame
+    }
+
+    fn verified_client_config(certificate_der: &[u8]) -> Result<Arc<ClientConfig>, String> {
+        let mut roots = RootCertStore::empty();
+        roots
+            .add(CertificateDer::from(certificate_der.to_vec()))
+            .map_err(|_| "invalid pinned Companion certificate")?;
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        let mut config = ClientConfig::builder_with_provider(provider)
+            .with_safe_default_protocol_versions()
+            .map_err(|_| "Companion TLS protocol setup failed")?
+            .with_root_certificates(roots)
+            .with_no_client_auth();
+        config.alpn_protocols = vec![b"http/1.1".to_vec()];
+        Ok(Arc::new(config))
     }
 
     async fn connect(
         host: &DiscoveredCompanionHost,
         config: Arc<ClientConfig>,
     ) -> Result<tokio_rustls::client::TlsStream<TcpStream>, String> {
-        let tcp = timeout(
-            CONNECT_TIMEOUT,
-            TcpStream::connect((host.host_name.as_str(), host.port)),
-        )
-        .await
-        .map_err(|_| "Companion connection timed out")?
-        .map_err(|_| "Companion connection failed")?;
+        let tcp = connect_tcp(host).await?;
         let server_name = ServerName::try_from(format!("{}.local", host.host_id))
             .map_err(|_| "invalid Companion TLS server name")?;
         timeout(
@@ -1550,7 +1787,17 @@ mod native_companion_client {
         .map_err(|_| "Companion TLS handshake failed".into())
     }
 
-    fn parse_http_response(response: &[u8]) -> Result<Vec<u8>, String> {
+    async fn connect_tcp(host: &DiscoveredCompanionHost) -> Result<TcpStream, String> {
+        timeout(
+            CONNECT_TIMEOUT,
+            TcpStream::connect((host.host_name.as_str(), host.port)),
+        )
+        .await
+        .map_err(|_| "Companion connection timed out")?
+        .map_err(|_| "Companion connection failed".into())
+    }
+
+    fn parse_http_response(response: &[u8]) -> Result<(u16, Vec<u8>), String> {
         let header_end = response
             .windows(4)
             .position(|window| window == b"\r\n\r\n")
@@ -1567,10 +1814,7 @@ mod native_companion_client {
             .nth(1)
             .and_then(|value| value.parse::<u16>().ok())
             .ok_or_else(|| "invalid Companion HTTP status".to_owned())?;
-        if status != 200 {
-            return Err("pairing was rejected by the Controller".into());
-        }
-        Ok(response[header_end..].to_vec())
+        Ok((status, response[header_end..].to_vec()))
     }
 
     #[cfg(test)]
@@ -1583,11 +1827,12 @@ mod native_companion_client {
             assert_eq!(
                 parse_http_response(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\n\r\n{}")
                     .expect("response"),
-                b"{}"
+                (200, b"{}".to_vec())
             );
-            assert!(
+            assert_eq!(
                 parse_http_response(b"HTTP/1.1 403 Forbidden\r\nContent-Length: 0\r\n\r\n")
-                    .is_err()
+                    .expect("forbidden response"),
+                (403, Vec::new())
             );
             assert!(parse_http_response(b"not-http").is_err());
         }
@@ -1619,6 +1864,135 @@ struct NativeCompanionService {
     transport: Option<Arc<native_companion_transport::NativeCompanionTransport>>,
     probed_target: AsyncMutex<Option<native_companion_client::ProbedTarget>>,
     active_grant: AsyncMutex<Option<native_companion_client::ActiveGrant>>,
+    client_status: Arc<Mutex<Option<CompanionClientView>>>,
+    client_task: AsyncMutex<Option<JoinHandle<()>>>,
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn companion_client_view(
+    grant: &native_companion_client::ActiveGrant,
+    service_name: impl Into<String>,
+    phase: CompanionClientPhase,
+) -> CompanionClientView {
+    CompanionClientView {
+        host_id: grant.host_id.clone(),
+        service_name: service_name.into(),
+        paired: phase != CompanionClientPhase::PairingRequired,
+        phase,
+        runtime_instance_id: None,
+        revision: None,
+    }
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn publish_companion_client_status(
+    app: &tauri::AppHandle,
+    status: &Arc<Mutex<Option<CompanionClientView>>>,
+    view: CompanionClientView,
+) {
+    if let Ok(mut current) = status.lock() {
+        *current = Some(view.clone());
+    }
+    let _ = app.emit("companion-projector-status", view);
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+async fn stop_companion_client(service: &NativeCompanionService) {
+    if let Some(task) = service.client_task.lock().await.take() {
+        task.abort();
+    }
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+async fn restart_companion_client(app: &tauri::AppHandle, service: &NativeCompanionService) {
+    stop_companion_client(service).await;
+    let grant = service.active_grant.lock().await.clone();
+    let Some(grant) = grant.filter(native_companion_client::ActiveGrant::is_usable) else {
+        if let Ok(mut status) = service.client_status.lock() {
+            *status = None;
+        }
+        return;
+    };
+    let app = app.clone();
+    let status = service.client_status.clone();
+    let task = tauri::async_runtime::spawn(async move {
+        companion_client_loop(app, status, grant).await;
+    });
+    *service.client_task.lock().await = Some(task);
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+async fn companion_client_loop(
+    app: tauri::AppHandle,
+    status: Arc<Mutex<Option<CompanionClientView>>>,
+    grant: native_companion_client::ActiveGrant,
+) {
+    let mut retry_seconds = 1_u64;
+    loop {
+        let host = apple_bonjour::browser_snapshot()
+            .ok()
+            .and_then(|hosts| hosts.into_iter().find(|host| host.host_id == grant.host_id));
+        let Some(host) = host else {
+            publish_companion_client_status(
+                &app,
+                &status,
+                companion_client_view(
+                    &grant,
+                    "Gekoppelter Controller",
+                    CompanionClientPhase::Discovering,
+                ),
+            );
+            tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+            continue;
+        };
+        publish_companion_client_status(
+            &app,
+            &status,
+            companion_client_view(&grant, &host.service_name, CompanionClientPhase::Connecting),
+        );
+        let frame_app = app.clone();
+        let frame_status = status.clone();
+        let frame_grant = grant.clone();
+        let service_name = host.service_name.clone();
+        let result = native_companion_client::replicate(&host, &grant, move |state| {
+            let mut view =
+                companion_client_view(&frame_grant, &service_name, CompanionClientPhase::Connected);
+            view.runtime_instance_id = Some(state.runtime_instance_id.clone());
+            view.revision = Some(state.revision);
+            publish_companion_client_status(&frame_app, &frame_status, view);
+            let _ = frame_app.emit("companion-projector-frame", state);
+        })
+        .await;
+        match result {
+            Err(native_companion_client::SessionError::Authorization) => {
+                publish_companion_client_status(
+                    &app,
+                    &status,
+                    companion_client_view(
+                        &grant,
+                        &host.service_name,
+                        CompanionClientPhase::PairingRequired,
+                    ),
+                );
+                return;
+            }
+            Err(native_companion_client::SessionError::Retry(error)) => {
+                eprintln!("Companion projector reconnecting: {error}");
+                publish_companion_client_status(
+                    &app,
+                    &status,
+                    companion_client_view(
+                        &grant,
+                        &host.service_name,
+                        CompanionClientPhase::Reconnecting,
+                    ),
+                );
+            }
+            Ok(()) => unreachable!("Companion replication runs until disconnect"),
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(retry_seconds)).await;
+        retry_seconds = (retry_seconds * 2).min(5);
+    }
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -1982,6 +2356,7 @@ fn companion_pairing_prepare(
 #[tauri::command]
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 async fn companion_pairing_complete(
+    app: tauri::AppHandle,
     state: State<'_, SharedNativeState>,
     service: State<'_, NativeCompanionService>,
     host_id: String,
@@ -2078,22 +2453,27 @@ async fn companion_pairing_complete(
             eprintln!("Companion host preference could not be saved: {error}");
         }
     }
-    *service.active_grant.lock().await = Some(native_companion_client::ActiveGrant {
+    let active_grant = native_companion_client::ActiveGrant {
         host_id: target.host.host_id.clone(),
         certificate_der: target.certificate_der,
         token: Zeroizing::new(grant.token),
-    });
+    };
+    let view = companion_client_view(
+        &active_grant,
+        &target.host.service_name,
+        CompanionClientPhase::Discovering,
+    );
+    *service.active_grant.lock().await = Some(active_grant);
     *service.probed_target.lock().await = None;
-    Ok(CompanionClientView {
-        host_id: target.host.host_id,
-        service_name: target.host.service_name,
-        paired: true,
-    })
+    publish_companion_client_status(&app, &service.client_status, view.clone());
+    restart_companion_client(&app, &service).await;
+    Ok(view)
 }
 
 #[tauri::command]
 #[cfg(not(any(target_os = "ios", target_os = "macos")))]
 fn companion_pairing_complete(
+    _app: tauri::AppHandle,
     _state: State<'_, SharedNativeState>,
     _host_id: String,
     _manual_fingerprint: String,
@@ -2115,18 +2495,11 @@ async fn companion_client_status(
     if !is_companion {
         return Ok(None);
     }
-    Ok(service
-        .active_grant
+    service
+        .client_status
         .lock()
-        .await
-        .as_ref()
-        .and_then(|grant| {
-            grant.is_usable().then(|| CompanionClientView {
-                host_id: grant.host_id.clone(),
-                service_name: "Gekoppelter Controller".into(),
-                paired: true,
-            })
-        }))
+        .map(|status| status.clone())
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -2165,6 +2538,7 @@ async fn app_role_select(
             transport.stop().await;
         }
         apple_board_host::stop();
+        restart_companion_client(&app, &service).await;
         let public = shared_state
             .lock()
             .map_err(|error| error.to_string())?
@@ -2177,6 +2551,7 @@ async fn app_role_select(
         .lock()
         .map_err(|error| error.to_string())?
         .select_app_role(role)?;
+    stop_companion_client(&service).await;
     apple_bonjour::browser_stop();
     apple_board_host::install();
     if public.projector_output == ProjectorOutput::Companion
@@ -2420,10 +2795,20 @@ pub fn run() {
             let native_state = Arc::new(Mutex::new(native_state));
             app.manage(native_state.clone());
             #[cfg(any(target_os = "ios", target_os = "macos"))]
+            let client_status = Arc::new(Mutex::new(active_grant.as_ref().map(|grant| {
+                companion_client_view(
+                    grant,
+                    "Gekoppelter Controller",
+                    CompanionClientPhase::Discovering,
+                )
+            })));
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
             app.manage(NativeCompanionService {
                 transport: companion_transport.clone(),
                 probed_target: AsyncMutex::new(None),
                 active_grant: AsyncMutex::new(active_grant),
+                client_status,
+                client_task: AsyncMutex::new(None),
             });
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let _ = APP_HANDLE.set(app.handle().clone());
@@ -2441,6 +2826,12 @@ pub fn run() {
                 NativeAppRole::CompanionProjector => {
                     if let Err(error) = apple_bonjour::browser_start() {
                         eprintln!("Companion discovery startup failed: {error}");
+                    } else {
+                        let app_handle = app.handle().clone();
+                        tauri::async_runtime::spawn(async move {
+                            let service = app_handle.state::<NativeCompanionService>();
+                            restart_companion_client(&app_handle, &service).await;
+                        });
                     }
                 }
             }
@@ -2605,6 +2996,71 @@ mod tests {
                 .companions
                 .authenticate(&grant.token)
                 .is_some()
+        );
+        let active_grant = native_companion_client::ActiveGrant {
+            host_id: host_id.into(),
+            certificate_der: target.certificate_der.clone(),
+            token: Zeroizing::new(grant.token),
+        };
+        let stream_host = target.host.clone();
+        let stream_grant = active_grant.clone();
+        let (frames, mut received) = tokio::sync::mpsc::unbounded_channel();
+        let client = tokio::spawn(async move {
+            native_companion_client::replicate(&stream_host, &stream_grant, |public| {
+                frames.send(public).expect("frame receiver")
+            })
+            .await
+        });
+        let initial = tokio::time::timeout(std::time::Duration::from_secs(3), received.recv())
+            .await
+            .expect("bootstrap timeout")
+            .expect("bootstrap frame");
+        tokio::time::timeout(std::time::Duration::from_secs(3), async {
+            loop {
+                if state
+                    .lock()
+                    .expect("state")
+                    .companion_states
+                    .receiver_count()
+                    > 0
+                {
+                    break;
+                }
+                tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("WebSocket subscription timeout");
+        let updated = {
+            let mut state = state.lock().expect("state");
+            let public = state.ingest_test_hit().expect("test hit");
+            state
+                .companion_states
+                .send(public.clone())
+                .expect("publish state");
+            public
+        };
+        let replicated = tokio::time::timeout(std::time::Duration::from_secs(3), received.recv())
+            .await
+            .expect("state timeout")
+            .expect("state frame");
+        assert_eq!(initial.revision + 1, replicated.revision);
+        assert_eq!(replicated, updated);
+        state
+            .lock()
+            .expect("state")
+            .revoke_companion("0d00e843-d495-44b3-9eb0-6f7e0ce304df", now_ms())
+            .expect("revoke");
+        assert!(
+            tokio::time::timeout(std::time::Duration::from_secs(3), client)
+                .await
+                .expect("stream close timeout")
+                .expect("client task")
+                .is_err()
+        );
+        assert_eq!(
+            native_companion_client::replicate(&target.host, &active_grant, |_| {}).await,
+            Err(native_companion_client::SessionError::Authorization)
         );
         transport.stop().await;
     }

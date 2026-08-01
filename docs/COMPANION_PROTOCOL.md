@@ -143,12 +143,23 @@ Implementiert und automatisiert getestet:
   korrektes Pairing und Ablehnung eines falschen Pins; ein Playwright-Test mit
   WebKit belegt den gesperrten UI-Ablauf bis Fingerprint und Code vollständig
   bestätigt sind.
+- authentisierter Bootstrap und laufende WSS-Replikation im nativen
+  Apple-Projector-Client. Der gemeinsame `ReplicaCursor` erzwingt Snapshot,
+  Runtime-ID und lückenlose Revisionen; Frame und Payload müssen dieselben
+  Metadaten tragen. Nach Disconnect wird kein veralteter Spielstand mehr
+  angezeigt, sondern mit begrenztem Backoff neu entdeckt und zuerst ein
+  Vollsnapshot geladen. Heartbeats erkennen auch eine stille unterbrochene
+  Verbindung. Widerruf beendet den Socket und führt beim nächsten Bootstrap
+  in den sichtbaren Neu-Pairing-Zustand. Der echte TLS-Integrationstest deckt
+  Bootstrap, Stream-Snapshot, Folgezustand, Widerruf und Auth-Ablehnung ab; der
+  WebKit-Test deckt Connected- und Reconnect-Darstellung ab.
 
 Noch offen:
 
 - Android-Keystore-Adapter für den Companion-Client,
 - signierte iOS-/iPadOS-Hardwareabnahme der nativen TLS-Identität; der
   lokal getestete unsigned Simulator stellte keinen nutzbaren Keychain bereit,
-- Bootstrap-Snapshot, revisionsgenauer WebSocket-Stream, Reconnect-Zustand und
-  Übergabe an den read-only Projector-Renderer auf dem Companion,
-- echte iPhone/iPad-zu-iPad-Abnahme mit Disconnect, Resume und Widerruf.
+- Ausbau des M0-Projector-Renderers auf die vollständige produktive
+  Spielmodus-, Artwork-, Animations- und Sounddarstellung,
+- echte iPhone/iPad-zu-iPad-Abnahme mit Disconnect, Resume, Widerruf, Sound und
+  längerem Arcade-Dauerbetrieb.

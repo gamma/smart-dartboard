@@ -18,6 +18,7 @@ tauri-build = { version = "2.6.3", features = [] }
 axum = { version = "0.8", features = ["ws"] }
 axum-server = { version = "0.8", features = ["tls-rustls-no-provider"] }
 base64 = "0.22"
+futures-util = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sdb-board = { path = "../../../crates/board" }
@@ -29,6 +30,7 @@ sdb-storage = { path = "../../../crates/storage" }
 tauri = { version = "2.11.5", features = [] }
 tokio = { version = "1.47", features = ["io-util", "net", "sync", "time"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
+tokio-tungstenite = { version = "0.29", default-features = false, features = ["rustls-tls-webpki-roots"] }
 tower-http = { version = "0.6", features = ["set-header"] }
 uuid = { version = "1.24", features = ["v4"] }
 zeroize = "1.8"

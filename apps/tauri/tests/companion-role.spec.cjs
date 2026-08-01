@@ -19,6 +19,7 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
       companion_available: false
     };
     window.__nativeCalls = [];
+    window.__nativeEvents = {};
     window.__TAURI__ = {
       core: {
         invoke: async (command, args = {}) => {
@@ -28,6 +29,8 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
               return publicState;
             case 'companion_discovery_start':
             case 'companion_discovery_stop':
+              return null;
+            case 'companion_client_status':
               return null;
             case 'companion_discovered_hosts':
               return [{
@@ -49,14 +52,22 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
               return {
                 host_id: args.hostId,
                 service_name: 'Smart Dartboard Arcade',
-                paired: true
+                paired: true,
+                phase: 'discovering',
+                runtime_instance_id: null,
+                revision: null
               };
             default:
               throw new Error(`unexpected native command: ${command}`);
           }
         }
       },
-      event: { listen: async () => () => {} }
+      event: {
+        listen: async (name, listener) => {
+          window.__nativeEvents[name] = listener;
+          return () => delete window.__nativeEvents[name];
+        }
+      }
     };
   });
 
@@ -84,4 +95,36 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
   });
   expect(await page.evaluate(() =>
     window.__nativeCalls.some(call => call.command === 'runtime_dispatch'))).toBe(false);
+
+  await page.evaluate(() => {
+    window.__nativeEvents['companion-projector-status']({ payload: {
+      host_id: '991708fa-c4e7-419f-ad1d-c44f01891b03',
+      service_name: 'Smart Dartboard Arcade',
+      paired: true,
+      phase: 'connected',
+      runtime_instance_id: 'controller-runtime',
+      revision: 8
+    }});
+    window.__nativeEvents['companion-projector-frame']({ payload: {
+      runtime_instance_id: 'controller-runtime',
+      revision: 8,
+      counter: 120
+    }});
+  });
+  await expect(page.locator('#companionProjectorStage')).toBeVisible();
+  await expect(page.locator('#companionCounter')).toHaveText('120');
+  await expect(page.locator('#companionRuntimeStatus')).toContainText('Revision 8');
+
+  await page.evaluate(() => {
+    window.__nativeEvents['companion-projector-status']({ payload: {
+      host_id: '991708fa-c4e7-419f-ad1d-c44f01891b03',
+      service_name: 'Smart Dartboard Arcade',
+      paired: true,
+      phase: 'reconnecting',
+      runtime_instance_id: null,
+      revision: null
+    }});
+  });
+  await expect(page.locator('#companionProjectorStage')).toBeHidden();
+  await expect(page.locator('#discoveryStatus')).toContainText('neuer Snapshot');
 });

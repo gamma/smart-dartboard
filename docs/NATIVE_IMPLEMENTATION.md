@@ -77,8 +77,8 @@ Umgesetzt und lokal verifiziert:
   Der native Apple-Host stellt denselben Projector-Stream inzwischen über
   HTTPS/WSS mit der lokalen TLS-Identität bereit und veröffentlicht den nur bei
   gewähltem Companion-Ausgang aktiven Port per Bonjour. Der Projector-Client
-  kann den Host inzwischen auswählen und sicher koppeln; die laufende
-  Snapshot-/WebSocket-Wiedergabe ist noch offen. Details:
+  kann den Host auswählen, sicher koppeln und den laufenden Zustand über
+  Bootstrap und WebSocket revisionsgenau wiedergeben. Details:
   [COMPANION_PROTOCOL.md](COMPANION_PROTOCOL.md).
 - persistente lokale Apple-TLS-Identität für Companion-Pairing. Zertifikat und
   privater P-256-Schlüssel liegen als gebundener Datensatz im Keychain; SQLite
@@ -127,6 +127,16 @@ Umgesetzt und lokal verifiziert:
   Code nicht einlösen kann. Die point-and-click-fähige WebKit-UI wurde mit
   Playwright geprüft; der Kopplungsbutton bleibt bis zum bestätigten
   Fingerprint und vollständigen Code gesperrt.
+- nativer Apple-Projector-Client mit authentisiertem Bootstrap-Snapshot und
+  TLS-gepinntem WebSocket. Jeder Frame läuft durch den gemeinsamen
+  `ReplicaCursor`; Duplikate werden ignoriert, Revisionslücken, Runtimewechsel
+  ohne Snapshot und ungültige Payload-Metadaten erzwingen einen vollständigen
+  Reconnect. Der Host prüft die Verbindung mit Heartbeats. Bei Unterbrechung
+  blendet die UI den alten Spielstand aus und zeigt einen neutralen
+  Reconnect-Zustand; nach Widerruf fordert sie neues Pairing. Ein realer
+  In-Process-TLS-Test belegt Bootstrap, initialen WebSocket-Snapshot, den
+  nächsten Runtime-Zustand, sofortiges Schließen nach Widerruf und die folgende
+  Auth-Ablehnung. Derselbe UI-Lifecycle ist mit Playwright/WebKit geprüft.
 - natives Board-Setup für den Controller: Pairing-Fenster öffnen, gruppierten
   Einmalcode mit Live-Countdown anzeigen, persistierte Projector-Geräte ohne
   Token-Hash auflisten und Grants widerrufen. Nur das Control-Fenster besitzt
@@ -145,10 +155,9 @@ Noch nicht als produktionsreif nachgewiesen:
   implementiert, aber noch nicht mit der realen Scheibe qualifiziert,
 - reale AirPlay-, HDMI- und Audio-Hardware,
 - External-Display-Scene-Accessory ab iOS/iPadOS 27,
-- iPhone/iPad-zu-iPad-Companion mit Bootstrap-Snapshot, revisionsgenauem
-  WebSocket-Reconnect und Projector-Renderer; Rollenwahl, Host-Advertiser,
-  Browser, sicherer TLS-Client, Pairing-UI und Keychain-Grant sind
-  implementiert,
+- vollständige iPhone/iPad-zu-iPad-Hardwareabnahme des implementierten
+  Companion-Pfads einschließlich App-Resume, realem WLAN-Verlust, Sound und
+  Projector-Animationen,
 - vollständige Portierung aller Spielmodi sowie Heatmap, Modusstatistiken,
   Export und Trainingsempfehlungen,
 - vollständige Docker-Parität zur Python-Anwendung,
@@ -162,6 +171,12 @@ Rust-Core:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+```
+
+Companion-UI mit WebKit:
+
+```bash
+npm --prefix apps/tauri run test:webkit
 ```
 
 macOS-M0:

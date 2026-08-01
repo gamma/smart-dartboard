@@ -6,16 +6,29 @@ document.querySelector('#role').textContent=role.toUpperCase();
 
 function render(payload){
   renderAppRole(payload.app_role ?? 'controller');
-  document.querySelector('#counter').textContent=String(payload.counter ?? 0);
+  renderProjectorValues(payload);
   document.querySelector('#status').textContent=`Runtime ${payload.runtime_instance_id} · Revision ${payload.revision}`;
   renderBoardStatus(payload.board);
   renderDisplayStatus(payload.external_display_count ?? 0);
   renderProjectorOutput(payload.projector_output ?? 'external_display',payload.external_display_count ?? 0,payload.counter ?? 0,payload.companion_port ?? null,payload.companion_available ?? false);
 }
 
+function renderProjectorValues(payload){
+  const counter=String(payload.counter ?? 0);
+  document.querySelector('#counter').textContent=counter;
+  document.querySelector('#previewCounter').textContent=counter;
+  document.querySelector('#companionCounter').textContent=counter;
+}
+
+function renderCompanionFrame(payload){
+  renderProjectorValues(payload);
+  document.querySelector('#companionRuntimeStatus').textContent=`Runtime ${payload.runtime_instance_id} · Revision ${payload.revision}`;
+}
+
 let currentAppRole='controller';
 let discoveryTimer;
 let currentPairingTarget;
+let currentCompanionClientPhase;
 
 function renderAppRole(appRole){
   currentAppRole=appRole;
@@ -31,10 +44,12 @@ function renderDiscoveredHosts(hosts=[]){
   const list=document.querySelector('#discoveredHosts');
   list.replaceChildren();
   const status=document.querySelector('#discoveryStatus');
-  status.dataset.connected=String(hosts.length>0);
-  status.textContent=hosts.length>0
-    ? `${hosts.length} Controller gefunden`
-    : 'Lokales Netzwerk wird durchsucht …';
+  if(!currentCompanionClientPhase){
+    status.dataset.connected=String(hosts.length>0);
+    status.textContent=hosts.length>0
+      ? `${hosts.length} Controller gefunden`
+      : 'Lokales Netzwerk wird durchsucht …';
+  }
   for(const host of hosts){
     const item=document.createElement('li');
     const copy=document.createElement('div');
@@ -99,6 +114,7 @@ function setupCompanionClient(){
         manualFingerprint:currentPairingTarget.manual_fingerprint,
         code:code.value
       });
+      renderCompanionClientStatus(paired);
       status.textContent=`Mit ${paired.service_name} gekoppelt. Projector wird verbunden …`;
     }catch(error){
       status.textContent=String(error);
@@ -106,6 +122,32 @@ function setupCompanionClient(){
     }
   });
   updateCompletePairingButton();
+}
+
+function renderCompanionClientStatus(status){
+  const setup=document.querySelector('#companionConnectionSetup');
+  const stage=document.querySelector('#companionProjectorStage');
+  const discovery=document.querySelector('#discoveryStatus');
+  const connected=status?.phase==='connected';
+  setup.hidden=connected;
+  stage.hidden=!connected;
+  if(!status){
+    currentCompanionClientPhase=undefined;
+    return;
+  }
+  currentCompanionClientPhase=status.phase;
+  const labels={
+    discovering:'Gekoppelter Controller wird gesucht …',
+    connecting:`Verbindung zu ${status.service_name} wird hergestellt …`,
+    reconnecting:'Verbindung unterbrochen · neuer Snapshot wird angefordert …',
+    pairing_required:'Kopplung wurde widerrufen · Controller erneut auswählen',
+    connected:`Mit ${status.service_name} verbunden`
+  };
+  discovery.dataset.connected=String(connected);
+  discovery.textContent=labels[status.phase] ?? 'Companion wird vorbereitet …';
+  if(connected){
+    document.querySelector('#companionRuntimeStatus').textContent=`Runtime ${status.runtime_instance_id} · Revision ${status.revision}`;
+  }
 }
 
 async function pollDiscovery(){
@@ -135,6 +177,7 @@ async function stopDiscovery(){
 async function applyRoleLifecycle(){
   if(currentAppRole==='companion_projector'){
     await startDiscovery();
+    renderCompanionClientStatus(await tauri.core.invoke('companion_client_status'));
   }else{
     await stopDiscovery();
     renderCompanionDevices(await tauri.core.invoke('companion_devices'));
@@ -277,6 +320,8 @@ async function start(){
   render(initial);
   await tauri.event.listen('runtime-state',event=>render(event.payload));
   await tauri.event.listen('display-status',event=>renderDisplayStatus(event.payload.external_display_count ?? 0));
+  await tauri.event.listen('companion-projector-status',event=>renderCompanionClientStatus(event.payload));
+  await tauri.event.listen('companion-projector-frame',event=>renderCompanionFrame(event.payload));
   document.querySelector('#increment').addEventListener('click',async()=>{
     render(await tauri.core.invoke('runtime_dispatch',{action:'increment'}));
   });

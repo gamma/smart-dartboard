@@ -54,6 +54,7 @@
     </section>
     </div>
     <section id="companionProjectorView" class="companion-projector-view" aria-labelledby="companionProjectorTitle" hidden>
+      <div id="companionConnectionSetup">
       <p class="eyebrow">COMPANION · PROJECTOR</p>
       <div class="mark" aria-hidden="true">◎</div>
       <h1 id="companionProjectorTitle">Controller<br>finden.</h1>
@@ -72,6 +73,14 @@
         <p id="clientPairingStatus" class="output-hint" role="status"></p>
       </div>
       <p class="setup-copy companion-note">Bonjour zeigt nur Geräte in der Nähe. Die sichere Identität wird vor dem Eingeben des Einmalcodes separat verglichen.</p>
+      </div>
+      <div id="companionProjectorStage" class="companion-projector-stage" hidden>
+        <p class="eyebrow">COMPANION · PROJECTOR</p>
+        <div class="mark" aria-hidden="true">◎</div>
+        <h1>Spiel läuft.</h1>
+        <output id="companionCounter">0</output>
+        <p id="companionRuntimeStatus" class="status">Snapshot wird geladen …</p>
+      </div>
     </section>
   </main>
   <script src="./main.js"></script>
