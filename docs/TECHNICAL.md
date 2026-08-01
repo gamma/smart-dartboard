@@ -19,6 +19,8 @@ ergänzende Bewertung eines eigenständigen Android-Spieltablets steht in
 [ANDROID_PORTABILITY.md](ANDROID_PORTABILITY.md). Die gemeinsame Zielarchitektur
 für Linux/Docker, macOS, iPadOS, Android und Windows steht in
 [CROSS_PLATFORM_ARCHITECTURE.md](CROSS_PLATFORM_ARCHITECTURE.md).
+Der belegte Stand, lokale Buildbefehle und noch offene Hardware-Gates stehen in
+[NATIVE_IMPLEMENTATION.md](NATIVE_IMPLEMENTATION.md).
 
 ---
 

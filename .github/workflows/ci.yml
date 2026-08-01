@@ -45,6 +45,8 @@ jobs:
         run: |
           node --check web/static/app.js
           node --check web/static/i18n.js
+          node --check web/static/runtime-client.js
+          node --check apps/tauri/ui/main.js
           node --check website/app.js
 
       - name: Validate Docker Compose
@@ -64,6 +66,81 @@ jobs:
             -eq "$(find dist/assets/modes -maxdepth 1 -name '*.webp' | wc -l)"
           test "$(find web/static/assets/themes/neon/modes -maxdepth 1 -name '*.webp' | wc -l)" \
             -eq "$(find dist/assets/neon -maxdepth 1 -name '*.webp' | wc -l)"
+
+  rust-core:
+    name: Rust core
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+          components: clippy,rustfmt
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Run Rust tests
+        run: cargo test --workspace
+
+  apple-native:
+    name: macOS and iOS native builds
+    runs-on: macos-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "26"
+          cache: npm
+          cache-dependency-path: apps/tauri/package-lock.json
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.97.1
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          components: clippy,rustfmt
+
+      - name: Cache Rust builds
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            . -> target
+            apps/tauri/src-tauri -> target
+
+      - name: Install native build prerequisites
+        run: brew install cocoapods libimobiledevice xcodegen
+
+      - name: Install Tauri dependencies
+        run: npm --prefix apps/tauri ci
+
+      - name: Check shared core for Apple targets
+        run: |
+          cargo check --workspace --target aarch64-apple-ios
+          cargo check --workspace --target aarch64-apple-ios-sim
+
+      - name: Check native shell
+        run: cargo clippy --manifest-path apps/tauri/src-tauri/Cargo.toml --all-targets -- -D warnings
+
+      - name: Build macOS shell
+        run: npm --prefix apps/tauri run build
+
+      - name: Build unsigned iOS simulator app
+        run: npm --prefix apps/tauri run tauri ios build -- --debug --target aarch64-sim --no-sign --ci
 
   container:
     name: Container build and smoke test
