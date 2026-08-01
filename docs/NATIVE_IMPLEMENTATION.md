@@ -1,6 +1,6 @@
 # Native Implementierung
 
-Stand: 2026-08-01
+Stand: 2026-08-02
 
 Dieses Dokument beschreibt den belegten Implementierungsstand des
 Cross-Platform-Rewrites. Zielarchitektur und Abnahmekriterien stehen in
@@ -18,14 +18,20 @@ Umgesetzt und lokal verifiziert:
 - statische, zur Buildzeit typsicher registrierte Spielmodi mit versionierten
   Metadaten, validierten Optionen, Anleitungen, Artwork-/Sound-Referenzen und
   Projector-Overlay. `GET /api/v2/modes` liefert derzeit CountUp, X01, Cricket,
-  8-Ball, Avoid the Bomb, Color Clash, Heart Chase, Target Rush, Ghost Chase,
-  Risk It, Robin Hood, Candy Cannon, Lightning Round, Mini Golf, Simon Says und
-  Treasure Hunt. Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase,
-  Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round,
-  Mini Golf, Simon Says sowie Treasure Hunt laufen über denselben generischen
+  8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board, Target
+  Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round, Mini
+  Golf, Simon Says und Treasure Hunt. Cricket, 8-Ball, Avoid the Bomb, Color
+  Clash, Heart Chase, King of the Board, Target Rush, Ghost Chase, Risk It,
+  Robin Hood, Candy Cannon, Lightning Round, Mini Golf, Simon Says sowie
+  Treasure Hunt laufen über denselben generischen
   Registry-Pfad
   und sind durch gemeinsame Python-/Rust-Golden-Fixtures belegt;
   Cricket zusätzlich durch den vollständigen SQLite-Recovery-Pfad,
+- Avatar und frei gewählte Spielerfarbe werden aus der Session in native
+  Registry-Spiele übernommen und bleiben im serialisierten Spielzustand
+  erhalten. Alte Registry-Snapshots ohne diese Felder erhalten sichere
+  Standardwerte. King of the Board verwendet dadurch auf der Scheibe exakt die
+  gewählte Farbe des jeweiligen Spielers,
 - injizierter, plattformneutraler Zufallskontext für Registry-Modi. Reguläre
   Sessions leiten den Seed stabil aus der persistierten Spiel-ID ab; Seed und
   Cursor gehören zum Runtime-Snapshot. Damit reproduzieren Recovery, Undo und
@@ -66,8 +72,9 @@ Umgesetzt und lokal verifiziert:
   Spiele bleiben dauerhaft aus der normalen Statistik ausgeschlossen.
 - Öffentliche Commands zum Korrigieren und Löschen über stabile Action-IDs für
   CountUp, X01 und alle Registry-Modi, derzeit Cricket, 8-Ball, Avoid the Bomb,
-  Color Clash, Heart Chase, Target Rush, Ghost Chase, Risk It, Robin Hood, Candy
-  Cannon, Lightning Round, Mini Golf, Simon Says und Treasure Hunt. Der
+  Color Clash, Heart Chase, King of the Board, Target Rush, Ghost Chase, Risk
+  It, Robin Hood, Candy Cannon, Lightning Round, Mini Golf, Simon Says und
+  Treasure Hunt. Der
   gemeinsame State
   liefert die
   editierbaren

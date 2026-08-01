@@ -1,0 +1,203 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 2,
+  "random_seed": 42,
+  "players": [
+    {"id": "ada", "name": "Ada", "avatar": "fox", "color": "#ff00aa"},
+    {"id": "bob", "name": "Bob", "avatar": "comet", "color": "#00ffaa"}
+  ],
+  "options": {"rounds": 3, "ownership": "area"},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 20, "ring": "double", "multiplier": 2, "label": "D20", "score": 40}},
+      "expected": {
+        "scores": [4, 0],
+        "territory_counts": {"ada": 4, "bob": 0},
+        "selected_owners": {"20:single_inner": ["ada", "#ff00aa"]},
+        "last_effect": "king_capture",
+        "capture_count": 4,
+        "capture_cells": ["20:single_inner", "20:triple", "20:single_outer", "20:double"],
+        "previous_owner_ids": [],
+        "current_player_index": 0,
+        "darts_in_turn": 1,
+        "turn_score": 4,
+        "round_number": 1,
+        "status": "running",
+        "winner_id": null,
+        "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 1, "ring": "triple", "multiplier": 3, "label": "T1", "score": 3}},
+      "expected": {
+        "scores": [12, 0],
+        "territory_counts": {"ada": 12, "bob": 0},
+        "selected_owners": {
+          "20:single_inner": ["ada", "#ff00aa"],
+          "1:triple": ["ada", "#ff00aa"],
+          "18:double": ["ada", "#ff00aa"]
+        },
+        "last_effect": "king_capture",
+        "capture_count": 12,
+        "capture_cells": [
+          "20:single_inner", "20:triple", "20:single_outer", "20:double",
+          "1:single_inner", "1:triple", "1:single_outer", "1:double",
+          "18:single_inner", "18:triple", "18:single_outer", "18:double"
+        ],
+        "previous_owner_ids": ["ada"],
+        "current_player_index": 0,
+        "darts_in_turn": 2,
+        "turn_score": 12,
+        "round_number": 1,
+        "status": "running",
+        "winner_id": null,
+        "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 3, "label": "MISS", "score": 0}},
+      "expected": {
+        "scores": [12, 0],
+        "territory_counts": {"ada": 12, "bob": 0},
+        "selected_owners": {
+          "20:single_inner": ["ada", "#ff00aa"],
+          "1:triple": ["ada", "#ff00aa"],
+          "18:double": ["ada", "#ff00aa"]
+        },
+        "last_effect": "king_miss",
+        "capture_count": 0,
+        "capture_cells": [],
+        "previous_owner_ids": [],
+        "current_player_index": 0,
+        "darts_in_turn": 3,
+        "turn_score": 12,
+        "round_number": 1,
+        "status": "hold",
+        "winner_id": null,
+        "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {
+        "scores": [12, 0],
+        "territory_counts": {"ada": 12, "bob": 0},
+        "selected_owners": {
+          "20:single_inner": ["ada", "#ff00aa"],
+          "1:triple": ["ada", "#ff00aa"],
+          "18:double": ["ada", "#ff00aa"]
+        },
+        "last_effect": "",
+        "capture_count": 0,
+        "capture_cells": [],
+        "previous_owner_ids": [],
+        "current_player_index": 1,
+        "darts_in_turn": 0,
+        "turn_score": 0,
+        "round_number": 1,
+        "status": "running",
+        "winner_id": null,
+        "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 4, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+      "expected": {
+        "scores": [4, 12],
+        "territory_counts": {"ada": 4, "bob": 12},
+        "selected_owners": {
+          "20:single_inner": ["bob", "#00ffaa"],
+          "1:triple": ["bob", "#00ffaa"],
+          "18:double": ["ada", "#ff00aa"]
+        },
+        "last_effect": "king_steal",
+        "capture_count": 12,
+        "capture_cells": [
+          "5:single_inner", "5:triple", "5:single_outer", "5:double",
+          "20:single_inner", "20:triple", "20:single_outer", "20:double",
+          "1:single_inner", "1:triple", "1:single_outer", "1:double"
+        ],
+        "previous_owner_ids": ["ada"],
+        "current_player_index": 1,
+        "darts_in_turn": 1,
+        "turn_score": 12,
+        "round_number": 1,
+        "status": "running",
+        "winner_id": null,
+        "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "correct", "action_id": 5, "event": {"type": "hit", "seq": 99, "field": 18, "ring": "double", "multiplier": 2, "label": "D18", "score": 36}},
+      "expected": {
+        "scores": [8, 4],
+        "territory_counts": {"ada": 8, "bob": 4},
+        "selected_owners": {
+          "20:single_inner": ["ada", "#ff00aa"],
+          "1:triple": ["ada", "#ff00aa"],
+          "18:double": ["bob", "#00ffaa"]
+        },
+        "last_effect": "king_steal",
+        "capture_count": 4,
+        "capture_cells": ["18:single_inner", "18:triple", "18:single_outer", "18:double"],
+        "previous_owner_ids": ["ada"],
+        "current_player_index": 1,
+        "darts_in_turn": 1,
+        "turn_score": 4,
+        "round_number": 1,
+        "status": "running",
+        "winner_id": null,
+        "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 5, "field": 25, "ring": "single_bull", "multiplier": 1, "label": "SBull", "score": 25}},
+      "expected": {
+        "scores": [8, 5],
+        "territory_counts": {"ada": 8, "bob": 5},
+        "selected_owners": {
+          "20:single_inner": ["ada", "#ff00aa"],
+          "1:triple": ["ada", "#ff00aa"],
+          "18:double": ["bob", "#00ffaa"],
+          "25:single_bull": ["bob", "#00ffaa"]
+        },
+        "last_effect": "king_capture",
+        "capture_count": 1,
+        "capture_cells": ["25:single_bull"],
+        "previous_owner_ids": [],
+        "current_player_index": 1,
+        "darts_in_turn": 2,
+        "turn_score": 5,
+        "round_number": 1,
+        "status": "running",
+        "winner_id": null,
+        "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 6, "field": 25, "ring": "double_bull", "multiplier": 2, "label": "DBull", "score": 50}},
+      "expected": {
+        "scores": [8, 6],
+        "territory_counts": {"ada": 8, "bob": 6},
+        "selected_owners": {
+          "20:single_inner": ["ada", "#ff00aa"],
+          "1:triple": ["ada", "#ff00aa"],
+          "18:double": ["bob", "#00ffaa"],
+          "25:single_bull": ["bob", "#00ffaa"],
+          "25:double_bull": ["bob", "#00ffaa"]
+        },
+        "last_effect": "king_capture",
+        "capture_count": 1,
+        "capture_cells": ["25:double_bull"],
+        "previous_owner_ids": [],
+        "current_player_index": 1,
+        "darts_in_turn": 3,
+        "turn_score": 6,
+        "round_number": 1,
+        "status": "hold",
+        "winner_id": null,
+        "result_type": ""
+      }
+    }
+  ]
+}

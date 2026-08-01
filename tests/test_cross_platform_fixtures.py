@@ -60,6 +60,9 @@ COLOR_CLASH_FIXTURE = (
 RISK_IT_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "risk_it_v3.json"
 )
+KING_OF_BOARD_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "king_of_board_v2.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -722,6 +725,70 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                 "last_effect": mode_state["last_effect"],
                 "effect_amount": mode_state["effect_amount"],
                 "effect_target_player_id": mode_state["effect_target_player_id"],
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_id": state.winner_id,
+                "result_type": state.result_type,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_king_of_board_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(KING_OF_BOARD_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_schema_version"], 1)
+        self.assertEqual(
+            fixture["ruleset_version"],
+            registry.get("king_of_board").metadata.ruleset_version,
+        )
+        engine = GameEngine()
+        engine.reset(
+            "king_of_board",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        player_ids = [player["id"] for player in fixture["players"]]
+        selected_cells = (
+            "20:single_inner",
+            "1:triple",
+            "18:double",
+            "25:single_bull",
+            "25:double_bull",
+        )
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]), dict(command["event"])
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            mode_state = state.mode_state
+            owned = mode_state["owned"]
+            actual = {
+                "scores": [player.score for player in state.players],
+                "territory_counts": {
+                    player_id: sum(
+                        item["owner_id"] == player_id for item in owned.values()
+                    )
+                    for player_id in player_ids
+                },
+                "selected_owners": {
+                    cell: [owned[cell]["owner_id"], owned[cell]["color"]]
+                    for cell in selected_cells
+                    if cell in owned
+                },
+                "last_effect": mode_state["last_effect"],
+                "capture_count": mode_state["capture_count"],
+                "capture_cells": mode_state["capture_cells"],
+                "previous_owner_ids": mode_state["previous_owner_ids"],
                 "current_player_index": state.current_player_index,
                 "darts_in_turn": state.darts_in_turn,
                 "turn_score": state.turn_score,

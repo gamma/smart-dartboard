@@ -1,6 +1,6 @@
 # Rust Headless Server API v2
 
-Stand: 2026-08-01
+Stand: 2026-08-02
 
 Der Rust-Server ist der parallele Migrationspfad für Linux und Docker. Er
 ersetzt die produktive Python-API noch nicht. Die bestehende UI wird weiterhin
@@ -124,13 +124,17 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 
 ## Aktueller Funktionsumfang
 
-- CountUp, X01, Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase,
-  Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round,
-  Mini Golf, Simon Says und Treasure Hunt starten; Cricket, 8-Ball, Avoid the
-  Bomb, Color Clash, Heart Chase, Target Rush, Ghost Chase, Risk It, Robin Hood,
-  Candy Cannon, Lightning Round, Mini Golf, Simon Says und Treasure Hunt nutzen
+- CountUp, X01, Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King
+  of the Board, Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon,
+  Lightning Round, Mini Golf, Simon Says und Treasure Hunt starten; Cricket,
+  8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board, Target
+  Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round, Mini
+  Golf, Simon Says und Treasure Hunt nutzen
   dieselbe generische, statische Modus-Registry statt neuer Runtime- oder
   Serverzweige,
+- Sessionprofile einschließlich Avatar und Spielerfarbe bleiben beim Start
+  eines Registry-Spiels erhalten; ältere Snapshots ohne diese Felder werden
+  rückwärtskompatibel geladen,
 - Modusmetadaten einschließlich validierter Optionen, Anleitungen,
   Artwork-/Sound-Referenzen und Regelsatz-Version über `/api/v2/modes` liefern,
 - den deterministischen Registry-Zufall aus der stabilen Spiel-ID ableiten und

@@ -34,6 +34,7 @@ class KingOfBoardMode:
             InstructionStep("Mehrheit gewinnt", "Nach den Runden gewinnt die größte Board-Kontrolle.", "crown"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -41,7 +42,13 @@ class KingOfBoardMode:
         player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        state.mode_state = {"owned": {}}
+        state.mode_state = {
+            "owned": {},
+            "last_effect": "",
+            "capture_count": 0,
+            "capture_cells": [],
+            "previous_owner_ids": [],
+        }
         state.message = "Erobere die Scheibe!"
 
     def _neighbor_fields(self, field: int) -> list[int]:
@@ -99,7 +106,10 @@ class KingOfBoardMode:
             player.score = counts.get(player.id, 0)
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        self._clear_effect(state)
         if event.get("type") != "hit":
+            state.mode_state["last_effect"] = "king_miss"
+            event["effect"] = "king_miss"
             outcome = ThrowOutcome(turn_value=0, message="Miss – kein Gebiet")
         else:
             cells = self._capture_cells(state, event)
@@ -127,6 +137,29 @@ class KingOfBoardMode:
                 if old_owners <= {None, player.id}
                 else "erobert"
             )
+            effect = {
+                "hält": "king_hold",
+                "übernimmt": "king_capture",
+                "erobert": "king_steal",
+            }[action]
+            capture_cells = [f"{field}:{ring}" for field, ring in cells]
+            previous_owner_ids = sorted(owner for owner in old_owners if owner)
+            state.mode_state.update(
+                {
+                    "last_effect": effect,
+                    "capture_count": len(cells),
+                    "capture_cells": capture_cells,
+                    "previous_owner_ids": previous_owner_ids,
+                }
+            )
+            event.update(
+                {
+                    "effect": effect,
+                    "capture_count": len(cells),
+                    "capture_cells": capture_cells,
+                    "previous_owner_ids": previous_owner_ids,
+                }
+            )
             outcome = ThrowOutcome(
                 turn_value=score_change,
                 message=(
@@ -136,6 +169,23 @@ class KingOfBoardMode:
             )
         return finish_round_game(
             state, outcome, "{winner} regiert die Scheibe!"
+        )
+
+    def on_turn_start(self, state: Any, player: Any) -> None:
+        self._clear_effect(state)
+
+    def on_turn_skipped(self, state: Any, player: Any) -> None:
+        self._clear_effect(state)
+
+    @staticmethod
+    def _clear_effect(state: Any) -> None:
+        state.mode_state.update(
+            {
+                "last_effect": "",
+                "capture_count": 0,
+                "capture_cells": [],
+                "previous_owner_ids": [],
+            }
         )
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:

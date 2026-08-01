@@ -11,6 +11,7 @@ mod color_clash;
 mod eight_ball;
 mod ghost_chase;
 mod heart_chase;
+mod king_of_board;
 mod lightning_round;
 mod mini_golf;
 mod risk_it;
@@ -25,6 +26,7 @@ use color_clash::COLOR_CLASH_MODE;
 use eight_ball::EIGHT_BALL_MODE;
 use ghost_chase::GHOST_CHASE_MODE;
 use heart_chase::HEART_CHASE_MODE;
+use king_of_board::KING_OF_BOARD_MODE;
 use lightning_round::LIGHTNING_ROUND_MODE;
 use mini_golf::MINI_GOLF_MODE;
 use risk_it::RISK_IT_MODE;
@@ -1191,7 +1193,7 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 14] = [
+static MODES: [&'static dyn GameMode; 15] = [
     &AVOID_BOMB_MODE,
     &CRICKET_MODE,
     &CANDY_CANNON_MODE,
@@ -1199,6 +1201,7 @@ static MODES: [&'static dyn GameMode; 14] = [
     &EIGHT_BALL_MODE,
     &GHOST_CHASE_MODE,
     &HEART_CHASE_MODE,
+    &KING_OF_BOARD_MODE,
     &LIGHTNING_ROUND_MODE,
     &MINI_GOLF_MODE,
     &ROBIN_HOOD_MODE,
