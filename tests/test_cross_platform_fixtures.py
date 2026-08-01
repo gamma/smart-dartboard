@@ -29,6 +29,9 @@ HEART_CHASE_FIXTURE = (
 TARGET_RUSH_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "target_rush_v2.json"
 )
+GHOST_CHASE_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "ghost_chase_v2.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -276,6 +279,54 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                     for target in state.mode_state["round_targets"]
                 ],
                 "active_target": state.mode_state["target"]["label"],
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_id": state.winner_id,
+                "result_type": state.result_type,
+                "random_cursor": state.random_cursor,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_ghost_chase_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(GHOST_CHASE_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(fixture["fixture_schema_version"], 1)
+        self.assertEqual(fixture["ruleset_version"], 2)
+        engine = GameEngine()
+        engine.reset(
+            "ghost_chase",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]),
+                    dict(command["event"]),
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            def values(name: str) -> list[int]:
+                return [
+                    state.mode_state[name][player.id]
+                    for player in state.players
+                ]
+            actual = {
+                "scores": [player.score for player in state.players],
+                "combos": values("combo"),
+                "escapes": values("escape"),
+                "path_indices": values("path_index"),
+                "path": [target["label"] for target in state.mode_state["path"]],
+                "active_target": state.overlay()["targets"][0]["id"],
                 "current_player_index": state.current_player_index,
                 "darts_in_turn": state.darts_in_turn,
                 "turn_score": state.turn_score,

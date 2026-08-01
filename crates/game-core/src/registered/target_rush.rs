@@ -1,6 +1,11 @@
 use super::{
     GameInstruction, GameMetadata, GameMode, GameOption, GameOptionChoice, GameOptionValue,
-    RegisteredGameState, finish_fixed_round_game,
+    RegisteredGameState,
+    arcade::{
+        Target, parse_target, ring_name, same_field, same_target, sample_targets, target_value,
+        zone_id,
+    },
+    finish_fixed_round_game,
 };
 use crate::GameError;
 use sdb_contracts::{DartEvent, Ring};
@@ -228,15 +233,6 @@ impl GameMode for TargetRushMode {
     }
 }
 
-#[derive(Clone)]
-struct Target {
-    label: String,
-    field: u8,
-    ring: Ring,
-    multiplier: u8,
-    score: u16,
-}
-
 const fn choice_integer(value: i64, label: &'static str) -> GameOptionChoice {
     GameOptionChoice {
         value: GameOptionValue::Integer(value),
@@ -257,12 +253,7 @@ fn difficulty(state: &RegisteredGameState) -> Result<&str, GameError> {
 fn generate_round_targets(state: &mut RegisteredGameState) -> Result<(), GameError> {
     let difficulty = difficulty(state)?.to_string();
     let count = if difficulty == "easy" { 1 } else { 3 };
-    let mut available = target_pool(&difficulty);
-    let mut targets = Vec::with_capacity(count);
-    for _ in 0..count.min(available.len()) {
-        let index = state.random_index(available.len())?;
-        targets.push(available.remove(index));
-    }
+    let targets = sample_targets(state, count, &difficulty)?;
     state.mode_state["target_round"] = Value::from(state.round_number);
     state.mode_state["round_targets"] =
         Value::Array(targets.iter().map(target_value).collect::<Vec<_>>());
@@ -316,106 +307,6 @@ fn set_combo(state: &mut RegisteredGameState, player_id: &str, value: u8) -> Res
         .ok_or_else(invalid_state)?
         .insert(player_id.into(), Value::from(value));
     Ok(())
-}
-
-fn target_pool(difficulty: &str) -> Vec<Target> {
-    let mut targets = Vec::new();
-    if difficulty == "easy" || difficulty == "normal" {
-        targets.extend((1..=20).map(|field| target_for(field, Ring::SingleOuter)));
-    }
-    if difficulty != "easy" {
-        targets.extend((1..=20).map(|field| target_for(field, Ring::Double)));
-        targets.extend((1..=20).map(|field| target_for(field, Ring::Triple)));
-        targets.push(target_for(25, Ring::DoubleBull));
-    }
-    targets
-}
-
-fn target_for(field: u8, ring: Ring) -> Target {
-    let (prefix, multiplier) = match ring {
-        Ring::Double => ("D", 2),
-        Ring::Triple => ("T", 3),
-        Ring::DoubleBull => ("DBull", 2),
-        _ => ("S", 1),
-    };
-    Target {
-        label: if field == 25 {
-            prefix.into()
-        } else {
-            format!("{prefix}{field}")
-        },
-        field,
-        ring,
-        multiplier,
-        score: u16::from(field) * u16::from(multiplier),
-    }
-}
-
-fn target_value(target: &Target) -> Value {
-    json!({
-        "label": target.label,
-        "field": target.field,
-        "ring": target.ring,
-        "multiplier": target.multiplier,
-        "score": target.score,
-    })
-}
-
-fn parse_target(value: &Value) -> Result<Target, GameError> {
-    serde_json::from_value::<DartEvent>(json!({
-        "type": "hit",
-        "seq": 0,
-        "field": value.get("field"),
-        "ring": value.get("ring"),
-        "multiplier": value.get("multiplier"),
-        "label": value.get("label"),
-        "score": value.get("score"),
-    }))
-    .map_err(|_| invalid_state())
-    .and_then(|event| match event {
-        DartEvent::Hit {
-            label,
-            field,
-            ring,
-            multiplier,
-            score,
-            ..
-        } => Ok(Target {
-            label,
-            field,
-            ring,
-            multiplier,
-            score,
-        }),
-        DartEvent::Miss { .. } => Err(invalid_state()),
-    })
-}
-
-fn same_field(event: &DartEvent, target: &Target) -> bool {
-    matches!(event, DartEvent::Hit { field, .. } if *field == target.field)
-}
-
-fn same_target(event: &DartEvent, target: &Target) -> bool {
-    matches!(event, DartEvent::Hit { field, ring, .. } if *field == target.field && *ring == target.ring)
-}
-
-fn zone_id(target: &Target) -> String {
-    match target.ring {
-        Ring::SingleBull => "SBULL".into(),
-        Ring::DoubleBull => "DBULL".into(),
-        _ => target.label.clone(),
-    }
-}
-
-const fn ring_name(ring: Ring) -> &'static str {
-    match ring {
-        Ring::SingleInner => "single_inner",
-        Ring::SingleOuter => "single_outer",
-        Ring::Triple => "triple",
-        Ring::Double => "double",
-        Ring::SingleBull => "single_bull",
-        Ring::DoubleBull => "double_bull",
-    }
 }
 
 fn invalid_state() -> GameError {

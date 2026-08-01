@@ -1174,7 +1174,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(6));
+        assert_eq!(modes.as_array().map(Vec::len), Some(7));
         assert!(
             modes
                 .as_array()
@@ -1208,6 +1208,13 @@ mod tests {
                     && mode["ruleset_version"] == 2
                     && mode["options"][0]["default"] == 5
                     && mode["options"][1]["default"] == "normal"
+            })
+        }));
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "ghost_chase"
+                    && mode["ruleset_version"] == 2
+                    && mode["artwork"] == "/static/assets/modes/ghost_chase.webp"
             })
         }));
     }

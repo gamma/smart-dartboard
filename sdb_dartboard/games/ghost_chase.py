@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .arcade import choose_targets, finish_round_game, number_overlay_items, overlay_item, same_target
+from .arcade import choose_targets_for_state, finish_round_game, number_overlay_items, overlay_item, same_target
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -50,7 +50,8 @@ class GhostChaseMode:
         self._generate_round_path(state)
 
     def _generate_round_path(self, state: Any) -> None:
-        state.mode_state["path"] = choose_targets(
+        state.mode_state["path"] = choose_targets_for_state(
+            state,
             4,
             str(state.options.get("difficulty", "normal")),
         )
