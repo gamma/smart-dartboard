@@ -531,6 +531,10 @@ dispatchen. Bei Revisionslücken, App-Resume oder Hostwechsel ist ein vollständ
 Snapshot Pflicht. Ein automatischer Hostwechsel während eines laufenden Spiels
 ist nicht zulässig.
 
+Der normative Pairing-, Rollen- und Revisionsvertrag einschließlich Threat
+Model und Abnahmestand steht in
+[COMPANION_PROTOCOL.md](COMPANION_PROTOCOL.md).
+
 ### 10.3 Audio und Effekte
 
 Sound ist ein deklarativer `PlatformEffect` und wird logisch der

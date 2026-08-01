@@ -69,6 +69,10 @@ Umgesetzt und lokal verifiziert:
   Im iPad-Simulator blieben Score 60 und Revision 2 nach vollständigem
   Terminieren und erneutem Start erhalten; die Runtime-ID wechselte dabei wie
   vorgesehen.
+- plattformneutraler Companion-Kern für fünf Minuten gültige sechsstellige
+  Einmalcodes, Versuchslimit, 256-Bit-Projector-Tokens, Hashspeicherung,
+  Widerruf und strikt revisionsgenaue Snapshot-Replikation. Transport und UI
+  sind noch offen; Details: [COMPANION_PROTOCOL.md](COMPANION_PROTOCOL.md).
 
 Noch nicht als produktionsreif nachgewiesen:
 

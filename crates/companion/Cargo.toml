@@ -1,0 +1,19 @@
+[package]
+name = "sdb-companion"
+description = "Secure pairing and revision rules for projector companion clients"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+base64 = "0.22"
+getrandom = "0.3"
+serde.workspace = true
+serde_json.workspace = true
+sha2 = "0.10"
+thiserror.workspace = true
+
+[lints]
+workspace = true

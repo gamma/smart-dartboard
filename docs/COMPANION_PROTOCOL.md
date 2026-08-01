@@ -1,0 +1,91 @@
+# Companion-Protokoll
+
+Stand: 2026-08-01
+
+Dieses Dokument konkretisiert den Companion-Modus aus der
+[Cross-Platform-Architektur](CROSS_PLATFORM_ARCHITECTURE.md). Der erste
+Produktfall ist ein iPhone oder iPad als Controller, BLE-Host, Runtime und
+SQLite-Instanz sowie ein zweites iPad als reiner Projector mit Sound.
+
+## Autorität und Rollen
+
+Nur das Controller-Gerät besitzt Boardverbindung, Runtime, Session und
+Datenbank. Ein Companion erhält ausschließlich die Rolle `projector` und darf:
+
+- einen vollständigen Runtime-Snapshot beziehen,
+- fortlaufende Zustände und deklarative Projector-Effekte empfangen,
+- seinen Verbindungs- und Audiozustand melden.
+
+Er darf keine Spiel-, Setup-, Korrektur- oder BLE-Commands senden. Es gibt
+keinen automatischen Hostwechsel während eines laufenden Spiels.
+
+## Discovery, Pairing und Transport
+
+Bonjour veröffentlicht nur Adresse, Port, Protokollversion und eine nicht
+geheime Host-ID. Discovery ist keine Authentisierung. Der eigentliche Transport
+muss gegenseitig gegen Downgrade geschützt und verschlüsselt sein; Klartext-
+HTTP oder ein global geöffnetes CORS ist kein zulässiger Produktpfad.
+
+Der Controller öffnet Pairing sichtbar im Board-Setup:
+
+1. Er erzeugt einen sechsstelligen Einmalcode für fünf Minuten.
+2. Das Companion-iPad wählt den gefundenen Controller und gibt Code oder
+   denselben Inhalt per QR ein.
+3. Nach höchstens fünf falschen Versuchen schließt das Fenster.
+4. Bei Erfolg erhält das iPad einmalig einen zufälligen 256-Bit-Token mit der
+   festen Rolle `projector`.
+5. Der Controller speichert nur SHA-256 des Tokens; das iPad legt den Klartext
+   im Keychain/Keystore ab.
+6. Ein neues Pairing desselben Geräts ersetzt dessen alten Token. Der Betreiber
+   kann jedes Gerät im Board-Setup widerrufen.
+
+Diese Regeln liegen plattformneutral in `sdb-companion`. Bonjour, TLS,
+QR-Erfassung und Keychain/Keystore sind austauschbare Hostadapter.
+
+## Replikation
+
+Jeder Frame enthält:
+
+- `protocol_version`,
+- `runtime_instance_id`,
+- `revision`,
+- `kind` als `snapshot` oder `state`,
+- den versionierten Payload.
+
+Nach Connect, App-Resume, Runtimewechsel oder Revisionslücke fordert der
+Companion zwingend einen Vollsnapshot an. Erst danach akzeptiert er
+`revision + 1`. Derselbe Frame darf als Duplikat ignoriert werden; ältere
+Frames werden verworfen. Ein `state` einer neuen Runtime darf niemals ohne
+vorherigen Snapshot angewendet werden.
+
+Die lokale Projector-WebView besitzt keine eigene Spielzustandskopie. Der
+Companion-Adapter validiert den Frame und übergibt den freigegebenen Snapshot an
+denselben read-only Projector-Renderer wie AirPlay/HDMI.
+
+## Verhalten bei Ausfall
+
+- Der Controller spielt bei Companion-Verlust weiter.
+- Der Controller zeigt den Verlust und bietet lokale Vorschau oder
+  AirPlay/HDMI als Fallback an.
+- Der Companion zeigt einen neutralen Reconnect-Zustand, keinen veralteten
+  vermeintlich aktuellen Spielstand.
+- Nach Reconnect folgt zuerst ein Vollsnapshot; Effekte vor diesem Snapshot
+  werden nicht nachträglich abgespielt.
+- Sound wird über Effect-ID dedupliziert und bleibt standardmäßig der
+  Projector-Rolle zugeordnet.
+
+## Implementierungs- und Abnahmestand
+
+Implementiert und automatisiert getestet:
+
+- Einmalcode, Ablaufzeit und Versuchslimit,
+- 256-Bit-Token, Hashspeicherung, Projector-Rolle und Widerruf,
+- Snapshotpflicht, Runtimewechsel, Duplikate, Stale Frames und Revisionslücken.
+
+Noch offen:
+
+- persistente Grants in SQLite und Token im Apple Keychain,
+- Bonjour-Advertiser und -Browser,
+- authentisierter TLS-/WebSocket-Transport,
+- Rollenwahl und Pairing-UI auf Controller und Companion,
+- echte iPhone/iPad-zu-iPad-Abnahme mit Disconnect, Resume und Widerruf.
