@@ -12,6 +12,7 @@ mod heart_chase;
 mod lightning_round;
 mod mini_golf;
 mod robin_hood;
+mod simon_says;
 mod target_rush;
 
 use candy_cannon::CANDY_CANNON_MODE;
@@ -21,6 +22,7 @@ use heart_chase::HEART_CHASE_MODE;
 use lightning_round::LIGHTNING_ROUND_MODE;
 use mini_golf::MINI_GOLF_MODE;
 use robin_hood::ROBIN_HOOD_MODE;
+use simon_says::SIMON_SAYS_MODE;
 use target_rush::TARGET_RUSH_MODE;
 
 const CRICKET_TARGETS: [u8; 7] = [20, 19, 18, 17, 16, 15, 25];
@@ -1129,7 +1131,7 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 9] = [
+static MODES: [&'static dyn GameMode; 10] = [
     &CRICKET_MODE,
     &CANDY_CANNON_MODE,
     &EIGHT_BALL_MODE,
@@ -1138,6 +1140,7 @@ static MODES: [&'static dyn GameMode; 9] = [
     &LIGHTNING_ROUND_MODE,
     &MINI_GOLF_MODE,
     &ROBIN_HOOD_MODE,
+    &SIMON_SAYS_MODE,
     &TARGET_RUSH_MODE,
 ];
 

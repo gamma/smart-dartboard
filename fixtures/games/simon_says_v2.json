@@ -1,0 +1,40 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 2,
+  "random_seed": 42,
+  "players": [
+    {"id": "ada", "name": "Ada"},
+    {"id": "bob", "name": "Bob"}
+  ],
+  "options": {"rounds": 3, "difficulty": "easy"},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 7, "ring": "single_outer", "multiplier": 1, "label": "S7", "score": 7}},
+      "expected": {"scores": [25, 0], "sequence": [{"zone": 4, "fields": [7, 16, 8, 11]}], "position": 0, "current_player_index": 0, "darts_in_turn": 1, "turn_score": 25, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 1}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [25, 0], "sequence": [{"zone": 4, "fields": [7, 16, 8, 11]}], "position": 0, "current_player_index": 1, "darts_in_turn": 0, "turn_score": 0, "round_number": 1, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 1}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 2, "label": "MISS", "score": 0}},
+      "expected": {"scores": [25, 0], "sequence": [{"zone": 4, "fields": [7, 16, 8, 11]}], "position": 0, "current_player_index": 1, "darts_in_turn": 1, "turn_score": 0, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 1}
+    },
+    {
+      "command": {"type": "correct", "action_id": 3, "event": {"type": "hit", "seq": 999, "field": 25, "ring": "double_bull", "multiplier": 2, "label": "DBULL", "score": 50}},
+      "expected": {"scores": [25, 25], "sequence": [{"zone": 4, "fields": [7, 16, 8, 11]}], "position": 0, "current_player_index": 1, "darts_in_turn": 1, "turn_score": 25, "round_number": 1, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 1}
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {"scores": [25, 25], "sequence": [{"zone": 2, "fields": [13, 6, 10, 15]}, {"zone": 4, "fields": [7, 16, 8, 11]}], "position": 0, "current_player_index": 0, "darts_in_turn": 0, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 3}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 3, "field": 13, "ring": "triple", "multiplier": 3, "label": "T13", "score": 39}},
+      "expected": {"scores": [25, 25], "sequence": [{"zone": 2, "fields": [13, 6, 10, 15]}, {"zone": 4, "fields": [7, 16, 8, 11]}], "position": 1, "current_player_index": 0, "darts_in_turn": 1, "turn_score": 0, "round_number": 2, "status": "running", "winner_id": null, "result_type": "", "random_cursor": 3}
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 4, "field": 7, "ring": "triple", "multiplier": 3, "label": "T7", "score": 21}},
+      "expected": {"scores": [75, 25], "sequence": [{"zone": 2, "fields": [13, 6, 10, 15]}, {"zone": 4, "fields": [7, 16, 8, 11]}], "position": 0, "current_player_index": 0, "darts_in_turn": 2, "turn_score": 50, "round_number": 2, "status": "hold", "winner_id": null, "result_type": "", "random_cursor": 3}
+    }
+  ]
+}

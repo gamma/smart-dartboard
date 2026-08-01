@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict
 
 from .arcade import finish_round_game
@@ -70,8 +69,11 @@ class SimonSaysMode:
             }
             for index in range(zone_count)
         ]
-        # Gameplay variety only; no security decision depends on this randomness.
-        state.mode_state["sequence"] = random.sample(zones, length)  # nosec B311
+        available = list(zones)
+        sequence = []
+        for _ in range(length):
+            sequence.append(available.pop(state.random_index(len(available))))
+        state.mode_state["sequence"] = sequence
         state.mode_state["zone_count"] = zone_count
         state.mode_state["sequence_round"] = state.round_number
         state.mode_state["position"] = 0

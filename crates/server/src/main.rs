@@ -1177,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(11));
+        assert_eq!(modes.as_array().map(Vec::len), Some(12));
         assert!(
             modes
                 .as_array()
@@ -1240,6 +1240,14 @@ mod tests {
                     && mode["ruleset_version"] == 2
                     && mode["options"][0]["default"] == 9
                     && mode["options"][1]["default"] == "normal"
+            })
+        }));
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "simon_says"
+                    && mode["ruleset_version"] == 2
+                    && mode["options"][0]["default"] == 5
+                    && mode["options"][1]["default"] == "easy"
             })
         }));
         assert!(modes.as_array().is_some_and(|items| {
