@@ -4,18 +4,17 @@ use sdb_board::{BoardFailureCode, BoardPhase};
 #[cfg(any(target_os = "ios", target_os = "macos", test))]
 use sdb_board::{BoardIngress, BoardIngressOutcome};
 use sdb_contracts::{DartEvent, DartSource, Ring};
-use sdb_runtime::{MemoryRepository, Runtime, RuntimeAction, RuntimeGameState};
+use sdb_runtime::{Runtime, RuntimeAction, RuntimeGameState};
+use sdb_storage::SqliteRepository;
 use serde::Serialize;
 use std::sync::Mutex;
-use tauri::{Emitter, State};
+use tauri::{Emitter, Manager, State};
+use uuid::Uuid;
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 use std::sync::OnceLock;
 #[cfg(target_os = "ios")]
 use std::sync::atomic::{AtomicU32, Ordering};
-#[cfg(any(target_os = "ios", debug_assertions))]
-use tauri::Manager;
-
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 
@@ -23,7 +22,7 @@ static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 static EXTERNAL_DISPLAY_COUNT: AtomicU32 = AtomicU32::new(0);
 
 struct NativeState {
-    runtime: Runtime<MemoryRepository>,
+    runtime: Runtime<SqliteRepository>,
     next_dart_seq: u64,
     #[cfg(any(target_os = "ios", target_os = "macos", test))]
     board_ingress: BoardIngress,
@@ -41,20 +40,23 @@ struct PublicState {
 }
 
 impl NativeState {
-    fn new() -> Result<Self, String> {
-        let mut runtime = Runtime::restore("native-m0", MemoryRepository::default())
+    fn restore(repository: SqliteRepository) -> Result<Self, String> {
+        let runtime_instance_id = Uuid::new_v4().to_string();
+        let mut runtime = Runtime::restore(runtime_instance_id.clone(), repository)
             .map_err(|error| error.to_string())?;
-        runtime
-            .dispatch(
-                "native-m0",
-                "bootstrap-countup",
-                Some(0),
-                RuntimeAction::StartCountUp {
-                    players: vec![("test-player".into(), "Test Player".into())],
-                    rounds: 20,
-                },
-            )
-            .map_err(|error| error.to_string())?;
+        if runtime.snapshot().revision == 0 {
+            runtime
+                .dispatch(
+                    &runtime_instance_id,
+                    "bootstrap-countup",
+                    Some(0),
+                    RuntimeAction::StartCountUp {
+                        players: vec![("test-player".into(), "Test Player".into())],
+                        rounds: 20,
+                    },
+                )
+                .map_err(|error| error.to_string())?;
+        }
         Ok(Self {
             runtime,
             next_dart_seq: 1,
@@ -88,10 +90,11 @@ impl NativeState {
     fn ingest_test_hit(&mut self) -> Result<PublicState, String> {
         let seq = self.next_dart_seq;
         self.next_dart_seq += 1;
-        let command_id = format!("test-hit-{seq}");
+        let runtime_instance_id = self.runtime.instance_id().to_owned();
+        let command_id = format!("test-hit:{runtime_instance_id}:{seq}");
         self.runtime
             .dispatch(
-                "native-m0",
+                &runtime_instance_id,
                 &command_id,
                 Some(self.runtime.snapshot().revision),
                 RuntimeAction::Dart {
@@ -117,9 +120,10 @@ impl NativeState {
         else {
             return Ok(false);
         };
+        let runtime_instance_id = self.runtime.instance_id().to_owned();
         self.runtime
             .dispatch(
-                "native-m0",
+                &runtime_instance_id,
                 &command_id,
                 Some(self.runtime.snapshot().revision),
                 RuntimeAction::Dart {
@@ -384,10 +388,14 @@ fn publish_public_state(app: &tauri::AppHandle, public: &PublicState) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let native_state = NativeState::new().expect("initialize shared runtime");
     tauri::Builder::default()
-        .manage(Mutex::new(native_state))
         .setup(|app| {
+            let data_dir = app.path().app_data_dir()?;
+            std::fs::create_dir_all(&data_dir)?;
+            let repository = SqliteRepository::open(data_dir.join("runtime.sqlite"))
+                .map_err(std::io::Error::other)?;
+            let native_state = NativeState::restore(repository).map_err(std::io::Error::other)?;
+            app.manage(Mutex::new(native_state));
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let _ = APP_HANDLE.set(app.handle().clone());
             #[cfg(target_os = "ios")]
@@ -436,7 +444,8 @@ mod tests {
 
     #[test]
     fn raw_board_packet_uses_shared_ingress_and_runtime_once() {
-        let mut state = NativeState::new().expect("native state");
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let mut state = NativeState::restore(repository).expect("native state");
         let packet = [1, 0, 0, 0, 5, 0, 0x0d, 0, 2, 0x0f];
         assert!(
             state
@@ -451,5 +460,22 @@ mod tests {
         let public = state.public();
         assert_eq!(public.revision, 2);
         assert_eq!(public.counter, 40);
+    }
+
+    #[test]
+    fn native_runtime_recovers_committed_state_with_a_new_instance_id() {
+        let path = std::env::temp_dir().join(format!("sdb-native-{}.sqlite", Uuid::new_v4()));
+        let first_instance = {
+            let repository = SqliteRepository::open(&path).expect("first repository");
+            let mut state = NativeState::restore(repository).expect("first state");
+            state.ingest_test_hit().expect("committed hit");
+            state.runtime.instance_id().to_owned()
+        };
+        let repository = SqliteRepository::open(&path).expect("reopened repository");
+        let state = NativeState::restore(repository).expect("restored state");
+        assert_ne!(state.runtime.instance_id(), first_instance);
+        assert_eq!(state.public().revision, 2);
+        assert_eq!(state.public().counter, 60);
+        std::fs::remove_file(path).expect("remove test database");
     }
 }

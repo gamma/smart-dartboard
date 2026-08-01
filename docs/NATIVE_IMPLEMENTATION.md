@@ -63,6 +63,12 @@ Umgesetzt und lokal verifiziert:
   Bundle und macOS-Release-Binary linken und starten erfolgreich; ein nativer
   Test verarbeitet D20 genau einmal, und die Control UI zeigt im BLE-losen
   Simulator verständlich `nicht verfügbar`.
+- dieselbe Schema-4-SQLite-Persistenz wie der Headless-Host im nativen
+  App-Datenverzeichnis. Jede Prozessausführung erhält eine neue Runtime-ID,
+  stellt aber ausschließlich den letzten atomar committed Snapshot wieder her.
+  Im iPad-Simulator blieben Score 60 und Revision 2 nach vollständigem
+  Terminieren und erneutem Start erhalten; die Runtime-ID wechselte dabei wie
+  vorgesehen.
 
 Noch nicht als produktionsreif nachgewiesen:
 
@@ -108,6 +114,11 @@ Der M0-Zwei-Display-Test kann in einem Debug-Build mit dem Simulator-Argument
 CountUp-Start, Revision 2 der automatische `T20`-Treffer. Der virtuelle externe
 Ausgang wird über `simctl io ... screenConfig --display external power on|off`
 verbunden beziehungsweise getrennt.
+
+Der gleiche Startparameter dient außerdem als Persistenz-Smoke-Test: App einmal
+mit `--m0-test-hit-after-start` starten, nach Revision 2 vollständig beenden und
+ohne Parameter neu öffnen. Score und Revision müssen erhalten bleiben, die
+angezeigte Runtime-ID muss wechseln.
 
 ## Apple-DisplayHost
 
