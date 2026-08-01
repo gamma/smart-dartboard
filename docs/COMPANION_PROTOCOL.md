@@ -80,11 +80,13 @@ Implementiert und automatisiert getestet:
 
 - Einmalcode, Ablaufzeit und Versuchslimit,
 - 256-Bit-Token, Hashspeicherung, Projector-Rolle und Widerruf,
-- Snapshotpflicht, Runtimewechsel, Duplikate, Stale Frames und Revisionslücken.
+- Snapshotpflicht, Runtimewechsel, Duplikate, Stale Frames und Revisionslücken,
+- persistente, widerrufbare Geräte in SQLite-Schema 5; die Datenbank erhält nur
+  den Token-Hash und behält den Widerrufszeitpunkt als lokale Auditspur.
 
 Noch offen:
 
-- persistente Grants in SQLite und Token im Apple Keychain,
+- Tokenablage im Apple Keychain beziehungsweise Android Keystore,
 - Bonjour-Advertiser und -Browser,
 - authentisierter TLS-/WebSocket-Transport,
 - Rollenwahl und Pairing-UI auf Controller und Companion,

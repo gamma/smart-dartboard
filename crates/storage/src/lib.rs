@@ -1,6 +1,7 @@
 //! Transactional `SQLite` implementation of the runtime repository.
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use sdb_companion::{CompanionRole, PairedDevice};
 use sdb_contracts::{DartEvent, DartSource};
 use sdb_runtime::{
     CommitOutcome, CommitRequest, Repository, RuntimeAction, RuntimeGame, RuntimeSnapshot,
@@ -10,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::Path};
 use thiserror::Error;
 
-const CURRENT_SCHEMA_VERSION: u32 = 4;
+const CURRENT_SCHEMA_VERSION: u32 = 5;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
@@ -191,6 +192,112 @@ impl SqliteRepository {
         Ok(self
             .connection
             .pragma_query_value(None, "user_version", |row| row.get(0))?)
+    }
+
+    /// Returns active projector companions in deterministic device order.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for an invalid stored role, negative timestamp or an
+    /// underlying `SQLite` failure.
+    pub fn companion_devices(&self) -> Result<Vec<PairedDevice>, StorageError> {
+        let mut statement = self.connection.prepare(
+            "SELECT device_id, device_name, role, token_hash, paired_at_ms
+             FROM companion_devices
+             WHERE revoked_at_ms IS NULL
+             ORDER BY device_id ASC",
+        )?;
+        let rows = statement.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+                row.get::<_, i64>(4)?,
+            ))
+        })?;
+        rows.map(|row| {
+            let (device_id, device_name, role, token_hash, paired_at_ms) = row?;
+            if role != "projector" {
+                return Err(StorageError::Integrity(format!(
+                    "unknown companion role: {role}"
+                )));
+            }
+            Ok(PairedDevice {
+                device_id,
+                device_name,
+                role: CompanionRole::Projector,
+                token_hash,
+                paired_at_ms: u64::try_from(paired_at_ms).map_err(|_| {
+                    StorageError::Integrity("negative companion pairing timestamp".into())
+                })?,
+            })
+        })
+        .collect()
+    }
+
+    /// Persists or replaces a projector grant without ever receiving its
+    /// plaintext token.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for malformed metadata, timestamps outside `SQLite`'s
+    /// signed range, or an underlying `SQLite` failure.
+    pub fn save_companion_device(&mut self, device: &PairedDevice) -> Result<(), StorageError> {
+        if device.device_id.is_empty()
+            || device.device_id.len() > 128
+            || device.device_name.trim().is_empty()
+            || device.device_name.len() > 80
+            || device.token_hash.len() != 64
+            || !device
+                .token_hash
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit())
+        {
+            return Err(StorageError::Integrity(
+                "invalid companion device metadata".into(),
+            ));
+        }
+        let paired_at_ms = i64::try_from(device.paired_at_ms)
+            .map_err(|_| StorageError::Integrity("companion timestamp is out of range".into()))?;
+        self.connection.execute(
+            "INSERT INTO companion_devices(
+                 device_id, device_name, role, token_hash, paired_at_ms, revoked_at_ms
+             ) VALUES(?1, ?2, 'projector', ?3, ?4, NULL)
+             ON CONFLICT(device_id) DO UPDATE SET
+                 device_name=excluded.device_name,
+                 role=excluded.role,
+                 token_hash=excluded.token_hash,
+                 paired_at_ms=excluded.paired_at_ms,
+                 revoked_at_ms=NULL",
+            params![
+                device.device_id,
+                device.device_name,
+                device.token_hash,
+                paired_at_ms
+            ],
+        )?;
+        Ok(())
+    }
+
+    /// Revokes a companion grant while retaining a local audit timestamp.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for timestamps outside `SQLite`'s signed range or an
+    /// underlying `SQLite` failure.
+    pub fn revoke_companion_device(
+        &mut self,
+        device_id: &str,
+        revoked_at_ms: u64,
+    ) -> Result<bool, StorageError> {
+        let revoked_at_ms = i64::try_from(revoked_at_ms)
+            .map_err(|_| StorageError::Integrity("companion timestamp is out of range".into()))?;
+        Ok(self.connection.execute(
+            "UPDATE companion_devices SET revoked_at_ms=?1
+             WHERE device_id=?2 AND revoked_at_ms IS NULL",
+            params![revoked_at_ms, device_id],
+        )? > 0)
     }
 
     /// Returns committed journal entries in ascending revision order.
@@ -970,6 +1077,25 @@ fn migrate(connection: &Connection) -> Result<(), StorageError> {
             ALTER TABLE throws ADD COLUMN action_id INTEGER;
             CREATE INDEX idx_throws_action ON throws(game_id, action_id);
             PRAGMA user_version=4;
+            COMMIT;
+            ",
+        )?;
+    }
+    if version < 5 {
+        connection.execute_batch(
+            "
+            BEGIN;
+            CREATE TABLE companion_devices (
+                device_id TEXT PRIMARY KEY,
+                device_name TEXT NOT NULL,
+                role TEXT NOT NULL CHECK(role = 'projector'),
+                token_hash TEXT NOT NULL CHECK(length(token_hash) = 64),
+                paired_at_ms INTEGER NOT NULL,
+                revoked_at_ms INTEGER
+            );
+            CREATE INDEX idx_companion_devices_active
+                ON companion_devices(revoked_at_ms, device_id);
+            PRAGMA user_version=5;
             COMMIT;
             ",
         )?;
@@ -2031,7 +2157,7 @@ mod tests {
                 .expect("legacy schema");
         }
         let repository = SqliteRepository::open(&temporary).expect("migrate");
-        assert_eq!(repository.schema_version().expect("version"), 4);
+        assert_eq!(repository.schema_version().expect("version"), 5);
         assert!(repository.journal(10).expect("journal").is_empty());
         std::fs::remove_file(temporary).expect("remove test database");
     }
@@ -2064,7 +2190,7 @@ mod tests {
                 .expect("legacy Python schema slice");
         }
         let repository = SqliteRepository::open(&temporary).expect("migrate Python database");
-        assert_eq!(repository.schema_version().expect("version"), 4);
+        assert_eq!(repository.schema_version().expect("version"), 5);
         let profiles = repository.players().expect("profiles");
         assert_eq!(profiles.len(), 1);
         assert_eq!(profiles[0].id, "legacy-ada");
@@ -2100,7 +2226,7 @@ mod tests {
                 .expect("schema three slice");
         }
         let repository = SqliteRepository::open(&temporary).expect("migrate action IDs");
-        assert_eq!(repository.schema_version().expect("version"), 4);
+        assert_eq!(repository.schema_version().expect("version"), 5);
         let row: (String, Option<i64>) = repository
             .connection
             .query_row(
@@ -2110,6 +2236,37 @@ mod tests {
             )
             .expect("preserved throw");
         assert_eq!(row, ("legacy-game".into(), None));
+        std::fs::remove_file(temporary).expect("remove test database");
+    }
+
+    #[test]
+    fn schema_four_adds_companion_devices_without_losing_existing_data() {
+        let temporary = std::env::temp_dir().join(format!(
+            "sdb-companion-migration-{}-{}.sqlite",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_file(&temporary);
+        {
+            let connection = Connection::open(&temporary).expect("schema four database");
+            connection
+                .execute_batch(
+                    "
+                    CREATE TABLE migration_sentinel(value TEXT NOT NULL);
+                    INSERT INTO migration_sentinel(value) VALUES('preserve-me');
+                    PRAGMA user_version=4;
+                    ",
+                )
+                .expect("schema four slice");
+        }
+        let repository = SqliteRepository::open(&temporary).expect("migrate companions");
+        assert_eq!(repository.schema_version().expect("version"), 5);
+        assert!(repository.companion_devices().expect("devices").is_empty());
+        let sentinel: String = repository
+            .connection
+            .query_row("SELECT value FROM migration_sentinel", [], |row| row.get(0))
+            .expect("preserved data");
+        assert_eq!(sentinel, "preserve-me");
         std::fs::remove_file(temporary).expect("remove test database");
     }
 
@@ -2565,6 +2722,46 @@ mod tests {
         assert_eq!(statistics[0].games, 0);
         assert_eq!(statistics[0].darts, 0);
         assert_eq!(statistics[0].wins, 0);
+    }
+
+    #[test]
+    fn companion_grants_persist_as_hashes_and_remain_revocable() {
+        let mut repository = SqliteRepository::in_memory().expect("repository");
+        let device = PairedDevice {
+            device_id: "ipad-projector".into(),
+            device_name: "Arcade iPad".into(),
+            role: CompanionRole::Projector,
+            token_hash: "ab".repeat(32),
+            paired_at_ms: 42,
+        };
+        repository
+            .save_companion_device(&device)
+            .expect("save companion");
+        assert_eq!(
+            repository.companion_devices().expect("devices"),
+            vec![device]
+        );
+        assert!(
+            repository
+                .revoke_companion_device("ipad-projector", 99)
+                .expect("revoke")
+        );
+        assert!(repository.companion_devices().expect("devices").is_empty());
+        assert!(
+            !repository
+                .revoke_companion_device("ipad-projector", 100)
+                .expect("already revoked")
+        );
+        let stored: (String, i64) = repository
+            .connection
+            .query_row(
+                "SELECT token_hash, revoked_at_ms FROM companion_devices
+                 WHERE device_id='ipad-projector'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("audit row");
+        assert_eq!(stored, ("ab".repeat(32), 99));
     }
 
     #[test]

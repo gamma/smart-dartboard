@@ -132,9 +132,12 @@ Schema 4 ergänzt stabile Dart-Action-IDs in der schnellen Wurfprojektion.
 Korrektur und Löschen markieren das ersetzte Event als unwirksam, hängen ein
 neues Auditereignis an und schreiben alle betroffenen X01-Würfe aus dem
 deterministisch wiedergegebenen Core-Zustand neu.
+Schema 5 ergänzt widerrufbare Companion-Geräte. Gespeichert werden Geräte-ID,
+Anzeigename, feste Projector-Rolle, Pairing- und Widerrufszeit sowie
+ausschließlich der SHA-256-Token-Hash; ein Klartext-Token gelangt nie in SQLite.
 
 Migrationen laufen fortlaufend und transaktional; eine Datenbank mit neuerer
 unbekannter Schema-Version wird ohne Downgrade oder Schreibversuch abgelehnt. Nach jeder
-Migration läuft `PRAGMA quick_check`. Da 1 → 2, 2 → 3 und 3 → 4 ausschließlich
-Tabellen beziehungsweise eine Spalte ergänzen, ist hierfür kein destruktives
-Migrationsbackup erforderlich.
+Migration läuft `PRAGMA quick_check`. Da 1 → 2, 2 → 3, 3 → 4 und 4 → 5
+ausschließlich Tabellen beziehungsweise eine Spalte ergänzen, ist hierfür kein
+destruktives Migrationsbackup erforderlich.
