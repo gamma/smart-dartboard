@@ -9,7 +9,9 @@
 /* Begin PBXBuildFile section */
 		12E6FD74EB7C335FA3E1A749 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4BBB39A5278574C663F72A0A /* Assets.xcassets */; };
 		179125BCC41C2DD5409596E2 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 664DBB93EFBC8B306B3A8922 /* Metal.framework */; };
+		35F61D673558B421FC3D670C /* ProjectorDisplayHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = EA9BFC414BC28065A79C93A0 /* ProjectorDisplayHost.mm */; };
 		3B437BB1B33E4B19FAF6AEE6 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CB82108290AA99350E05CAD /* QuartzCore.framework */; };
+		4923A4935C256B9855FFFC73 /* libapp.a in Resources */ = {isa = PBXBuildFile; fileRef = DAE57E1E821C1B95F9E635E6 /* libapp.a */; };
 		52BE30277572DABEC40BE063 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 203FF380527E4CB403054650 /* Security.framework */; };
 		577CFC2641E3EAE43F3DEACA /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E29BE45429DDFE60C0089110 /* UIKit.framework */; };
 		9823E4AD829BCE3E7A175922 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91CF9EBAD127047153940344 /* CoreGraphics.framework */; };
@@ -35,9 +37,12 @@
 		7BF1B662EDAAECA04E85FD80 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
 		7D40A1650231C610CD8C3C99 /* main.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = main.mm; sourceTree = "<group>"; };
 		91CF9EBAD127047153940344 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
+		B9CC417A162E3407588330FE /* ProjectorDisplayHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ProjectorDisplayHost.h; sourceTree = "<group>"; };
 		BE2C4AF5160B57ED1ABD16C6 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		BF36697C53B0946F7B5E5F49 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
+		DAE57E1E821C1B95F9E635E6 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		E29BE45429DDFE60C0089110 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
+		EA9BFC414BC28065A79C93A0 /* ProjectorDisplayHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ProjectorDisplayHost.mm; sourceTree = "<group>"; };
 		ED32A4CE2C4BDFD971DC011F /* sdb-native-m0_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "sdb-native-m0_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		F887F5660CD9632B7C904FD8 /* WebKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WebKit.framework; path = System/Library/Frameworks/WebKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
@@ -61,6 +66,22 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		0EE868A9EF7FFE385C8578B5 /* arm64 */ = {
+			isa = PBXGroup;
+			children = (
+				10872FA3188566BC2A325FEB /* debug */,
+			);
+			path = arm64;
+			sourceTree = "<group>";
+		};
+		10872FA3188566BC2A325FEB /* debug */ = {
+			isa = PBXGroup;
+			children = (
+				DAE57E1E821C1B95F9E635E6 /* libapp.a */,
+			);
+			path = debug;
+			sourceTree = "<group>";
+		};
 		26A601B14D1FF38CE801B242 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -128,6 +149,7 @@
 		E6C327C6E0B0E45C96D2B153 /* Externals */ = {
 			isa = PBXGroup;
 			children = (
+				0EE868A9EF7FFE385C8578B5 /* arm64 */,
 			);
 			path = Externals;
 			sourceTree = "<group>";
@@ -145,9 +167,18 @@
 			isa = PBXGroup;
 			children = (
 				7D40A1650231C610CD8C3C99 /* main.mm */,
+				B9CC417A162E3407588330FE /* ProjectorDisplayHost.h */,
+				EA9BFC414BC28065A79C93A0 /* ProjectorDisplayHost.mm */,
 				B149A77DF041ECF18529B10D /* bindings */,
 			);
 			path = "sdb-native-m0";
+			sourceTree = "<group>";
+		};
+		"TEMP_A2726F7F-BACE-42A1-80D9-AEDBA3D178E3" /* x86_64 */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			path = x86_64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -211,6 +242,7 @@
 				12E6FD74EB7C335FA3E1A749 /* Assets.xcassets in Resources */,
 				E571E4C5EE7922CADDFF9CDA /* LaunchScreen.storyboard in Resources */,
 				F354FDA0EA86D3D7CA6B0707 /* assets in Resources */,
+				4923A4935C256B9855FFFC73 /* libapp.a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -245,6 +277,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				35F61D673558B421FC3D670C /* ProjectorDisplayHost.mm in Sources */,
 				D571B95AA1786C4A54511A0E /* main.mm in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

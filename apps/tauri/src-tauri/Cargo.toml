@@ -15,9 +15,13 @@ tauri-build = { version = "2.6.3", features = [] }
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 tauri = { version = "2.11.5", features = [] }
+
+[target.'cfg(target_os = "ios")'.dependencies]
+libc = "0.2"
 
 [workspace]
 
 [lints.rust]
-unsafe_code = "forbid"
+unsafe_code = "deny"
