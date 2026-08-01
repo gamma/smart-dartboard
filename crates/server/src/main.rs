@@ -1,0 +1,411 @@
+use axum::{
+    Json, Router,
+    extract::{State, WebSocketUpgrade, ws::Message},
+    http::{HeaderMap, HeaderValue, StatusCode, header},
+    response::{IntoResponse, Response},
+    routing::{get, post},
+};
+use sdb_contracts::{
+    CommandEnvelope, ContractError, Envelope, ErrorCode, MessageKind, PROTOCOL_VERSION,
+};
+use sdb_runtime::{CommandResult, Runtime, RuntimeSnapshot};
+use sdb_storage::SqliteRepository;
+use serde::Serialize;
+use std::{
+    env,
+    net::{IpAddr, Ipv4Addr, SocketAddr},
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+use tokio::sync::broadcast;
+use tower_http::set_header::SetResponseHeaderLayer;
+use uuid::Uuid;
+
+type SharedRuntime = Arc<Mutex<Runtime<SqliteRepository>>>;
+type StateMessage = Envelope<RuntimeSnapshot>;
+
+#[derive(Clone)]
+struct AppState {
+    runtime: SharedRuntime,
+    states: broadcast::Sender<StateMessage>,
+    board_status: &'static str,
+}
+
+#[derive(Serialize)]
+struct Health {
+    status: &'static str,
+    runtime: &'static str,
+    database: &'static str,
+    board: &'static str,
+    protocol_version: u16,
+    revision: u64,
+}
+
+#[derive(Serialize)]
+struct ServiceInfo {
+    service: &'static str,
+    api: &'static str,
+    production_replacement: bool,
+}
+
+#[tokio::main]
+async fn main() {
+    let data_dir = PathBuf::from(env::var("SDB_DATA_DIR").unwrap_or_else(|_| "data".into()));
+    std::fs::create_dir_all(&data_dir).expect("create data directory");
+    let repository =
+        SqliteRepository::open(data_dir.join("runtime.sqlite")).expect("open runtime database");
+    let runtime = Runtime::restore(Uuid::new_v4().to_string(), repository)
+        .expect("restore committed runtime");
+    let ble_enabled = env_flag("SDB_ENABLE_BLE", true);
+    let state = AppState::new(
+        runtime,
+        if ble_enabled {
+            "unavailable"
+        } else {
+            "disabled"
+        },
+    );
+    let app = router(state);
+    let port = env::var("SDB_PORT")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or(8000);
+    let address = SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), port);
+    let listener = tokio::net::TcpListener::bind(address)
+        .await
+        .expect("bind server socket");
+    println!("Smart Dartboard runtime v2 listening on http://{address}");
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown_signal())
+        .await
+        .expect("serve HTTP");
+}
+
+impl AppState {
+    fn new(runtime: Runtime<SqliteRepository>, board_status: &'static str) -> Self {
+        let (states, _) = broadcast::channel(64);
+        Self {
+            runtime: Arc::new(Mutex::new(runtime)),
+            states,
+            board_status,
+        }
+    }
+
+    fn snapshot(&self, message_id: impl Into<String>) -> Result<StateMessage, ContractError> {
+        let runtime = self
+            .runtime
+            .lock()
+            .map_err(|_| internal_error("runtime lock poisoned"))?;
+        Ok(Envelope::new(
+            runtime.instance_id(),
+            message_id,
+            runtime.snapshot().revision,
+            MessageKind::State,
+            runtime.snapshot().clone(),
+        ))
+    }
+}
+
+fn router(state: AppState) -> Router {
+    Router::new()
+        .route("/", get(service_info))
+        .route("/api/v2/health", get(health))
+        .route("/api/v2/runtime/bootstrap", get(bootstrap))
+        .route("/api/v2/runtime/snapshot", get(snapshot))
+        .route("/api/v2/runtime/commands", post(command))
+        .route("/api/v2/runtime/events", get(websocket))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::X_CONTENT_TYPE_OPTIONS,
+            HeaderValue::from_static("nosniff"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::REFERRER_POLICY,
+            HeaderValue::from_static("no-referrer"),
+        ))
+        .layer(SetResponseHeaderLayer::if_not_present(
+            header::CONTENT_SECURITY_POLICY,
+            HeaderValue::from_static(
+                "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' ws: wss:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'",
+            ),
+        ))
+        .with_state(state)
+}
+
+async fn service_info() -> Json<ServiceInfo> {
+    Json(ServiceInfo {
+        service: "Smart Dartboard Rust Runtime",
+        api: "v2-preview",
+        production_replacement: false,
+    })
+}
+
+async fn health(State(state): State<AppState>) -> Result<Json<Health>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let board_ready = matches!(state.board_status, "ready" | "disabled");
+    Ok(Json(Health {
+        status: if board_ready { "ok" } else { "degraded" },
+        runtime: "ok",
+        database: "ok",
+        board: state.board_status,
+        protocol_version: PROTOCOL_VERSION,
+        revision: runtime.snapshot().revision,
+    }))
+}
+
+async fn bootstrap(State(state): State<AppState>) -> Result<Json<StateMessage>, ApiError> {
+    Ok(Json(state.snapshot(Uuid::new_v4().to_string())?))
+}
+
+async fn snapshot(State(state): State<AppState>) -> Result<Json<StateMessage>, ApiError> {
+    Ok(Json(state.snapshot(Uuid::new_v4().to_string())?))
+}
+
+async fn command(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(envelope): Json<CommandEnvelope>,
+) -> Result<Json<CommandResult>, ApiError> {
+    validate_same_origin(&headers)?;
+    let command_id = envelope.command_id.clone();
+    let result = {
+        let mut runtime = state
+            .runtime
+            .lock()
+            .map_err(|_| internal_error("runtime lock poisoned"))?;
+        runtime.dispatch_envelope(envelope)?
+    };
+    let message = state.snapshot(format!("{command_id}:state"))?;
+    let _ = state.states.send(message);
+    Ok(Json(result))
+}
+
+async fn websocket(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> Result<Response, ApiError> {
+    validate_websocket_origin(&headers)?;
+    let initial = state.snapshot(Uuid::new_v4().to_string())?;
+    let receiver = state.states.subscribe();
+    Ok(upgrade.on_upgrade(move |socket| stream_states(socket, initial, receiver)))
+}
+
+async fn stream_states(
+    mut socket: axum::extract::ws::WebSocket,
+    initial: StateMessage,
+    mut receiver: broadcast::Receiver<StateMessage>,
+) {
+    if send_state(&mut socket, &initial).await.is_err() {
+        return;
+    }
+    while let Ok(message) = receiver.recv().await {
+        if send_state(&mut socket, &message).await.is_err() {
+            break;
+        }
+    }
+}
+
+async fn send_state(
+    socket: &mut axum::extract::ws::WebSocket,
+    state: &StateMessage,
+) -> Result<(), axum::Error> {
+    let json = serde_json::to_string(state).map_err(axum::Error::new)?;
+    socket.send(Message::Text(json.into())).await
+}
+
+fn validate_websocket_origin(headers: &HeaderMap) -> Result<(), ContractError> {
+    validate_same_origin(headers)
+}
+
+fn validate_same_origin(headers: &HeaderMap) -> Result<(), ContractError> {
+    let Some(origin) = headers.get(header::ORIGIN) else {
+        return Ok(());
+    };
+    let host = headers
+        .get(header::HOST)
+        .and_then(|value| value.to_str().ok())
+        .ok_or_else(|| forbidden("missing host header"))?;
+    let origin = origin
+        .to_str()
+        .map_err(|_| forbidden("invalid origin header"))?;
+    let origin_host = origin
+        .strip_prefix("http://")
+        .or_else(|| origin.strip_prefix("https://"))
+        .ok_or_else(|| forbidden("invalid WebSocket origin"))?;
+    if origin_host != host {
+        return Err(forbidden("cross-origin WebSocket denied"));
+    }
+    Ok(())
+}
+
+fn env_flag(name: &str, default: bool) -> bool {
+    env::var(name).map_or(default, |value| {
+        !matches!(value.to_ascii_lowercase().as_str(), "0" | "false" | "no")
+    })
+}
+
+async fn shutdown_signal() {
+    let _ = tokio::signal::ctrl_c().await;
+}
+
+fn forbidden(message: &str) -> ContractError {
+    ContractError {
+        code: ErrorCode::Forbidden,
+        message: message.into(),
+        details: None,
+    }
+}
+
+fn internal_error(message: &str) -> ContractError {
+    ContractError {
+        code: ErrorCode::Internal,
+        message: message.into(),
+        details: None,
+    }
+}
+
+struct ApiError(ContractError);
+
+impl From<ContractError> for ApiError {
+    fn from(error: ContractError) -> Self {
+        Self(error)
+    }
+}
+
+impl IntoResponse for ApiError {
+    fn into_response(self) -> Response {
+        let status = match self.0.code {
+            ErrorCode::IncompatibleProtocol => StatusCode::UPGRADE_REQUIRED,
+            ErrorCode::WrongRuntimeInstance | ErrorCode::StaleRevision => StatusCode::CONFLICT,
+            ErrorCode::InvalidCommand | ErrorCode::BoardUnavailable => StatusCode::BAD_REQUEST,
+            ErrorCode::Forbidden => StatusCode::FORBIDDEN,
+            ErrorCode::PersistenceFailed | ErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        (status, Json(self.0)).into_response()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::{
+        body::{Body, to_bytes},
+        http::{Method, Request},
+    };
+    use serde_json::Value;
+    use tower::ServiceExt;
+
+    fn test_app() -> Router {
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let runtime = Runtime::restore("test-runtime", repository).expect("runtime");
+        router(AppState::new(runtime, "disabled"))
+    }
+
+    #[tokio::test]
+    async fn health_and_bootstrap_report_the_runtime() {
+        let health = test_app()
+            .oneshot(
+                Request::get("/api/v2/health")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(health.status(), StatusCode::OK);
+        let value: Value = serde_json::from_slice(
+            &to_bytes(health.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("json");
+        assert_eq!(value["status"], "ok");
+        assert_eq!(value["protocol_version"], PROTOCOL_VERSION);
+
+        let bootstrap = test_app()
+            .oneshot(
+                Request::get("/api/v2/runtime/bootstrap")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(bootstrap.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn command_endpoint_starts_a_versioned_game() {
+        let envelope = serde_json::json!({
+            "protocol_version": 1,
+            "command_id": "start-1",
+            "runtime_instance_id": "test-runtime",
+            "expected_revision": 0,
+            "command": {
+                "type": "start_game",
+                "game_type": "countup",
+                "player_ids": ["Ada"],
+                "options": {"rounds": 8}
+            }
+        });
+        let response = test_app()
+            .oneshot(
+                Request::builder()
+                    .method(Method::POST)
+                    .uri("/api/v2/runtime/commands")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(envelope.to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let value: Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("json");
+        assert_eq!(value["revision"], 1);
+        assert_eq!(value["state"]["game_type"], "count_up");
+    }
+
+    #[test]
+    fn websocket_origin_must_match_host() {
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            header::HOST,
+            HeaderValue::from_static("dartboard.local:8000"),
+        );
+        headers.insert(
+            header::ORIGIN,
+            HeaderValue::from_static("https://attacker.example"),
+        );
+        let error = validate_websocket_origin(&headers).expect_err("must reject");
+        assert_eq!(error.code, ErrorCode::Forbidden);
+    }
+
+    #[tokio::test]
+    async fn browser_command_origin_must_match_host() {
+        let envelope = serde_json::json!({
+            "protocol_version": 1,
+            "command_id": "cross-origin",
+            "runtime_instance_id": "test-runtime",
+            "expected_revision": 0,
+            "command": {"type": "undo"}
+        });
+        let response = test_app()
+            .oneshot(
+                Request::post("/api/v2/runtime/commands")
+                    .header(header::HOST, "dartboard.local:8000")
+                    .header(header::ORIGIN, "https://attacker.example")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(envelope.to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+}

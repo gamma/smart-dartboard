@@ -1,0 +1,25 @@
+[package]
+name = "sdb-server"
+description = "Headless HTTP and WebSocket host for the Smart Dartboard runtime"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+axum = { version = "0.8", features = ["ws"] }
+sdb-contracts = { path = "../contracts" }
+sdb-runtime = { path = "../runtime" }
+sdb-storage = { path = "../storage" }
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tower-http = { version = "0.6", features = ["set-header"] }
+uuid = { version = "1.18", features = ["v4"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+
+[lints]
+workspace = true
