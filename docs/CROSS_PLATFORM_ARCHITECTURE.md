@@ -141,6 +141,19 @@ lautet damit im Idealfall: App starten, Board einschalten, spielen. AirPlay und
 HDMI sind lediglich zwei Adapter desselben `DisplayHost` und dürfen weder eine
 zweite Runtime noch unterschiedliche Spielregeln erzeugen.
 
+Dieser Pfad ist der Standard und benötigt kein Companion-Pairing:
+
+```text
+iPhone oder iPad                         AirPlay oder HDMI/USB-C
+Controller + BLE + Runtime + SQLite  ─────→  Projector + Sound
+```
+
+Die App zeigt auf dem internen Display immer die vollständige Bedienoberfläche.
+Beim Verbinden eines externen Displays erscheint dort automatisch die
+Projector-Ansicht. Ein laufendes Spiel, die Boardverbindung und die Session
+bleiben beim Verbinden, Wechseln oder Trennen des Ausgabegeräts erhalten. Der
+Nutzer muss dafür weder eine Adresse eingeben noch einen Server starten.
+
 **Companion-Projektor** ist der zweite Produktmodus und benötigt zwei Geräte:
 
 ```text
@@ -159,6 +172,14 @@ TLS-Identität; bei manueller Eingabe wird derselbe kurze Fingerprint auf beiden
 Geräten bestätigt. Bonjour allein ist ausdrücklich kein Vertrauensanker. Es
 gibt niemals zwei autoritative Runtimes für dasselbe laufende Spiel.
 
+Der typische Companion-Fall ist ausdrücklich **iPhone als Controller und iPad
+als Projector**. Auch ein iPad darf Controller sein, damit die Topologie nicht
+an ein bestimmtes Apple-Gerätemodell gekoppelt wird. Das Projector-iPad zeigt
+nach der einmaligen Kopplung beim nächsten Start nur eine große, einfache
+Hostauswahl beziehungsweise verbindet sich automatisch mit dem zuletzt
+verwendeten verfügbaren Controller. Es bietet keine lokale Spiel- oder
+Boardsteuerung an.
+
 Die Ausgabeauswahl liegt im Board-Setup und bietet `AirPlay/externes Display`,
 `Companion-iPad` und `Vorschau auf diesem Gerät`. Die App stellt den zuletzt
 erfolgreichen Pfad beim nächsten Arcade-Start automatisch wieder her und zeigt
@@ -171,6 +192,22 @@ Reihenfolge der Produktpräferenz:
 1. iPhone/iPad als Controller mit AirPlay oder HDMI als Projector,
 2. iPhone/iPad als Controller mit iPad als Companion-Projector,
 3. vorübergehende Projector-Vorschau auf demselben Display als Fallback.
+
+Für den point-and-click-fähigen Arcade-Betrieb gelten zusätzlich folgende
+UX-Kriterien:
+
+- Ohne eingerichteten Companion startet die App immer als Controller und sucht
+  das bekannte Board automatisch.
+- AirPlay oder HDMI wird durch Anschließen beziehungsweise Auswählen des
+  Ausgabegeräts aktiv; eine zusätzliche Netzwerk- oder Serverkonfiguration ist
+  unzulässig.
+- Ein bereits gekoppeltes Companion-iPad kann sich nach App-Neustart ohne neuen
+  Einmalcode verbinden. Ein neuer Code ist nur für erstmaliges Pairing oder
+  bewusstes Neu-Pairing erforderlich.
+- Der Controller zeigt jederzeit knapp an, ob Projector und Sound lokal,
+  über AirPlay/HDMI oder auf einem Companion-iPad ausgegeben werden.
+- Fällt die Projector-Ausgabe aus, läuft das Spiel auf dem Controller weiter
+  und die UI bietet den nächsten verfügbaren Ausgabepfad mit einem Klick an.
 
 Für die Abnahme müssen mindestens diese Kombinationen denselben laufenden
 Spielstand und dieselbe Projector-Darstellung liefern:

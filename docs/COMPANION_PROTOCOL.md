@@ -10,6 +10,13 @@ Modus ist der sekundäre Ausgabepfad nach der direkten Projector-Ausgabe desselb
 Controller-Geräts über AirPlay oder HDMI. Beide Rollen werden von derselben App
 bereitgestellt; der Companion ist keine zweite autoritative Spielanwendung.
 
+Die primäre Apple-Topologie benötigt damit nur ein iOS-/iPadOS-Gerät: Es dient
+als Controller und gibt den Projector eigenständig über AirPlay oder
+HDMI/USB-C aus. Der Companion-Transport wird nur benötigt, wenn ein zweites iPad
+selbst die Projector-App ausführen soll, typischerweise mit einem iPhone als
+Controller. Beide Wege müssen dieselbe Projector-Darstellung und denselben
+Sound liefern.
+
 ## Autorität und Rollen
 
 Nur das Controller-Gerät besitzt Boardverbindung, Runtime, Session und
