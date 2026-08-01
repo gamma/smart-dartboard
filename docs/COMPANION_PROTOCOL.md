@@ -115,14 +115,19 @@ Implementiert und automatisiert getestet:
   Ablehnung und Widerruf sind automatisiert getestet. Ist der sichere Store
   oder TLS auf einem Gerät nicht verfügbar, bleibt die App mit deaktiviertem
   Companion-Modus spielfähig.
+- nativer Apple-Bonjour-Browser mit explizitem Start/Stopp und begrenztem,
+  validiertem Snapshot-Contract. Nur syntaktisch gültige `.local`-Ziele mit
+  UUID-Host-ID, TLS-Merkmal und Port verlassen die FFI-Grenze. Ein echter
+  macOS-DNS-SD-Test entdeckt den parallel veröffentlichten TLS-Host samt
+  Protokollversion und dynamischem Port.
 
 Noch offen:
 
 - Tokenablage des Companion-Clients im Apple Keychain beziehungsweise Android
   Keystore; die persistente lokale Apple-TLS-Identität des Controller-Hosts
   liegt bereits im Keychain,
-- Bonjour-Browser und Auswahl eines gefundenen Controller-Hosts; der
-  Host-Advertiser ist implementiert,
+- Rollen-UI und Auswahl eines vom implementierten Bonjour-Browser gefundenen
+  Controller-Hosts,
 - signierte iOS-/iPadOS-Hardwareabnahme der nativen TLS-Identität; der
   lokal getestete unsigned Simulator stellte keinen nutzbaren Keychain bereit,
 - Rollenwahl und Pairing-UI auf Controller und Companion,

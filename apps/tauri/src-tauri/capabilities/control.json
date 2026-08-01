@@ -11,6 +11,9 @@
     "allow-companion-pairing-open",
     "allow-companion-devices",
     "allow-companion-revoke",
+    "allow-companion-discovery-start",
+    "allow-companion-discovered-hosts",
+    "allow-companion-discovery-stop",
     "allow-projector-output-select"
   ]
 }

@@ -10,7 +10,7 @@ use sdb_companion_transport::{SecretStore, TlsIdentity, load_identity, load_or_c
 use sdb_contracts::{DartEvent, DartSource, Ring};
 use sdb_runtime::{Runtime, RuntimeAction, RuntimeGameState};
 use sdb_storage::SqliteRepository;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::{
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
@@ -104,6 +104,31 @@ struct CompanionDeviceView {
     device_name: String,
     role: CompanionRole,
     paired_at_ms: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]
+struct DiscoveredCompanionHost {
+    service_name: String,
+    host_name: String,
+    port: u16,
+    host_id: String,
+    protocol_version: u16,
+    tls: bool,
+}
+
+fn is_valid_mdns_hostname(host_name: &str) -> bool {
+    if host_name.len() > 253 || !host_name.ends_with(".local") {
+        return false;
+    }
+    host_name.split('.').all(|label| {
+        !label.is_empty()
+            && label.len() <= 63
+            && !label.starts_with('-')
+            && !label.ends_with('-')
+            && label
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+    })
 }
 
 impl From<PairedDevice> for CompanionDeviceView {
@@ -471,6 +496,9 @@ mod apple_bonjour {
 
     type BonjourStart = unsafe extern "C" fn(u16, *const c_char, u16) -> i32;
     type BonjourStop = unsafe extern "C" fn();
+    type BrowserStart = unsafe extern "C" fn() -> i32;
+    type BrowserSnapshot = unsafe extern "C" fn(*mut *mut u8, *mut usize) -> i32;
+    type BrowserSnapshotFree = unsafe extern "C" fn(*mut u8, usize);
 
     #[cfg(target_os = "macos")]
     unsafe extern "C" {
@@ -480,6 +508,10 @@ mod apple_bonjour {
             protocol_version: u16,
         ) -> i32;
         fn sdb_companion_bonjour_stop();
+        fn sdb_companion_bonjour_browser_start() -> i32;
+        fn sdb_companion_bonjour_browser_stop();
+        fn sdb_companion_bonjour_browser_snapshot(bytes: *mut *mut u8, length: *mut usize) -> i32;
+        fn sdb_companion_bonjour_browser_snapshot_free(bytes: *mut u8, length: usize);
     }
 
     #[cfg(target_os = "ios")]
@@ -510,6 +542,51 @@ mod apple_bonjour {
         Some(sdb_companion_bonjour_stop)
     }
 
+    #[cfg(target_os = "ios")]
+    fn browser_start_function() -> Option<BrowserStart> {
+        lookup(c"sdb_companion_bonjour_browser_start")
+            .map(|address| unsafe { std::mem::transmute::<*mut c_void, BrowserStart>(address) })
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn browser_start_function() -> Option<BrowserStart> {
+        Some(sdb_companion_bonjour_browser_start)
+    }
+
+    #[cfg(target_os = "ios")]
+    fn browser_stop_function() -> Option<BonjourStop> {
+        lookup(c"sdb_companion_bonjour_browser_stop")
+            .map(|address| unsafe { std::mem::transmute::<*mut c_void, BonjourStop>(address) })
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn browser_stop_function() -> Option<BonjourStop> {
+        Some(sdb_companion_bonjour_browser_stop)
+    }
+
+    #[cfg(target_os = "ios")]
+    fn browser_snapshot_function() -> Option<BrowserSnapshot> {
+        lookup(c"sdb_companion_bonjour_browser_snapshot")
+            .map(|address| unsafe { std::mem::transmute::<*mut c_void, BrowserSnapshot>(address) })
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn browser_snapshot_function() -> Option<BrowserSnapshot> {
+        Some(sdb_companion_bonjour_browser_snapshot)
+    }
+
+    #[cfg(target_os = "ios")]
+    fn browser_snapshot_free_function() -> Option<BrowserSnapshotFree> {
+        lookup(c"sdb_companion_bonjour_browser_snapshot_free").map(|address| unsafe {
+            std::mem::transmute::<*mut c_void, BrowserSnapshotFree>(address)
+        })
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn browser_snapshot_free_function() -> Option<BrowserSnapshotFree> {
+        Some(sdb_companion_bonjour_browser_snapshot_free)
+    }
+
     pub fn start(port: u16, host_id: &str, protocol_version: u16) -> Result<(), String> {
         let host_id = CString::new(host_id).map_err(|_| "invalid Bonjour host ID".to_owned())?;
         let start = start_function().ok_or_else(|| "Bonjour host is unavailable".to_owned())?;
@@ -525,6 +602,56 @@ mod apple_bonjour {
         if let Some(stop) = stop_function() {
             unsafe { stop() };
         }
+    }
+
+    pub fn browser_start() -> Result<(), String> {
+        let start =
+            browser_start_function().ok_or_else(|| "Bonjour browser is unavailable".to_owned())?;
+        let status = unsafe { start() };
+        if status == 0 {
+            Ok(())
+        } else {
+            Err(format!("Bonjour browse failed with status {status}"))
+        }
+    }
+
+    pub fn browser_stop() {
+        if let Some(stop) = browser_stop_function() {
+            unsafe { stop() };
+        }
+    }
+
+    pub fn browser_snapshot() -> Result<Vec<super::DiscoveredCompanionHost>, String> {
+        const MAX_SNAPSHOT_BYTES: usize = 256 * 1_024;
+        let snapshot = browser_snapshot_function()
+            .ok_or_else(|| "Bonjour browser is unavailable".to_owned())?;
+        let free = browser_snapshot_free_function()
+            .ok_or_else(|| "Bonjour browser is unavailable".to_owned())?;
+        let mut bytes = std::ptr::null_mut();
+        let mut length = 0_usize;
+        let status = unsafe { snapshot(&mut bytes, &mut length) };
+        if status != 0 || bytes.is_null() || length == 0 {
+            return Err("Bonjour browser snapshot failed".into());
+        }
+        if length > MAX_SNAPSHOT_BYTES {
+            unsafe { free(bytes, length) };
+            return Err("Bonjour browser snapshot exceeds size limit".into());
+        }
+        let json = unsafe { std::slice::from_raw_parts(bytes, length) }.to_vec();
+        unsafe { free(bytes, length) };
+        let hosts: Vec<super::DiscoveredCompanionHost> =
+            serde_json::from_slice(&json).map_err(|_| "invalid Bonjour browser snapshot")?;
+        if hosts.iter().any(|host| {
+            host.service_name.is_empty()
+                || host.service_name.len() > 128
+                || !super::is_valid_mdns_hostname(&host.host_name)
+                || uuid::Uuid::parse_str(&host.host_id).is_err()
+                || host.port == 0
+                || !host.tls
+        }) {
+            return Err("invalid Bonjour host metadata".into());
+        }
+        Ok(hosts)
     }
 }
 
@@ -1004,8 +1131,11 @@ mod native_companion_transport {
 
         #[tokio::test]
         async fn listener_serves_http_over_the_pinned_tls_identity() {
-            let identity = load_or_create_identity(&MemorySecretStore::default(), "tls-host")
-                .expect("identity");
+            let identity = load_or_create_identity(
+                &MemorySecretStore::default(),
+                "0dc0b075-e6b5-4d6d-a6cf-ef4dbb61f2f7",
+            )
+            .expect("identity");
             let state = test_state(identity.host_id(), identity.certificate_sha256());
             let transport = NativeCompanionTransport::new(&identity).expect("transport");
             let port = transport.start(state).await.expect("start");
@@ -1043,6 +1173,26 @@ mod native_companion_transport {
                 .expect("HTTP response");
             let response = String::from_utf8(response).expect("UTF-8 response");
             assert!(response.starts_with("HTTP/1.1 403 Forbidden"));
+
+            apple_bonjour::browser_start().expect("start Bonjour browser");
+            let discovered = timeout(Duration::from_secs(5), async {
+                loop {
+                    if let Some(host) = apple_bonjour::browser_snapshot()
+                        .expect("Bonjour snapshot")
+                        .into_iter()
+                        .find(|host| host.host_id == identity.host_id())
+                    {
+                        break host;
+                    }
+                    tokio::time::sleep(Duration::from_millis(50)).await;
+                }
+            })
+            .await
+            .expect("Bonjour discovery timeout");
+            assert_eq!(discovered.port, port);
+            assert_eq!(discovered.protocol_version, COMPANION_PROTOCOL_VERSION);
+            assert!(discovered.tls);
+            apple_bonjour::browser_stop();
             transport.stop().await;
         }
     }
@@ -1271,6 +1421,40 @@ fn companion_revoke(
     state.revoke_companion(&device_id, now_ms())?;
     Ok(state.companion_devices())
 }
+
+#[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn companion_discovery_start() -> Result<(), String> {
+    apple_bonjour::browser_start()
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn companion_discovery_start() -> Result<(), String> {
+    Err("native Companion discovery is not available on this platform".into())
+}
+
+#[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn companion_discovered_hosts() -> Result<Vec<DiscoveredCompanionHost>, String> {
+    apple_bonjour::browser_snapshot()
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn companion_discovered_hosts() -> Result<Vec<DiscoveredCompanionHost>, String> {
+    Err("native Companion discovery is not available on this platform".into())
+}
+
+#[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn companion_discovery_stop() {
+    apple_bonjour::browser_stop();
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn companion_discovery_stop() {}
 
 #[tauri::command]
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -1520,6 +1704,9 @@ pub fn run() {
             companion_pairing_open,
             companion_devices,
             companion_revoke,
+            companion_discovery_start,
+            companion_discovered_hosts,
+            companion_discovery_stop,
             projector_output_select
         ])
         .run(tauri::generate_context!())
@@ -1536,6 +1723,16 @@ mod tests {
             certificate_sha256: "ab".repeat(32),
             available: true,
         }
+    }
+
+    #[test]
+    fn companion_discovery_accepts_only_local_dns_hostnames() {
+        assert!(is_valid_mdns_hostname("arcade-mac.local"));
+        assert!(is_valid_mdns_hostname("smart-dartboard-2.local"));
+        assert!(!is_valid_mdns_hostname("example.com"));
+        assert!(!is_valid_mdns_hostname("https://arcade.local"));
+        assert!(!is_valid_mdns_hostname("-arcade.local"));
+        assert!(!is_valid_mdns_hostname("arcade..local"));
     }
 
     #[test]

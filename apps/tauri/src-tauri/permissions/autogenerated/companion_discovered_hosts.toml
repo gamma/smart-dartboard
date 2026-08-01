@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-companion-discovered-hosts"
+description = "Enables the companion_discovered_hosts command without any pre-configured scope."
+commands.allow = ["companion_discovered_hosts"]
+
+[[permission]]
+identifier = "deny-companion-discovered-hosts"
+description = "Denies the companion_discovered_hosts command without any pre-configured scope."
+commands.deny = ["companion_discovered_hosts"]
