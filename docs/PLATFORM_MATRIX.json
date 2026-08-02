@@ -40,8 +40,8 @@
       "minimum": "Linux kernel and BlueZ supplied by the qualified host",
       "distributions": ["Debian 12 Bookworm container"],
       "architectures": ["amd64", "arm64"],
-      "build": "verified",
-      "installation": "verified_without_ble",
+      "build": "verified_amd64_and_arm64",
+      "installation": "verified_without_ble_amd64_and_arm64",
       "hardware": "not_qualified",
       "requirements": ["Docker Engine with Compose v2", "BlueZ system D-Bus for container BLE"]
     },

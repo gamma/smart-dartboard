@@ -107,6 +107,11 @@ expect(macLifecycle.includes('NSActivityIdleDisplaySleepDisabled')
   && iosDisplay.includes('idleTimerDisabled = active'),
   'Apple arcade keep-awake adapter drift');
 expect(release.includes('platforms: linux/amd64,linux/arm64'),'container architecture drift');
+expect(ci.includes('rust-container-arm64:')
+  && ci.includes('runs-on: ubuntu-24.04-arm')
+  && ci.includes('smart-dartboard:rust-arm64-ci')
+  && ci.includes('smart-dartboard:ble-arm64-ci'),
+  'Rust ARM64 container coverage drift');
 expect(tauriJson.bundle.macOS.minimumSystemVersion===matrix.platforms.macos.minimum,
   'macOS deployment target drift');
 expect(tauriJson.identifier==='de.gammaproduction.smart-dartboard',

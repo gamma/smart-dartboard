@@ -6,7 +6,7 @@ Das Repository verwendet vier Workflows:
 
 | Workflow | Auslöser | Aufgabe |
 |---|---|---|
-| `ci.yml` | Pull Requests, Push auf `main`, manuell | Python-Tests, Python-Kompilierung, JavaScript-Syntax, Compose-Prüfung, Website-Build, Container-Build und HTTP-Smoke-Test |
+| `ci.yml` | Pull Requests, Push auf `main`, manuell | Python- und Rust-Tests, Browserchecks, Apple-Builds sowie native AMD64-/ARM64-Containerbuilds und HTTP-Smoke-Tests |
 | `pages.yml` | relevante Pushes auf `main`, manuell | statische Website validieren und nach GitHub Pages deployen |
 | `security.yml` | Pull Requests, Push auf `main`, montags, manuell | Dependency Review, RustSec-/Lizenz-/Source-Policy für Cargo und CodeQL für Python und JavaScript |
 | `container-release.yml` | veröffentlichtes GitHub Release | AMD64-/ARM64-Image nach GitHub Container Registry veröffentlichen, SBOM und Build-Provenienz erzeugen |
@@ -19,6 +19,8 @@ mindestens diese Statuschecks verpflichtend sein:
 
 - `Tests and static checks`
 - `Container build and smoke test`
+- `Rust container preview`
+- `Rust ARM64 container build and smoke test`
 - `CodeQL (python)`
 - `CodeQL (javascript-typescript)`
 - `Rust advisories and licenses`

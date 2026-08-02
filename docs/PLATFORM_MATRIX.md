@@ -32,7 +32,7 @@ mit `--locked`, npm-Abhängigkeiten in CI mit `npm ci` gebaut.
 
 | Reihenfolge | Ziel | Mindeststand | Nachweis | Hardware |
 | --- | --- | --- | --- | --- |
-| 1 | Linux/Docker, AMD64 + ARM64 | Debian 12 Bookworm im Container | Build und Start ohne BLE | offen |
+| 1 | Linux/Docker, AMD64 + ARM64 | Debian 12 Bookworm im Container | native Builds und Starts auf AMD64- und ARM64-Runnern ohne BLE | offen |
 | 2 | macOS ARM64 | macOS 13 | unsigniertes `.app`-Bundle in CI und lokaler Bundle-Start | offen |
 | 3 | iOS/iPadOS | iOS/iPadOS 14 | unsigniertes ARM64-Gerätearchive gebaut; Simulatorbundle installiert, gestartet, TVOut Connect/Disconnect und Suspend/Resume geprüft | offen |
 | 4 | Android ARM64 | minSdk 31, targetSdk 36 | noch nicht implementiert | offen |
@@ -53,6 +53,12 @@ AirPlay/HDMI, Audio, Reconnect und der dokumentierte Soak-Test offen.
 Das iOS-`.xcarchive` belegt Geräte-Compilation und Packaging, ist ohne
 Development Team, Provisioning und Signatur aber weder installierbare IPA noch
 TestFlight-Release.
+
+Der Rust-Server und sein Linux-BLE-Sidecar werden in CI getrennt auf nativen
+AMD64- und ARM64-Linux-Runnern gebaut. Beide Serverimages starten ohne BLE als
+nicht privilegierter Benutzer, liefern Health, Control und Projector und
+beenden sich innerhalb des Shutdown-Budgets. Das ist Build- und
+Installationsnachweis, aber weiterhin keine BlueZ-/Boardqualifizierung.
 
 Der native Rust-/Tauri-Core kompiliert zusätzlich für
 `x86_64-apple-ios` und wird so in CI geprüft. Das committed Xcode-Projekt lässt

@@ -82,6 +82,10 @@ Umgesetzt und lokal verifiziert:
 - Rust-Headless-Server mit expliziter API v2, SQLite-Recovery, idempotenten
   Command-Envelopes, Snapshot-WebSocket und nicht privilegiertem
   Vorschaucontainer. Details: [RUST_SERVER_V2.md](RUST_SERVER_V2.md).
+- Rust-Server- und BLE-Sidecar-Container bauen nativ für Linux AMD64 und ARM64.
+  Beide Serverarchitekturen starten ohne BLE unprivilegiert, liefern Health,
+  Control und Projector und halten das Shutdown-Budget ein; der ARM64-Pfad
+  besitzt dafür einen eigenen GitHub-Runner statt QEMU-Emulation,
 - derselbe UI-Kernfluss wurde mit WebKit gegen den echten Rust-Host geprüft:
   Spieler `Ada` anlegen, Session starten, alle 24 Moduskarten laden, CountUp
   beginnen, im Projector T20 auslösen und im Control synchron Score 60 sehen.

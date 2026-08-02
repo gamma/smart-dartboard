@@ -480,3 +480,88 @@ jobs:
           assert len(replay['events']) == 1, replay
           assert statistics[0]['wins'] == 1, statistics
           PY
+
+  rust-container-arm64:
+    name: Rust ARM64 container build and smoke test
+    needs: rust-core
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Build native ARM64 Rust image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.rust
+          load: true
+          push: false
+          tags: smart-dartboard:rust-arm64-ci
+          cache-from: type=gha,scope=rust-preview-arm64
+          cache-to: type=gha,mode=max,scope=rust-preview-arm64
+
+      - name: Build native ARM64 BLE gateway
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.ble
+          load: true
+          push: false
+          tags: smart-dartboard:ble-arm64-ci
+          cache-from: type=gha,scope=ble-gateway-arm64
+          cache-to: type=gha,mode=max,scope=ble-gateway-arm64
+
+      - name: Smoke-test native ARM64 images
+        shell: bash
+        run: |
+          set -euo pipefail
+          container_name="smart-dartboard-rust-arm64-${GITHUB_RUN_ID}"
+          cleanup() {
+            docker rm -f "$container_name" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          test "$(docker run --rm --entrypoint /bin/uname smart-dartboard:rust-arm64-ci -m)" = aarch64
+          test "$(docker run --rm --entrypoint python smart-dartboard:ble-arm64-ci \
+            -c 'import platform; print(platform.machine())')" = aarch64
+
+          docker run --detach \
+            --name "$container_name" \
+            --cap-drop ALL \
+            --security-opt no-new-privileges:true \
+            --tmpfs /data:rw,size=64m,noexec,nosuid,uid=10001,gid=10001,mode=0700 \
+            --publish 127.0.0.1:18084:8000 \
+            --env SDB_ENABLE_BLE=0 \
+            smart-dartboard:rust-arm64-ci
+
+          ready=0
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error \
+              http://127.0.0.1:18084/api/v2/health > /tmp/rust-arm64-health.json; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs "$container_name"
+            exit 1
+          fi
+
+          python3 - <<'PY'
+          import json
+          health = json.load(open('/tmp/rust-arm64-health.json'))
+          assert health['status'] == 'ok', health
+          assert health['database'] == 'ok', health
+          assert health['board'] == 'disabled', health
+          PY
+          curl --fail --silent --show-error http://127.0.0.1:18084/control >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:18084/projector >/dev/null
+          SECONDS=0
+          docker stop --time 5 "$container_name" >/dev/null
+          test "$(docker inspect "$container_name" --format '{{.State.ExitCode}}')" = 0
+          test "$SECONDS" -lt 5
