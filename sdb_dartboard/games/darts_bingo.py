@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict, List
 
-from .arcade import DARTS, overlay_item
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 TASK_POOL = [
@@ -34,11 +32,12 @@ class DartsBingoMode:
             {"value":"full","label":"Volle Karte","description":"Alle neun Aufgaben müssen erfüllt werden.","description_en":"All nine tasks must be completed."},
         ])],
         instructions=[
-            InstructionStep("Karte füllen", "Jeder Treffer kann eine Aufgabe markieren.", "grid"),
+            InstructionStep("Karte füllen", "Jeder Treffer kann eine oder mehrere passende Aufgaben markieren.", "grid"),
             InstructionStep("Siegziel beachten", "Je nach Auswahl zählt die erste Linie oder die volle Karte.", "line"),
-            InstructionStep("Gleiche Chancen", "Alle spielen dieselbe zufällig erzeugte Aufgabenkarte.", "cards"),
+            InstructionStep("Gleiche Chancen", "Alle spielen dieselbe Karte. Nach dem ersten Bingo läuft die Teamrunde zu Ende.", "cards"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -47,8 +46,11 @@ class DartsBingoMode:
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
         del options
-        # Gameplay variety only; not used for a security decision.
-        tasks = random.sample(TASK_POOL, 9)  # nosec B311
+        available = list(TASK_POOL)
+        tasks = [
+            available.pop(state.random_index(len(available)))
+            for _ in range(9)
+        ]
         for player in state.players:
             player.marks = {
                 str(index): {
@@ -58,7 +60,12 @@ class DartsBingoMode:
                 }
                 for index, task in enumerate(tasks)
             }
-        state.mode_state = {"bingo_candidates": []}
+        state.mode_state = {
+            "bingo_candidates": [],
+            "last_effect": "",
+            "marked_count": 0,
+            "effect_player_id": None,
+        }
         state.message = "Für alle liegt dieselbe Bingo-Karte bereit!"
 
     def _task_by_id(self, task_id: str) -> Dict[str, Any]:
@@ -84,10 +91,14 @@ class DartsBingoMode:
             if player.id in candidates
         ]
         outcome.finished = True
-        outcome.winner_ids = candidates
+        outcome.winner_ids = candidates if len(candidates) == 1 else []
         outcome.winner_id = candidates[0] if len(candidates) == 1 else None
         outcome.result_type = "individual_win" if len(candidates) == 1 else "draw"
         outcome.force_hold = False
+        state.mode_state.update({
+            "last_effect": "bingo_win" if len(candidates) == 1 else "bingo_draw",
+            "effect_player_id": candidates[0] if len(candidates) == 1 else None,
+        })
         outcome.message = (
             f"{names[0]} ruft BINGO!"
             if len(names) == 1
@@ -96,6 +107,11 @@ class DartsBingoMode:
         return outcome
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        state.mode_state.update({
+            "last_effect": "",
+            "marked_count": 0,
+            "effect_player_id": None,
+        })
         if event.get("type") != "hit":
             return self._finish_candidates(
                 state,
@@ -115,6 +131,11 @@ class DartsBingoMode:
                 state,
                 ThrowOutcome(turn_value=0, message="Keine Bingo-Aufgabe getroffen"),
             )
+        state.mode_state.update({
+            "last_effect": "bingo_mark",
+            "marked_count": len(marked),
+            "effect_player_id": player.id,
+        })
         full_card = all(cell["done"] for cell in player.marks.values())
         target_reached = (
             full_card
@@ -140,6 +161,24 @@ class DartsBingoMode:
                 message=f"Bingo markiert: {' · '.join(marked)}",
             ),
         )
+
+    def on_turn_skipped(self, state: Any, player: Any) -> None:
+        del player
+        outcome = self._finish_candidates(
+            state,
+            ThrowOutcome(
+                turn_value=0,
+                message="Aufnahme übersprungen",
+                force_hold=True,
+            ),
+        )
+        if not outcome.finished:
+            return
+        state.status = "finished"
+        state.winner_id = outcome.winner_id
+        state.winner_ids = list(outcome.winner_ids)
+        state.result_type = outcome.result_type
+        state.message = outcome.message
 
     def get_overlay(self, state: Any) -> Dict[str, Any]:
         player = state.current_player()

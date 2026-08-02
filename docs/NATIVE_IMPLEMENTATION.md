@@ -21,12 +21,13 @@ Umgesetzt und lokal verifiziert:
   8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board, Target
   Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round, Mini
   Golf, Simon Says, Treasure Hunt, Block Drop, Dragon Eggs, Cookie Monster und
-  Space Defender sowie DartSweeper.
+  Space Defender, DartSweeper sowie Darts Bingo.
   Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board,
   Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round,
   Mini Golf, Simon Says, Treasure Hunt, Block Drop, Dragon Eggs, Cookie Monster
-  sowie Space Defender und DartSweeper laufen über denselben generischen
-  Registry-Pfad und sind durch gemeinsame Python-/Rust-Golden-Fixtures belegt;
+  sowie Space Defender, DartSweeper und Darts Bingo laufen über denselben
+  generischen Registry-Pfad und sind durch gemeinsame Python-/Rust-Golden-Fixtures
+  belegt;
   Cricket zusätzlich durch den vollständigen SQLite-Recovery-Pfad,
 - Avatar und frei gewählte Spielerfarbe werden aus der Session in native
   Registry-Spiele übernommen und bleiben im serialisierten Spielzustand
@@ -75,8 +76,8 @@ Umgesetzt und lokal verifiziert:
   CountUp, X01 und alle Registry-Modi, derzeit Cricket, 8-Ball, Avoid the Bomb,
   Color Clash, Heart Chase, King of the Board, Target Rush, Ghost Chase, Risk
   It, Robin Hood, Candy Cannon, Lightning Round, Mini Golf, Simon Says,
-  Treasure Hunt, Block Drop, Dragon Eggs, Cookie Monster, Space Defender und
-  DartSweeper. Der
+  Treasure Hunt, Block Drop, Dragon Eggs, Cookie Monster, Space Defender,
+  DartSweeper und Darts Bingo. Der
   gemeinsame State liefert die editierbaren Darts der aktuellen und vorherigen
   Aufnahme. Replay,
   Sessionpunkte, Gewinner, kanonische `throws` und append-only

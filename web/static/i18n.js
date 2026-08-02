@@ -508,9 +508,9 @@
       ['Clear it together','Bull helps scan. Reveal all safe numbers before the final life is lost.'],
     ],
     darts_bingo:[
-      ['Fill the card','Every hit can complete one task.'],
+      ['Fill the card','Every hit can complete one or more matching tasks.'],
       ['Watch the win condition','Win with either the first line or the full card.'],
-      ['Equal chances','Everyone plays the same randomly generated task card.'],
+      ['Equal chances','Everyone plays the same card. After the first Bingo, finish the current team round.'],
     ],
     dragon_eggs:[
       ['Golden egg','A visible egg scores +30 once per round.'],

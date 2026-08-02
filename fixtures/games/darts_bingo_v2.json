@@ -1,0 +1,37 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 2,
+  "random_seed": 42,
+  "players": [{"id":"ada","name":"Ada"},{"id":"bob","name":"Bob"}],
+  "options": {"points":"line"},
+  "steps": [
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":1,"field":20,"ring":"triple","multiplier":3,"label":"T20","score":60}},
+      "expected":{"scores":[2,0],"tasks":[["high","16+"],["triple","Any Triple"],["double","Any Double"],["low","1-5"],["field_5","Any 5"],["field_10","Any 10"],["field_18","Any 18"],["field_17","Any 17"],["field_16","Any 16"]],"done":[[0,1],[]],"bingo_candidates":[],"last_effect":"bingo_mark","marked_count":2,"effect_player_id":"ada","random_cursor":9,"current_player_index":0,"darts_in_turn":1,"turn_score":2,"round_number":1,"status":"running","winner_id":null,"winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":2,"field":20,"ring":"double","multiplier":2,"label":"D20","score":40}},
+      "expected":{"scores":[3,0],"tasks":[["high","16+"],["triple","Any Triple"],["double","Any Double"],["low","1-5"],["field_5","Any 5"],["field_10","Any 10"],["field_18","Any 18"],["field_17","Any 17"],["field_16","Any 16"]],"done":[[0,1,2],[]],"bingo_candidates":["ada"],"last_effect":"bingo_mark","marked_count":1,"effect_player_id":"ada","random_cursor":9,"current_player_index":0,"darts_in_turn":2,"turn_score":3,"round_number":1,"status":"hold","winner_id":null,"winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"continue"},
+      "expected":{"scores":[3,0],"tasks":[["high","16+"],["triple","Any Triple"],["double","Any Double"],["low","1-5"],["field_5","Any 5"],["field_10","Any 10"],["field_18","Any 18"],["field_17","Any 17"],["field_16","Any 16"]],"done":[[0,1,2],[]],"bingo_candidates":["ada"],"last_effect":"bingo_mark","marked_count":1,"effect_player_id":"ada","random_cursor":9,"current_player_index":1,"darts_in_turn":0,"turn_score":0,"round_number":1,"status":"running","winner_id":null,"winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":3,"field":20,"ring":"triple","multiplier":3,"label":"T20","score":60}},
+      "expected":{"scores":[3,2],"tasks":[["high","16+"],["triple","Any Triple"],["double","Any Double"],["low","1-5"],["field_5","Any 5"],["field_10","Any 10"],["field_18","Any 18"],["field_17","Any 17"],["field_16","Any 16"]],"done":[[0,1,2],[0,1]],"bingo_candidates":["ada"],"last_effect":"bingo_mark","marked_count":2,"effect_player_id":"bob","random_cursor":9,"current_player_index":1,"darts_in_turn":1,"turn_score":2,"round_number":1,"status":"running","winner_id":null,"winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":4,"field":20,"ring":"single_outer","multiplier":1,"label":"S20","score":20}},
+      "expected":{"scores":[3,2],"tasks":[["high","16+"],["triple","Any Triple"],["double","Any Double"],["low","1-5"],["field_5","Any 5"],["field_10","Any 10"],["field_18","Any 18"],["field_17","Any 17"],["field_16","Any 16"]],"done":[[0,1,2],[0,1]],"bingo_candidates":["ada"],"last_effect":"","marked_count":0,"effect_player_id":null,"random_cursor":9,"current_player_index":1,"darts_in_turn":2,"turn_score":2,"round_number":1,"status":"running","winner_id":null,"winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"miss","seq":5,"label":"MISS","score":0}},
+      "expected":{"scores":[3,2],"tasks":[["high","16+"],["triple","Any Triple"],["double","Any Double"],["low","1-5"],["field_5","Any 5"],["field_10","Any 10"],["field_18","Any 18"],["field_17","Any 17"],["field_16","Any 16"]],"done":[[0,1,2],[0,1]],"bingo_candidates":["ada"],"last_effect":"bingo_win","marked_count":0,"effect_player_id":"ada","random_cursor":9,"current_player_index":1,"darts_in_turn":3,"turn_score":2,"round_number":1,"status":"finished","winner_id":"ada","winner_ids":["ada"],"result_type":"individual_win"}
+    },
+    {
+      "command":{"type":"correct","action_id":5,"event":{"type":"hit","seq":999,"field":20,"ring":"double","multiplier":2,"label":"D20","score":40}},
+      "expected":{"scores":[3,3],"tasks":[["high","16+"],["triple","Any Triple"],["double","Any Double"],["low","1-5"],["field_5","Any 5"],["field_10","Any 10"],["field_18","Any 18"],["field_17","Any 17"],["field_16","Any 16"]],"done":[[0,1,2],[0,1,2]],"bingo_candidates":["ada","bob"],"last_effect":"bingo_draw","marked_count":1,"effect_player_id":null,"random_cursor":9,"current_player_index":1,"darts_in_turn":2,"turn_score":3,"round_number":1,"status":"finished","winner_id":null,"winner_ids":[],"result_type":"draw"}
+    }
+  ]
+}

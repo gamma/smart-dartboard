@@ -92,7 +92,7 @@ class GameState:
                     "id": player.id,
                     "name": player.name,
                     "score": player.score,
-                    "marks": dict(player.marks),
+                    "marks": copy.deepcopy(player.marks),
                     "avatar": player.avatar,
                     "color": player.color,
                 }
@@ -120,7 +120,7 @@ class GameState:
             player = by_id.get(data["id"], Player(id=data["id"], name=data["name"]))
             player.name = data["name"]
             player.score = data["score"]
-            player.marks = dict(data.get("marks", {}))
+            player.marks = copy.deepcopy(data.get("marks", {}))
             player.avatar = data.get("avatar", "comet")
             player.color = data.get("color", "#28e7ff")
             restored.append(player)

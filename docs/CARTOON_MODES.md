@@ -29,6 +29,7 @@ dieselben zufällig erzeugten Bedingungen.
 | `eight_ball` | Exakt zwei Spieler. Spieler 1 räumt Singles 1–7, Spieler 2 Singles 9–15. Richtig +20 und bis maximal drei Darts weiterspielen; falsches Feld oder Miss beendet den Turn. Double Bull gewinnt erst nach Abräumen, zu frühes Double Bull schenkt dem Gegner den Sieg. |
 | `block_drop` | Koop ohne Timer auf 5×8 Raster. Vier zusammenhängende Farbbögen steuern links/rechts sowie links/rechts drehen. Drop-Ziele: Easy Double/Triple/Bull, Mittel Double/Bull, Schwer nur Bull; DBull gibt zusätzlich +25. Nach einem Drop darf standardmäßig weitergeworfen werden. Klassisch sinkt nach jeder Teamrunde und spielt auf fünf Linien; Action sinkt nach jedem Dart und spielt auf zehn. Top-out verliert; Blockpunkte zählen für alle. |
 | `dart_sweeper` | Koop auf den 20 Zahlenfeldern. Single deckt das direkte Feld auf; Double zusätzlich einen, Triple zwei sichere Nachbarn. Ein direkter Minentreffer explodiert unabhängig vom Ring. SBull scannt ein, DBull zwei sichere Felder. Kein Flood Reveal. Presets: 3/5/7 Minen und 5/3/2 Leben. Erster Direkttreffer plus unmittelbare Nachbarn sind minenfrei. |
+| `darts_bingo` | Alle spielen dieselbe zufällig erzeugte 3×3-Aufgabenkarte. Ein Treffer markiert alle passenden offenen Aufgaben. Ziel ist eine Linie oder die volle Karte. Nach dem ersten Bingo spielen die übrigen Spieler die laufende Teamrunde zu Ende; ein einzelner Kandidat gewinnt, mehrere Kandidaten ergeben ein punktloses Unentschieden. |
 
 ## Gemeinsame Prinzipien
 

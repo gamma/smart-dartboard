@@ -78,6 +78,9 @@ SPACE_DEFENDER_FIXTURE = (
 DART_SWEEPER_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "dart_sweeper_v2.json"
 )
+DARTS_BINGO_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "darts_bingo_v2.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -1047,6 +1050,60 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                 "turn_score": state.turn_score,
                 "round_number": state.round_number,
                 "status": state.status,
+                "winner_ids": state.winner_ids,
+                "result_type": state.result_type,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_darts_bingo_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(DARTS_BINGO_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(2, fixture["ruleset_version"])
+        engine = GameEngine()
+        engine.reset(
+            "darts_bingo",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]), dict(command["event"])
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            mode = state.mode_state
+            actual = {
+                "scores": [player.score for player in state.players],
+                "tasks": [
+                    [cell["task"], cell["label"]]
+                    for cell in state.players[0].marks.values()
+                ],
+                "done": [
+                    [
+                        int(index)
+                        for index, cell in player.marks.items()
+                        if cell["done"]
+                    ]
+                    for player in state.players
+                ],
+                "bingo_candidates": mode["bingo_candidates"],
+                "last_effect": mode["last_effect"],
+                "marked_count": mode["marked_count"],
+                "effect_player_id": mode["effect_player_id"],
+                "random_cursor": state.random_cursor,
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_id": state.winner_id,
                 "winner_ids": state.winner_ids,
                 "result_type": state.result_type,
             }

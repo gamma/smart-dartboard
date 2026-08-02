@@ -1177,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(22));
+        assert_eq!(modes.as_array().map(Vec::len), Some(23));
         assert_cricket_metadata(&modes);
         assert!(modes.as_array().is_some_and(|items| {
             items
@@ -1254,6 +1254,7 @@ mod tests {
         assert_block_drop_metadata(&modes);
         assert_cookie_monster_metadata(&modes);
         assert_dart_sweeper_metadata(&modes);
+        assert_darts_bingo_metadata(&modes);
         assert_dragon_eggs_metadata(&modes);
         assert_space_defender_metadata(&modes);
     }
@@ -1332,6 +1333,20 @@ mod tests {
                     && mode["options"][0]["default"] == "classic"
                     && mode["min_players"] == 1
                     && mode["max_players"] == 8
+                    && mode["instructions"]
+                        .as_array()
+                        .is_some_and(|steps| steps.len() == 3)
+            })
+        }));
+    }
+
+    fn assert_darts_bingo_metadata(modes: &Value) {
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "darts_bingo"
+                    && mode["ruleset_version"] == 2
+                    && mode["artwork"] == "/static/assets/modes/darts_bingo.webp"
+                    && mode["options"][0]["default"] == "line"
                     && mode["instructions"]
                         .as_array()
                         .is_some_and(|steps| steps.len() == 3)

@@ -1017,7 +1017,60 @@ class GameEngineTests(unittest.TestCase):
         engine.handle_event(event | {"seq": 71})
         self.assertEqual("finished", engine.state.status)
         self.assertEqual("draw", engine.state.result_type)
-        self.assertEqual({ada.id, bob.id}, set(engine.state.winner_ids))
+        self.assertEqual([], engine.state.winner_ids)
+        self.assertEqual(
+            [ada.id, bob.id], engine.state.mode_state["bingo_candidates"]
+        )
+
+    def test_darts_bingo_finishes_equalization_when_last_player_skips(self):
+        engine = GameEngine()
+        engine.reset("darts_bingo", ["Ada", "Bob"], random_seed=42)
+        ada, _ = engine.state.players
+        engine.state.mode_state["bingo_candidates"] = [ada.id]
+        engine.state.status = "hold"
+        engine.continue_turn()
+
+        engine.next_player()
+
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual([ada.id], engine.state.winner_ids)
+
+    def test_darts_bingo_uses_shared_deterministic_randomness(self):
+        first = GameEngine()
+        second = GameEngine()
+        first.reset("darts_bingo", ["Ada", "Bob"], random_seed=42)
+        second.reset("darts_bingo", ["Ada", "Bob"], random_seed=42)
+
+        self.assertEqual(
+            first.state.players[0].marks,
+            second.state.players[0].marks,
+        )
+        self.assertEqual(9, first.state.random_cursor)
+
+    def test_darts_bingo_correction_replays_nested_marks_from_origin(self):
+        engine = GameEngine()
+        engine.reset(
+            "darts_bingo",
+            [{"id": "ada", "name": "Ada"}, {"id": "bob", "name": "Bob"}],
+            random_seed=42,
+        )
+        engine.handle_event(hit(60, 90, field=20, multiplier=3, label="T20"))
+        engine.handle_event(hit(40, 91, field=20, multiplier=2, label="D20"))
+        engine.continue_turn()
+        engine.handle_event(hit(60, 92, field=20, multiplier=3, label="T20"))
+        engine.handle_event(hit(20, 93, field=20, label="S20"))
+        engine.handle_event({"type": "miss", "score": 0, "seq": 94})
+
+        engine.correct_throw(
+            5,
+            hit(40, 93, field=20, multiplier=2, label="D20"),
+        )
+
+        ada, bob = engine.state.players
+        self.assertEqual(3, ada.score)
+        self.assertEqual(3, bob.score)
+        self.assertEqual("draw", engine.state.result_type)
+        self.assertEqual([], engine.state.winner_ids)
 
     def test_darts_bingo_full_card_does_not_finish_on_line(self):
         engine = GameEngine()
