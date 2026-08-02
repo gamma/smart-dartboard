@@ -159,7 +159,7 @@ Noch offen:
 - Android-Keystore-Adapter für den Companion-Client,
 - signierte iOS-/iPadOS-Hardwareabnahme der nativen TLS-Identität; der
   lokal getestete unsigned Simulator stellte keinen nutzbaren Keychain bereit,
-- Ausbau des M0-Projector-Renderers auf die vollständige produktive
+- Ausbau des External-Display- und Companion-Projector-Renderers auf die vollständige produktive
   Spielmodus-, Artwork-, Animations- und Sounddarstellung,
 - echte iPhone/iPad-zu-iPad-Abnahme mit Disconnect, Resume, Widerruf, Sound und
   längerem Arcade-Dauerbetrieb.

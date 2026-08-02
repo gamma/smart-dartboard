@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-runtime-v2-projector-test-event"
+description = "Allows only debug projector test darts through the dedicated guarded command."
+commands.allow = ["runtime_v2_projector_test_event"]

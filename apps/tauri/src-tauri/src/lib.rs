@@ -143,6 +143,7 @@ struct PublicState {
     projector_output: ProjectorOutput,
     companion_port: Option<u16>,
     companion_available: bool,
+    test_events: bool,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -315,6 +316,7 @@ impl NativeState {
             projector_output: self.projector_output,
             companion_port: companion_port(),
             companion_available: self.companion_identity.available,
+            test_events: cfg!(debug_assertions),
         }
     }
 
@@ -2266,6 +2268,7 @@ fn runtime_v2_query(
     let state = state.lock().map_err(|error| error.to_string())?;
     let repository = state.runtime.repository();
     let value = match path.as_str() {
+        "/api/v2/host" => serde_json::to_value(state.public()),
         "/api/v2/players" => {
             serde_json::to_value(repository.players().map_err(|error| error.to_string())?)
         }
@@ -2325,6 +2328,38 @@ fn runtime_v2_projector_report_allowed(command: &RuntimeCommand) -> bool {
         command,
         RuntimeCommand::ReportProjectorGeometry { .. } | RuntimeCommand::ReportSoundStatus { .. }
     )
+}
+
+fn runtime_v2_projector_test_event_allowed(command: &RuntimeCommand) -> bool {
+    matches!(
+        command,
+        RuntimeCommand::IngestDart {
+            source: DartSource::ProjectorTest,
+            ..
+        }
+    )
+}
+
+#[tauri::command]
+fn runtime_v2_projector_test_event(
+    app: tauri::AppHandle,
+    state: State<'_, SharedNativeState>,
+    envelope: CommandEnvelope,
+) -> Result<CommandResult, String> {
+    if !cfg!(debug_assertions) || !runtime_v2_projector_test_event_allowed(&envelope.command) {
+        return Err("projector test events are disabled".into());
+    }
+    let (result, public) = {
+        let mut state = state.lock().map_err(|error| error.to_string())?;
+        state.require_controller()?;
+        let result = state
+            .runtime
+            .dispatch_envelope(envelope)
+            .map_err(|error| error.message)?;
+        (result, state.public())
+    };
+    publish_public_state(&app, &public);
+    Ok(result)
 }
 
 #[tauri::command]
@@ -2973,9 +3008,9 @@ pub fn run() {
             tauri::WebviewWindowBuilder::new(
                 app,
                 "projector",
-                tauri::WebviewUrl::App("index.html?role=projector".into()),
+                tauri::WebviewUrl::App("projector.html".into()),
             )
-            .title("Smart Dartboard · Projector M0")
+            .title("Smart Dartboard · Projector")
             .inner_size(1280.0, 720.0)
             .build()?;
             Ok(())
@@ -2989,6 +3024,7 @@ pub fn run() {
             runtime_v2_query,
             runtime_v2_dispatch,
             runtime_v2_report,
+            runtime_v2_projector_test_event,
             companion_pairing_open,
             companion_devices,
             companion_revoke,
@@ -3065,6 +3101,35 @@ mod tests {
             &RuntimeCommand::SoundTest {
                 effect_id: "forbidden".into(),
             }
+        ));
+        assert!(runtime_v2_projector_test_event_allowed(
+            &RuntimeCommand::IngestDart {
+                event: DartEvent::Hit {
+                    seq: 1,
+                    field: 20,
+                    ring: Ring::Triple,
+                    multiplier: 3,
+                    label: "T20".into(),
+                    score: 60,
+                },
+                source: DartSource::ProjectorTest,
+            }
+        ));
+        assert!(!runtime_v2_projector_test_event_allowed(
+            &RuntimeCommand::IngestDart {
+                event: DartEvent::Hit {
+                    seq: 1,
+                    field: 20,
+                    ring: Ring::Triple,
+                    multiplier: 3,
+                    label: "T20".into(),
+                    score: 60,
+                },
+                source: DartSource::ManualCorrection,
+            }
+        ));
+        assert!(!runtime_v2_projector_test_event_allowed(
+            &RuntimeCommand::ResetCalibration
         ));
     }
 

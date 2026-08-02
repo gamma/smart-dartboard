@@ -7,7 +7,7 @@ const generatedOutputs = [
     import.meta.url,
   ),
   new URL(
-    "../src-tauri/gen/apple/build/arm64-sim/Smart%20Dartboard%20M0.app",
+    "../src-tauri/gen/apple/build/arm64-sim/Smart%20Dartboard.app",
     import.meta.url,
   ),
 ];

@@ -10,7 +10,7 @@ configs:
 settingGroups:
   app:
     base:
-      PRODUCT_NAME: Smart Dartboard M0
+      PRODUCT_NAME: Smart Dartboard
       PRODUCT_BUNDLE_IDENTIFIER: de.gammaproduction.smart-dartboard.m0
 targetTemplates:
   app:

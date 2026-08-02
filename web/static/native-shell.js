@@ -3,6 +3,9 @@ const params=new URLSearchParams(location.search);
 const role=params.get('role')==='projector'?'projector':'control';
 document.body.dataset.role=role;
 document.querySelector('#role').textContent=role.toUpperCase();
+const backToGame=document.querySelector('#backToGame');
+backToGame.hidden=role==='projector';
+backToGame.addEventListener('click',()=>location.replace('/control.html'));
 
 function render(payload){
   renderAppRole(payload.app_role ?? 'controller');
@@ -37,6 +40,7 @@ function renderAppRole(appRole){
     button.setAttribute('aria-pressed',String(button.dataset.appRole===appRole));
   }
   document.querySelector('#companionProjectorView').hidden=appRole!=='companion_projector';
+  backToGame.hidden=role==='projector'||appRole==='companion_projector';
   document.querySelector('#roleError').textContent='';
 }
 

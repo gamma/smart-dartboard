@@ -1,4 +1,7 @@
 const UI_LANGUAGE_KEY='sdb-ui-language';
+if(window.__TAURI__ || window.__TAURI_INTERNALS__){
+  document.documentElement.classList.add('native-shell');
+}
 function storedUiLanguage(){
   try{
     return localStorage.getItem(UI_LANGUAGE_KEY)==='en'?'en':'de';
@@ -410,7 +413,10 @@ function renderConnection(){
     button.setAttribute('title',label);
   });
   const projectorLink=document.querySelector('.icon-button[href="/projector"]');
-  if(projectorLink) projectorLink.setAttribute('title',t('open_projector'));
+  if(projectorLink){
+    projectorLink.hidden=Boolean(window.__TAURI__);
+    projectorLink.setAttribute('title',t('open_projector'));
+  }
   const settingsButton=document.querySelector('.settings-button');
   if(settingsButton){
     const settingsBlocked=appState.experience?.screen==='calibration';
@@ -1184,6 +1190,10 @@ function controlSettings(){
         <div><span>${t('board_setup')}</span><h2>${t('calibrate_title')}</h2><p>${t('calibrate_settings_copy')}</p></div>
         ${actionButton(t('calibrate'),'calibrate','secondary')}
       </section>
+      ${window.__TAURI__?`<section class="settings-link-card">
+        <div><span>NATIVE HOST</span><h2>${language()==='en'?'Devices & Companion':'Geräte & Companion'}</h2><p>${language()==='en'?'Bluetooth, AirPlay / HDMI, device role and Companion pairing.':'Bluetooth, AirPlay / HDMI, Geräterolle und Companion-Kopplung.'}</p></div>
+        ${actionButton(language()==='en'?'Open device setup':'Geräte-Setup öffnen','native-setup','secondary')}
+      </section>`:''}
     </div>
     <footer class="sticky-actions">
       ${actionButton(t('back'),'close-settings','ghost')}
@@ -2119,6 +2129,7 @@ document.addEventListener('click',async event=>{
     await action('/api/sound/test'); return;
   }
   if(name==='art-theme'){ await action('/api/art-theme',{theme:target.dataset.theme}); return; }
+  if(name==='native-setup'){ location.href='/native.html?role=control'; return; }
 });
 async function closeCalibration(){
   const destination=appState.calibrationReturn || {screen:'attract',localView:null};

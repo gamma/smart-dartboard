@@ -220,9 +220,9 @@ Noch offen und daher ausdrücklich kein Produktionsersatz:
 
 - Teammodell sowie Heatmap-, Modusstatistik-, Export- und Trainingsabfragen,
 - vollständige Anpassung der Historien-/Replay-Ansichten an die v2-Antworten,
-- Umschalten der nativen Tauri-Fenster von der M0-Diagnoseoberfläche auf die
-  gemeinsame Produkt-UI; die eingeschränkten `runtime_v2_*`-Commands und
-  Live-Events sind bereits vorhanden,
+- Umschalten des separaten iOS-/iPadOS-External-Display-Hosts und des
+  Companion-Projectors von der Diagnoseansicht auf die gemeinsame Projector-
+  Produkt-UI; natives Control und der macOS-Projector verwenden sie bereits,
 - ein plattformweiter Effect-Outbox-Vertrag; alle 24 heutigen Produktmodi sind
   portiert, während das adaptive Boss Fight V2 eine zurückgestellte
   Produktänderung bleibt,

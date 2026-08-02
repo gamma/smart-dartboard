@@ -13,6 +13,7 @@
     "allow-runtime-v2-query",
     "allow-runtime-v2-dispatch",
     "allow-runtime-v2-report",
+    "allow-runtime-v2-projector-test-event",
     "allow-app-role-select",
     "allow-companion-pairing-open",
     "allow-companion-devices",

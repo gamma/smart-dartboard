@@ -45,9 +45,11 @@
       this.modes=[];
       this.profiles=[];
       this.statistics=[];
+      this.host={};
       this.localScreen=null;
       this.listener=null;
       this.unsubscribe=null;
+      this.unsubscribeHost=null;
       this.lastSoundTestId=null;
     }
 
@@ -63,6 +65,9 @@
       this.modes=modes;
       this.profiles=profiles;
       this.statistics=statistics;
+      if(this.core instanceof api.TauriRuntimeClient){
+        this.host=await this.core.query('/api/v2/host');
+      }
       return this.experience();
     }
 
@@ -118,6 +123,13 @@
       const snapshot=this.envelope?.payload || {revision:0,session:{}};
       const session=snapshot.session || {};
       const settings={...clone(DEFAULT_CONFIG),...(snapshot.settings || {})};
+      const board=this.host.board || null;
+      const hostedBoard=this.health.board || 'disabled';
+      const boardPhase=board?.phase || hostedBoard;
+      const boardEnabled=boardPhase!=='disabled';
+      const boardStatus=boardPhase==='ready'?'connected'
+        : boardPhase==='error'?'error'
+        : boardEnabled?'searching':'disabled';
       const game=this.normalizeGame();
       const prepared=session.prepared_game;
       const selectedMode=prepared?.game_type || game?.game_type || null;
@@ -153,7 +165,9 @@
         art_theme:settings.art_theme,
         ui_language:settings.ui_language,
         correction_lock:{active:Boolean(settings.correction_lock)},
-        hardware:{enabled:false,status:'disabled',test_events:Boolean(this.health.test_events)},
+        hardware:{enabled:boardEnabled,status:boardStatus,
+          test_events:Boolean(this.host.test_events ?? this.health.test_events)},
+        native_host:this.host,
         rematch:{armed:false,expires_in_ms:0},
         runtime_instance_id:this.envelope?.runtime_instance_id,
         revision:this.envelope?.revision ?? snapshot.revision ?? 0,
@@ -321,10 +335,21 @@
           this.publish(soundEvent || envelope.payload?.game?.state?.last_event || undefined);
         },
       });
+      if(this.core instanceof api.TauriRuntimeClient){
+        this.unsubscribeHost=this.core.subscribeHost((host,error)=>{
+          if(error){ listener.onClose?.(error); return; }
+          this.host=host || {};
+          this.publish({type:'native_host_state'});
+        });
+      }
       return ()=>this.close();
     }
 
-    close(){ this.unsubscribe?.(); this.unsubscribe=null; this.core.close(); }
+    close(){
+      this.unsubscribe?.(); this.unsubscribe=null;
+      this.unsubscribeHost?.(); this.unsubscribeHost=null;
+      this.core.close();
+    }
   }
 
   class AutoRuntimeClient {

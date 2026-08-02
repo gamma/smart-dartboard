@@ -47,7 +47,11 @@ Umgesetzt und lokal verifiziert:
   liefert die bestehende Control-/Projector-Produkt-UI aus; der Experience-
   Adapter übersetzt deren Aktionen ohne modusspezifische Transportzweige in
   Runtime-v2-Commands und fällt bei einem Python-Host sauber auf dessen API
-  zurück. Die nativen Tauri-Fenster verwenden vorerst noch die M0-Oberfläche,
+  zurück. Das native Control-Fenster und das macOS-Projector-Fenster laden
+  dieselbe Produkt-UI und denselben Experience-Adapter wie Linux/Docker. Das
+  separate Geräte-/Companion-Setup bleibt als schmale native Hostoberfläche
+  erhalten. Board-, Reconnect- und Displaystatus fließen über einen getrennten
+  read-only Host-Eventkanal live in die Produkt-UI,
 - macOS-Tauri-App mit Control- und Projector-Fenster,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,
 - nativer Apple-DisplayHost mit eigener Projector-WKWebView auf `TVOut`,
@@ -77,7 +81,10 @@ Umgesetzt und lokal verifiziert:
 - das native Projector-Fenster erhält für den späteren Einsatz der Produkt-UI
   genau eine begrenzte Reporting-Bridge: Es darf seine Geometrie und seinen
   Soundstatus melden, aber weder Kalibrierung noch Spiel oder sonstiges Setup
-  verändern. Diese Autoritätsgrenze ist per Rust-Test belegt,
+  verändern. Debug-Builds besitzen zusätzlich einen dedizierten, auf
+  `projector_test` beschränkten Testwurf-Command; Release-Builds lehnen ihn auch
+  bei vorhandener Window-Berechtigung ab. Diese Autoritätsgrenze ist per
+  Rust- und WebKit-Test belegt,
 - deterministischer Session-Core mit gemeinsamer Python-/Rust-Fixture für
   Screenfluss, Starterrotation, Rematch, Abbruch, Draw sowie Einzel- und
   Koop-Wertung mit drei Punkten pro gewonnenem Spiel.
@@ -228,9 +235,10 @@ Noch nicht als produktionsreif nachgewiesen:
   alle 24 heutigen Produktmodi sind portiert. Das adaptive Boss Fight V2 bleibt
   eine getrennte, ausdrücklich zurückgestellte Produktänderung,
 - vollständige Historien-/Replay-Adapterparität der Produkt-UI,
-- Einsatz der gemeinsamen Produkt-UI in den nativen Tauri-Fenstern. Die
-  Runtime-v2-Bridge ist kompiliert und berechtigt, Control und Projector zeigen
-  dort aber noch die bewusst kleine M0-Diagnoseoberfläche,
+- Einsatz der gemeinsamen Projector-Produkt-UI im separaten iOS-/iPadOS-
+  External-Display-Host und im Companion-Projector. Control sowie der
+  macOS-Projector verwenden sie bereits; AirPlay/HDMI und Companion zeigen
+  derzeit noch die bewusst kleine Diagnoseansicht,
 - vollständige Docker-Parität zur Python-Anwendung; der Session-/Spielkernfluss
   und die statischen Oberflächen sind bereits im Container belegt,
 - reale Linux-BlueZ-/Board-Abnahme des neuen Sidecars.
@@ -257,7 +265,7 @@ Gemeinsame Produkt-UI gegen Runtime v2 mit WebKit:
 npm --prefix apps/tauri run test:rust-ui
 ```
 
-macOS-M0:
+macOS-App:
 
 ```bash
 npm --prefix apps/tauri ci

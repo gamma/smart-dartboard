@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const { pathToFileURL } = require('node:url');
 const path = require('node:path');
 
-const uiUrl = pathToFileURL(path.resolve(__dirname, '../ui/index.html')).href + '?role=control';
+const uiUrl = pathToFileURL(path.resolve(__dirname, '../../../web/native.html')).href + '?role=control';
 
 test('companion discovery requires fingerprint confirmation before pairing', async ({ page }) => {
   await page.addInitScript(() => {

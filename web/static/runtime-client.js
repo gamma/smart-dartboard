@@ -153,6 +153,7 @@
       this.invoke=tauri.core.invoke;
       this.listen=tauri.event.listen;
       this.unlisten=null;
+      this.hostUnlisten=null;
       this.runtimeInstanceId=null;
       this.revision=null;
     }
@@ -183,6 +184,8 @@
       };
       if(command.type==='report_projector_geometry' || command.type==='report_sound_status'){
         result=await this.invoke('runtime_v2_report',{envelope});
+      }else if(command.type==='ingest_dart' && command.source==='projector_test'){
+        result=await this.invoke('runtime_v2_projector_test_event',{envelope});
       }else{
         result=await this.invoke('runtime_v2_dispatch',{envelope});
       }
@@ -205,9 +208,21 @@
       return ()=>this.close();
     }
 
+    subscribeHost(listener){
+      this.listen('runtime-state',event=>listener(event.payload))
+        .then(unlisten=>{ this.hostUnlisten=unlisten; })
+        .catch(error=>listener(null,error));
+      return ()=>{
+        this.hostUnlisten?.();
+        this.hostUnlisten=null;
+      };
+    }
+
     close(){
       this.unlisten?.();
       this.unlisten=null;
+      this.hostUnlisten?.();
+      this.hostUnlisten=null;
     }
   }
 
