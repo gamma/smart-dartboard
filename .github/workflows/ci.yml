@@ -347,6 +347,8 @@ jobs:
           PY
           curl --fail --silent --show-error http://127.0.0.1:18081/control >/dev/null
           curl --fail --silent --show-error http://127.0.0.1:18081/projector >/dev/null
+          curl --fail --silent --show-error --location http://127.0.0.1:18081/ \
+            | grep -F '<title>Smart Dartboard · Control</title>' >/dev/null
           test "$(docker inspect "$container_name" --format '{{.Config.User}}')" = dartboard
           test "$(docker inspect "$container_name" --format '{{.HostConfig.Privileged}}')" = false
           python - <<'PY'

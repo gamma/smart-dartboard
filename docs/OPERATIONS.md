@@ -83,7 +83,8 @@ den ersten Start sollte die Adresse leer bleiben, damit das Board über
    feste Board-Adresse prüfen.
 5. `docker compose -f compose.production.yml up -d --wait --wait-timeout 60`
    starten und den erfolgreichen Healthcheck abwarten.
-6. `http://<host>:8000/control` auf dem Tablet öffnen.
+6. `http://<host>:8000/` auf dem Tablet öffnen; der Host leitet automatisch
+   zur Controller-Oberfläche weiter.
 7. `http://localhost:8000/projector` auf dem Projektorrechner öffnen.
 8. Über **Projektor kalibrieren** das Board-Setup öffnen und die Scheibe
    deckungsgleich ausrichten.

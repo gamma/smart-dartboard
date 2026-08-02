@@ -35,6 +35,9 @@ http://127.0.0.1:8001/control
 http://127.0.0.1:8001/projector
 ```
 
+Die Basis-URL `http://127.0.0.1:8001/` leitet direkt auf `/control` weiter;
+für den normalen Einstieg muss daher kein Unterpfad eingegeben werden.
+
 Der Container läuft ohne Root, ohne `privileged` und ohne Linux-Capabilities.
 `/data` enthält `runtime.sqlite`.
 
@@ -129,8 +132,10 @@ begrenztem Proxy-Netz.
 
 | Methode | Pfad | Zweck |
 | --- | --- | --- |
+| `GET` | `/` | direkter Browser-Einstieg; temporäre Weiterleitung auf `/control` |
 | `GET` | `/control` | gemeinsame Touch-Steuerung mit automatischer Runtime-v2-Erkennung |
 | `GET` | `/projector` | gemeinsame Projektoransicht mit Runtime-v2-Livestate |
+| `GET` | `/api/v2` | maschinenlesbare Dienst- und API-Information |
 | `GET` | `/api/v2/health` | Runtime-, Datenbank-, Board-, Protokoll- und Schemastatus |
 | `GET` | `/api/v2/runtime/bootstrap` | vollständiger versionierter Snapshot |
 | `GET` | `/api/v2/runtime/snapshot` | erneuter Snapshot nach Lücke oder Reconnect |

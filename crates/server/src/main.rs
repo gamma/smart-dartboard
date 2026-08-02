@@ -2,7 +2,7 @@ use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, Path, State, WebSocketUpgrade, ws::Message},
     http::{HeaderMap, HeaderValue, StatusCode, header},
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Redirect, Response},
     routing::{delete, get, post},
 };
 use sdb_board::{
@@ -314,7 +314,7 @@ fn router(state: AppState) -> Router {
         PathBuf::from,
     );
     Router::new()
-        .route("/", get(service_info))
+        .route("/", get(root))
         .route("/api/health", get(health))
         .route_service("/control", ServeFile::new(web_dir.join("control.html")))
         .route_service(
@@ -322,6 +322,7 @@ fn router(state: AppState) -> Router {
             ServeFile::new(web_dir.join("projector.html")),
         )
         .nest_service("/static", ServeDir::new(web_dir.join("static")))
+        .route("/api/v2", get(service_info))
         .route("/api/v2/health", get(health))
         .route("/api/v2/runtime/bootstrap", get(bootstrap))
         .route("/api/v2/runtime/snapshot", get(snapshot))
@@ -389,6 +390,10 @@ fn router(state: AppState) -> Router {
             ),
         ))
         .with_state(state)
+}
+
+async fn root() -> Redirect {
+    Redirect::temporary("/control")
 }
 
 async fn service_info() -> Json<ServiceInfo> {
@@ -1799,6 +1804,16 @@ mod tests {
 
     #[tokio::test]
     async fn server_delivers_the_shared_control_and_projector_ui() {
+        let root = test_app()
+            .oneshot(Request::get("/").body(Body::empty()).expect("request"))
+            .await
+            .expect("response");
+        assert_eq!(root.status(), StatusCode::TEMPORARY_REDIRECT);
+        assert_eq!(
+            root.headers().get(header::LOCATION),
+            Some(&HeaderValue::from_static("/control"))
+        );
+
         for path in [
             "/control",
             "/projector",
