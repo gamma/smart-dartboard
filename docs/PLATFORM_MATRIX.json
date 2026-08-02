@@ -62,7 +62,7 @@
       "architectures": {
         "arm64-device": "unsigned_archive_verified",
         "arm64-simulator": "bundle_verified",
-        "x86_64-simulator": "configured_not_verified"
+        "x86_64-simulator": "rust_native_core_verified; Tauri app bundle not verified"
       },
       "build": "device_archive_and_simulator_bundle_verified",
       "installation": "simulator_install_launch_lifecycle_and_external_display_verified",

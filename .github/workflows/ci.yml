@@ -128,7 +128,7 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: 1.97.1
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
           components: clippy,rustfmt
 
       - name: Cache Rust builds
@@ -154,6 +154,7 @@ jobs:
         run: |
           cargo check --workspace --target aarch64-apple-ios
           cargo check --workspace --target aarch64-apple-ios-sim
+          cargo check --manifest-path apps/tauri/src-tauri/Cargo.toml --target x86_64-apple-ios
 
       - name: Check native shell
         run: |

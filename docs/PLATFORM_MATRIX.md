@@ -54,6 +54,14 @@ Das iOS-`.xcarchive` belegt Geräte-Compilation und Packaging, ist ohne
 Development Team, Provisioning und Signatur aber weder installierbare IPA noch
 TestFlight-Release.
 
+Der native Rust-/Tauri-Core kompiliert zusätzlich für
+`x86_64-apple-ios` und wird so in CI geprüft. Das committed Xcode-Projekt lässt
+diese Simulatorarchitektur zu, behält aber ARM64 als sicheren Standard und
+schließt x86_64 für echte Geräte weiterhin aus. Ein mit Tauri 2.11.4 auf Apple
+Silicon angeforderter `--target x86_64`-Bundlepfad enthielt dennoch ein
+ARM64-Binary; deshalb gilt ein vollständiges Intel-Simulator-App-Bundle bewusst
+noch nicht als verifiziert. Ordnernamen sind kein Architekturnachweis.
+
 ## Hardwarestatus
 
 Es gibt noch **keine vollständig qualifizierte Kombination** aus Tablet/Mac,

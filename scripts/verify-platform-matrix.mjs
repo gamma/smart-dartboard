@@ -60,6 +60,10 @@ expect(bleDocker.startsWith(`FROM python:${matrix.toolchains.python_legacy.major
   'BLE gateway Python drift');
 expect(ci.includes(`node-version: "${matrix.toolchains.node.major}"`),'CI Node drift');
 expect(ci.includes(`toolchain: ${matrix.toolchains.rust.toolchain}`),'CI Rust drift');
+expect(rustToolchain.includes('"x86_64-apple-ios"')
+  && ci.includes('x86_64-apple-ios')
+  && ci.includes('Cargo.toml --target x86_64-apple-ios'),
+  'Intel iOS simulator core coverage drift');
 expect(ci.includes(`grep -F 'Xcode ${matrix.toolchains.apple_build_baseline.xcode}'`),'CI Xcode drift');
 expect(ci.includes(`xcode-version: "${matrix.toolchains.apple_build_baseline.xcode}"`),
   'CI Xcode selection drift');
@@ -102,6 +106,9 @@ const iosTargets=[...xcodeProject.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = ([^;]+)
   .map(match=>match[1]);
 expect(iosTargets.length>0 && iosTargets.every(value=>value===matrix.platforms.ios_ipados.minimum),
   'iOS deployment target drift');
+expect(xcodeProject.includes('VALID_ARCHS = "arm64 x86_64";')
+  && xcodeProject.includes('"EXCLUDED_ARCHS[sdk=iphoneos*]" = x86_64;'),
+  'iOS simulator/device architecture boundary drift');
 
 for(const [platform,entry] of Object.entries(matrix.platforms)){
   expect(entry.build && entry.installation && entry.hardware,`${platform} lacks evidence states`);

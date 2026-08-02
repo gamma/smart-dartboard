@@ -64,7 +64,10 @@ Umgesetzt und lokal verifiziert:
   rahmenlos im Vollbild angezeigt. Gespiegelte Displays gelten ausdrücklich
   nicht als eigenständiger Projector. `Vorschau auf diesem Gerät` stellt das
   Fenster wieder zentriert und bedienfreundlich auf dem Control-Screen dar,
-- iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,
+- iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`; der identische native
+  Rust-Core kompiliert zusätzlich für `x86_64-apple-ios`, während ein echtes
+  Intel-Simulator-App-Bundle wegen der unten dokumentierten Tauri-2.11.4-
+  Einschränkung noch nicht behauptet wird,
 - nativer Apple-DisplayHost mit eigener Projector-WKWebView auf `TVOut`; sie
   lädt die gemeinsame `projector.html` samt Artworks aus dem eingebetteten
   Tauri-Asset-Resolver und verwendet denselben Runtime-v2-Adapter,
@@ -406,6 +409,14 @@ Ausgang wird über `simctl io ... screenConfig --display external power on|off`
 verbunden beziehungsweise getrennt.
 Ohne diesen Debug-Parameter wird kein Testspiel angelegt; eine frische App
 bleibt bis zur ersten Nutzerinteraktion auf dem Startbildschirm bei Revision 0.
+
+Für Intel-Simulatoren ist `cargo check --manifest-path
+apps/tauri/src-tauri/Cargo.toml --target x86_64-apple-ios` der verbindliche
+Core-Nachweis. Tauri 2.11.4 erzeugt auf dem lokalen Apple-Silicon-Host bei
+`tauri ios build --target x86_64` derzeit einen entsprechend benannten Ordner,
+dessen ausführbare Datei laut `lipo` aber weiterhin ARM64 ist. Dieser Pfad wird
+daher nicht als Bundle-Abnahme gezählt; die Matrix bleibt an dieser Stelle
+ausdrücklich strenger als der CLI-Erfolgscode.
 
 Der gleiche Startparameter dient außerdem als Persistenz-Smoke-Test: App einmal
 mit `--m0-test-hit-after-start` starten, nach Revision 2 vollständig beenden und
