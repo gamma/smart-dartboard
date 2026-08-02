@@ -16,8 +16,35 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
       game: null,
       projector_output: 'external_display',
       companion_port: null,
-      companion_available: false
+      companion_available: false,
+      companion_protocol_version: 2
     };
+    const productEnvelope = {
+      protocol_version: 1,
+      kind: 'state',
+      message_id: 'companion-product',
+      runtime_instance_id: 'controller-runtime',
+      revision: 8,
+      payload: {
+        revision: 8,
+        session: {
+          session_id: 'session-1',session_status: 'active',screen: 'playing',
+          game_id: 'game-1',players: [{id:'ada',name:'Ada',avatar:'fox',color:'#ff00aa'}],
+          standings: [{player_id:'ada',games:0,wins:0,session_points:0}],
+        },
+        game: {game_type:'count_up',state:{
+          players:[{id:'ada',name:'Ada',score:120}],current_player_index:0,
+          round_number:2,darts_in_turn:1,turn_score:60,status:'running',last_event:null,
+        }},
+        settings: {},
+      },
+    };
+    const modes=[{
+      slug:'countup',title:'Count Up',tagline:'Jeder Punkt zählt',description:'Punkte sammeln',
+      accent:'#28e7ff',accent_secondary:'#176dff',visual:'neon-orbit',icon:'target',
+      artwork:'/static/assets/modes/countup.webp',sound_theme:'arena',min_players:1,max_players:8,
+      ruleset_version:1,options:[],instructions:[],control_legend:[],
+    }];
     window.__nativeCalls = [];
     window.__nativeEvents = {};
     window.__TAURI__ = {
@@ -32,13 +59,28 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
               return null;
             case 'companion_client_status':
               return null;
+            case 'companion_projector_v2_bootstrap':
+              return productEnvelope;
+            case 'companion_projector_v2_query':
+              if(args.path==='/api/v2/modes') return modes;
+              if(args.path==='/api/v2/players' || args.path==='/api/v2/statistics/players') return [];
+              if(args.path==='/api/v2/host') return {
+                app_role:'companion_projector',test_events:false,
+                board:{enabled:false,phase:'disabled'},
+              };
+              throw new Error(`unexpected Companion query: ${args.path}`);
+            case 'companion_projector_v2_report':
+              if(!['report_projector_geometry','report_sound_status'].includes(args.envelope.command.type)){
+                throw new Error(`forbidden Companion report: ${args.envelope.command.type}`);
+              }
+              return {command_id:args.envelope.command_id,revision:8,duplicate:false};
             case 'companion_discovered_hosts':
               return [{
                 service_name: 'Smart Dartboard Arcade',
                 host_name: 'arcade-mac.local',
                 port: 43123,
                 host_id: '991708fa-c4e7-419f-ad1d-c44f01891b03',
-                protocol_version: 1,
+                protocol_version: 2,
                 tls: true
               }];
             case 'companion_pairing_prepare':
@@ -105,26 +147,20 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
       runtime_instance_id: 'controller-runtime',
       revision: 8
     }});
-    window.__nativeEvents['companion-projector-frame']({ payload: {
-      runtime_instance_id: 'controller-runtime',
-      revision: 8,
-      counter: 120
-    }});
   });
-  await expect(page.locator('#companionProjectorStage')).toBeVisible();
-  await expect(page.locator('#companionCounter')).toHaveText('120');
-  await expect(page.locator('#companionRuntimeStatus')).toContainText('Revision 8');
+  await expect(page).toHaveURL(/projector\.html\?native-companion=1/);
+  await expect(page.locator('.projection-game')).toBeVisible();
+  await expect(page.locator('[data-score-player="ada"]').first()).toHaveText('120');
+  await expect(page.locator('.projector-test-tools')).toHaveCount(0);
+  await expect.poll(async()=>page.evaluate(() => window.__nativeCalls
+    .some(call=>call.command==='companion_projector_v2_report'
+      && call.args.envelope.command.type==='report_projector_geometry'))).toBe(true);
+  expect(await page.evaluate(() => window.__nativeCalls
+    .some(call=>call.command==='runtime_v2_dispatch'))).toBe(false);
 
   await page.evaluate(() => {
-    window.__nativeEvents['companion-projector-status']({ payload: {
-      host_id: '991708fa-c4e7-419f-ad1d-c44f01891b03',
-      service_name: 'Smart Dartboard Arcade',
-      paired: true,
-      phase: 'reconnecting',
-      runtime_instance_id: null,
-      revision: null
-    }});
+    window.__nativeEvents['companion-projector-v2-disconnected']({payload:null});
   });
-  await expect(page.locator('#companionProjectorStage')).toBeHidden();
-  await expect(page.locator('#discoveryStatus')).toContainText('neuer Snapshot');
+  await expect(page).toHaveURL(/native\.html\?role=control/);
+  await expect(page.getByRole('heading', { name: /Controller finden/ })).toBeVisible();
 });

@@ -65,6 +65,11 @@ point-and-click-tauglich.
 
 ## Replikation
 
+Die vollständige Projector-Produktdarstellung verwendet Companion-Protokoll 2.
+Die inkompatible Erweiterung gegenüber dem früheren Diagnose-Payload macht den
+öffentlichen Runtime-v2-Snapshot verbindlich; ein einmaliges neues Pairing
+ersetzt deshalb gespeicherte Grants aus Protokoll 1.
+
 Jeder Frame enthält:
 
 - `protocol_version`,
@@ -153,14 +158,23 @@ Implementiert und automatisiert getestet:
   in den sichtbaren Neu-Pairing-Zustand. Der echte TLS-Integrationstest deckt
   Bootstrap, Stream-Snapshot, Folgezustand, Widerruf und Auth-Ablehnung ab; der
   WebKit-Test deckt Connected- und Reconnect-Darstellung ab.
+- vollständige gemeinsame Projector-Produkt-UI auf dem Companion. Der
+  TLS/WSS-Kanal repliziert dafür den freigegebenen Runtime-v2-Snapshot; lokale
+  Registry-Metadaten liefern alle 24 Modusdarstellungen und Assets. Die
+  Companion-WebView besitzt nur Bootstrap-, Query- und eng begrenzte
+  Report-Rechte. Geometrie und Soundstatus laufen als authentifizierte,
+  TLS-gepinnte Rückmeldungen an die Controller-Runtime; Spiel-, Setup-,
+  Testwurf- und Korrekturcommands werden sowohl in der WebView als auch am
+  Controller abgewiesen. Bei einem Disconnect kehrt die App in den neutralen
+  Verbindungszustand zurück. Rust-Integrationstests prüfen Authentifizierung,
+  Replikation und die Command-Allowlist; WebKit prüft Pairing, produktive
+  Spielansicht, Geometrie-Report, deaktivierte Testwerkzeuge und
+  Disconnect-Rückkehr.
 
 Noch offen:
 
 - Android-Keystore-Adapter für den Companion-Client,
 - signierte iOS-/iPadOS-Hardwareabnahme der nativen TLS-Identität; der
   lokal getestete unsigned Simulator stellte keinen nutzbaren Keychain bereit,
-- Ausbau des Companion-Projector-Renderers auf die vollständige produktive
-  Spielmodus-, Artwork-, Animations- und Sounddarstellung; der lokale
-  AirPlay-/HDMI-DisplayHost verwendet sie bereits,
 - echte iPhone/iPad-zu-iPad-Abnahme mit Disconnect, Resume, Widerruf, Sound und
   längerem Arcade-Dauerbetrieb.

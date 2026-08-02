@@ -11,7 +11,7 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use thiserror::Error;
 
-pub const COMPANION_PROTOCOL_VERSION: u16 = 1;
+pub const COMPANION_PROTOCOL_VERSION: u16 = 2;
 pub const PAIRING_LIFETIME_MS: u64 = 5 * 60 * 1_000;
 pub const MAX_PAIRING_ATTEMPTS: u8 = 5;
 pub const CERTIFICATE_SHA256_HEX_LENGTH: usize = 64;

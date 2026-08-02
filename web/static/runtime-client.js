@@ -292,6 +292,74 @@
     }
   }
 
+  class CompanionProjectorRuntimeClient {
+    constructor(tauri=global.__TAURI__){
+      if(!tauri?.core?.invoke || !tauri?.event?.listen){
+        throw new RuntimeClientError('Companion projector bridge is unavailable');
+      }
+      this.invoke=tauri.core.invoke;
+      this.listen=tauri.event.listen;
+      this.unlisteners=[];
+      this.runtimeInstanceId=null;
+      this.revision=null;
+    }
+
+    acceptEnvelope(envelope){
+      if(envelope?.protocol_version!==PROTOCOL_VERSION || envelope?.kind!=='state'){
+        throw new RuntimeClientError('Incompatible Companion projector state');
+      }
+      this.runtimeInstanceId=envelope.runtime_instance_id;
+      this.revision=envelope.revision;
+      return envelope;
+    }
+
+    async bootstrap(){
+      return this.acceptEnvelope(await this.invoke('companion_projector_v2_bootstrap'));
+    }
+    async request_snapshot(){ return this.bootstrap(); }
+    query(path){ return this.invoke('companion_projector_v2_query',{path}); }
+    async dispatch(command,{commandId:stableId=commandId(),expectedRevision=this.revision}={}){
+      if(command.type!=='report_projector_geometry' && command.type!=='report_sound_status'){
+        throw new RuntimeClientError('Companion projector is read-only');
+      }
+      return this.invoke('companion_projector_v2_report',{envelope:{
+        protocol_version:PROTOCOL_VERSION,command_id:stableId,
+        runtime_instance_id:this.runtimeInstanceId,expected_revision:expectedRevision,command,
+      }});
+    }
+    subscribe(listener){
+      listenerCall(listener,'onOpen');
+      this.listen('companion-projector-v2-state',event=>{
+        try{
+          const envelope=event.payload;
+          const runtimeChanged=this.runtimeInstanceId!==envelope.runtime_instance_id;
+          if(!runtimeChanged && envelope.revision<=this.revision) return;
+          listenerCall(listener,'onMessage',this.acceptEnvelope(envelope));
+        }catch(error){ listenerCall(listener,'onError',error); }
+      }).then(unlisten=>this.unlisteners.push(unlisten)).catch(error=>{
+        listenerCall(listener,'onError',error); listenerCall(listener,'onClose');
+      });
+      this.listen('companion-projector-v2-disconnected',()=>{
+        listenerCall(listener,'onClose');
+        global.location.replace(new URL('./native.html?role=control',global.location.href));
+      })
+        .then(unlisten=>this.unlisteners.push(unlisten))
+        .catch(error=>listenerCall(listener,'onError',error));
+      return ()=>this.close();
+    }
+    subscribeHost(listener){
+      this.listen('companion-projector-status',event=>listener({
+        app_role:'companion_projector',test_events:false,
+        board:{enabled:false,phase:event.payload?.phase==='connected'?'disabled':'reconnecting'},
+        companion:event.payload,
+      })).then(unlisten=>this.unlisteners.push(unlisten)).catch(error=>listener(null,error));
+      return ()=>{};
+    }
+    close(){
+      for(const unlisten of this.unlisteners.splice(0)) unlisten();
+    }
+  }
+
   class TestRuntimeClient {
     constructor({envelope,dispatch,queries={}}){
       this.envelope=envelope;
@@ -367,6 +435,10 @@
     if(global.__SDB_EXTERNAL_PROJECTOR__){
       return new ExternalProjectorRuntimeClient(global.__SDB_EXTERNAL_PROJECTOR__);
     }
+    if((global.__TAURI_INTERNALS__ || global.__TAURI__)
+      && new URLSearchParams(global.location?.search || '').get('native-companion')==='1'){
+      return new CompanionProjectorRuntimeClient(global.__TAURI__);
+    }
     if(global.__TAURI_INTERNALS__ || global.__TAURI__){
       return new TauriRuntimeClient(global.__TAURI__);
     }
@@ -379,6 +451,7 @@
     HostedRuntimeClient,
     TauriRuntimeClient,
     ExternalProjectorRuntimeClient,
+    CompanionProjectorRuntimeClient,
     TestRuntimeClient,
     LegacyHostedRuntimeClient,
     createCore,

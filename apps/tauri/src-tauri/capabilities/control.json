@@ -24,6 +24,7 @@
     "allow-companion-pairing-prepare",
     "allow-companion-pairing-complete",
     "allow-companion-client-status",
+    "allow-companion-projector-v2",
     "allow-projector-output-select"
   ]
 }

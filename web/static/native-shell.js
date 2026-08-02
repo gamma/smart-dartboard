@@ -8,6 +8,7 @@ backToGame.hidden=role==='projector';
 backToGame.addEventListener('click',()=>location.replace('/control.html'));
 
 function render(payload){
+  companionProtocolVersion=payload.companion_protocol_version ?? companionProtocolVersion;
   renderAppRole(payload.app_role ?? 'controller');
   renderProjectorValues(payload);
   document.querySelector('#status').textContent=`Runtime ${payload.runtime_instance_id} · Revision ${payload.revision}`;
@@ -29,6 +30,7 @@ function renderCompanionFrame(payload){
 }
 
 let currentAppRole='controller';
+let companionProtocolVersion=2;
 let discoveryTimer;
 let currentPairingTarget;
 let currentCompanionClientPhase;
@@ -60,7 +62,7 @@ function renderDiscoveredHosts(hosts=[]){
     const name=document.createElement('strong');
     const details=document.createElement('span');
     const select=document.createElement('button');
-    const compatible=host.protocol_version===1&&host.tls===true;
+    const compatible=host.protocol_version===companionProtocolVersion&&host.tls===true;
     name.textContent=host.service_name;
     details.textContent=compatible
       ? `${host.host_name} · sicherer Dienst`
@@ -151,6 +153,7 @@ function renderCompanionClientStatus(status){
   discovery.textContent=labels[status.phase] ?? 'Companion wird vorbereitet …';
   if(connected){
     document.querySelector('#companionRuntimeStatus').textContent=`Runtime ${status.runtime_instance_id} · Revision ${status.revision}`;
+    location.replace(new URL('./projector.html?native-companion=1',location.href));
   }
 }
 

@@ -66,7 +66,8 @@
       this.profiles=profiles;
       this.statistics=statistics;
       if(this.core instanceof api.TauriRuntimeClient
-        || this.core instanceof api.ExternalProjectorRuntimeClient){
+        || this.core instanceof api.ExternalProjectorRuntimeClient
+        || this.core instanceof api.CompanionProjectorRuntimeClient){
         this.host=await this.core.query('/api/v2/host');
       }
       return this.experience();
@@ -346,7 +347,8 @@
         },
       });
       if(this.core instanceof api.TauriRuntimeClient
-        || this.core instanceof api.ExternalProjectorRuntimeClient){
+        || this.core instanceof api.ExternalProjectorRuntimeClient
+        || this.core instanceof api.CompanionProjectorRuntimeClient){
         this.unsubscribeHost=this.core.subscribeHost((host,error)=>{
           if(error){ listener.onClose?.(error); return; }
           this.host=host || {};

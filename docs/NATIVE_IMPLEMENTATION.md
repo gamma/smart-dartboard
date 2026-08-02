@@ -237,10 +237,6 @@ Noch nicht als produktionsreif nachgewiesen:
   Produktänderung; alle 24 heutigen Produktmodi sowie Historie, Replay,
   Heatmap, Modusstatistiken, Export und Trainingsempfehlungen sind im Rust-Pfad
   portiert,
-- Einsatz der gemeinsamen Projector-Produkt-UI im Companion-Projector. Control,
-  macOS-Projector und der separate iOS-/iPadOS-AirPlay-/HDMI-DisplayHost
-  verwenden sie bereits; der Companion zeigt derzeit noch die bewusst kleine
-  Diagnoseansicht,
 - vollständige Docker-Parität zur Python-Anwendung; der Session-/Spielkernfluss
   und die statischen Oberflächen sind bereits im Container belegt,
 - reale Linux-BlueZ-/Board-Abnahme des neuen Sidecars.

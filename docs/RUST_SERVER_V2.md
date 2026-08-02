@@ -228,9 +228,6 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
 - Teammodell,
-- Umschalten des Companion-Projectors von der Diagnoseansicht auf die
-  gemeinsame Projector-Produkt-UI; natives Control, der macOS-Projector und der
-  separate iOS-/iPadOS-AirPlay-/HDMI-DisplayHost verwenden sie bereits,
 - ein plattformweiter Effect-Outbox-Vertrag; alle 24 heutigen Produktmodi sind
   portiert, während das adaptive Boss Fight V2 eine zurückgestellte
   Produktänderung bleibt,

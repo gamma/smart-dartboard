@@ -144,7 +144,9 @@ struct PublicState {
     projector_output: ProjectorOutput,
     companion_port: Option<u16>,
     companion_available: bool,
+    companion_protocol_version: u16,
     test_events: bool,
+    runtime: RuntimePublicSnapshot,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -317,7 +319,9 @@ impl NativeState {
             projector_output: self.projector_output,
             companion_port: companion_port(),
             companion_available: self.companion_identity.available,
+            companion_protocol_version: COMPANION_PROTOCOL_VERSION,
             test_events: cfg!(debug_assertions),
+            runtime: self.runtime.public_snapshot(),
         }
     }
 
@@ -458,6 +462,14 @@ impl NativeState {
             Ok(())
         } else {
             Err("command is unavailable in Companion projector mode".into())
+        }
+    }
+
+    fn require_companion(&self) -> Result<(), String> {
+        if self.app_role == NativeAppRole::CompanionProjector {
+            Ok(())
+        } else {
+            Err("command is available only in Companion projector mode".into())
         }
     }
 }
@@ -935,8 +947,9 @@ mod apple_bonjour {
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 mod native_companion_transport {
     use super::{
-        COMPANION_PORT, NativeState, PublicState, SharedNativeState, TlsIdentity, apple_bonjour,
-        now_ms,
+        APP_HANDLE, COMPANION_PORT, CommandEnvelope, CommandResult, NativeState, PublicState,
+        SharedNativeState, TlsIdentity, apple_bonjour, now_ms, publish_public_state,
+        runtime_v2_projector_report_allowed,
     };
     use axum::{
         Json, Router,
@@ -1045,6 +1058,7 @@ mod native_companion_transport {
             .route("/api/v2/companion/pairing", post(pair))
             .route("/api/v2/companion/runtime/bootstrap", get(bootstrap))
             .route("/api/v2/companion/runtime/events", get(websocket))
+            .route("/api/v2/companion/runtime/reports", post(report))
             .layer(SetResponseHeaderLayer::if_not_present(
                 header::X_CONTENT_TYPE_OPTIONS,
                 HeaderValue::from_static("nosniff"),
@@ -1118,6 +1132,32 @@ mod native_companion_transport {
         Ok(upgrade.on_upgrade(move |socket| {
             stream(socket, service.native, token, initial, states, changes)
         }))
+    }
+
+    async fn report(
+        State(service): State<ServiceState>,
+        headers: HeaderMap,
+        Json(envelope): Json<CommandEnvelope>,
+    ) -> Result<Json<CommandResult>, TransportError> {
+        reject_browser_origin(&headers)?;
+        let token = bearer_token(&headers)?;
+        if !runtime_v2_projector_report_allowed(&envelope.command) {
+            return Err(TransportError::forbidden("Companion report is not allowed"));
+        }
+        let (result, public) = {
+            let mut state = service.native.lock().map_err(|_| TransportError::internal())?;
+            authenticate(&state, token)?;
+            state.require_controller().map_err(|_| TransportError::forbidden("host unavailable"))?;
+            let result = state.runtime.dispatch_envelope(envelope)
+                .map_err(|_| TransportError::bad_request("Companion report was rejected"))?;
+            (result, state.public())
+        };
+        if let Some(app) = APP_HANDLE.get() {
+            publish_public_state(app, &public);
+        } else if let Ok(state) = service.native.lock() {
+            let _ = state.companion_states.send(public);
+        }
+        Ok(Json(result))
     }
 
     async fn stream(
@@ -1387,6 +1427,62 @@ mod native_companion_transport {
             .expect("frame");
             assert_eq!(frame.kind, CompanionFrameKind::Snapshot);
 
+            let sound_report = CommandEnvelope {
+                protocol_version: sdb_contracts::PROTOCOL_VERSION,
+                command_id: "sound-ready".into(),
+                runtime_instance_id: frame.runtime_instance_id.clone(),
+                expected_revision: Some(frame.revision),
+                command: crate::RuntimeCommand::ReportSoundStatus {
+                    status: sdb_contracts::SoundStatus::Ready,
+                },
+            };
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::post("/api/v2/companion/runtime/reports")
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(serde_json::to_vec(&sound_report).expect("report")))
+                        .expect("request"),
+                )
+                .await
+                .expect("unauthenticated report response");
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::post("/api/v2/companion/runtime/reports")
+                        .header(header::AUTHORIZATION, format!("Bearer {}", grant.token))
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(serde_json::to_vec(&sound_report).expect("report")))
+                        .expect("request"),
+                )
+                .await
+                .expect("authenticated report response");
+            assert_eq!(response.status(), StatusCode::OK);
+
+            let forbidden_report = CommandEnvelope {
+                protocol_version: sdb_contracts::PROTOCOL_VERSION,
+                command_id: "forbidden-reset".into(),
+                runtime_instance_id: frame.runtime_instance_id.clone(),
+                expected_revision: Some(frame.revision + 1),
+                command: crate::RuntimeCommand::ResetCalibration,
+            };
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::post("/api/v2/companion/runtime/reports")
+                        .header(header::AUTHORIZATION, format!("Bearer {}", grant.token))
+                        .header(header::CONTENT_TYPE, "application/json")
+                        .body(Body::from(
+                            serde_json::to_vec(&forbidden_report).expect("forbidden report"),
+                        ))
+                        .expect("request"),
+                )
+                .await
+                .expect("forbidden report response");
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+
             let response = app
                 .clone()
                 .oneshot(
@@ -1504,8 +1600,8 @@ mod native_companion_transport {
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 mod native_companion_client {
     use super::{
-        CompanionFrame, DiscoveredCompanionHost, PairingGrant, PairingRequest, ReplicaCursor,
-        ReplicaDecision, certificate_sha256, now_ms,
+        CommandEnvelope, CommandResult, CompanionFrame, DiscoveredCompanionHost, PairingGrant,
+        PairingRequest, ReplicaCursor, ReplicaDecision, certificate_sha256, now_ms,
     };
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     use futures_util::{SinkExt, StreamExt};
@@ -1733,6 +1829,72 @@ mod native_companion_client {
         let (status, body) = parsed?;
         if status != 200 {
             return Err("pairing was rejected by the Controller".into());
+        }
+        Ok(body)
+    }
+
+    pub(super) async fn report(
+        host: &DiscoveredCompanionHost,
+        grant: &ActiveGrant,
+        envelope: &CommandEnvelope,
+    ) -> Result<CommandResult, String> {
+        if host.host_id != grant.host_id
+            || host.protocol_version != sdb_companion::COMPANION_PROTOCOL_VERSION
+            || !host.tls
+        {
+            return Err("discovered Controller identity changed".into());
+        }
+        let body = serde_json::to_vec(envelope).map_err(|_| "Companion report is invalid")?;
+        if body.len() > 64 * 1_024 {
+            return Err("Companion report exceeds size limit".into());
+        }
+        let mut response = post_authenticated_json(
+            host,
+            grant,
+            "/api/v2/companion/runtime/reports",
+            &body,
+        )
+        .await?;
+        let result = serde_json::from_slice(&response)
+            .map_err(|_| "invalid Companion report response".to_owned());
+        response.zeroize();
+        result
+    }
+
+    async fn post_authenticated_json(
+        host: &DiscoveredCompanionHost,
+        grant: &ActiveGrant,
+        path: &str,
+        body: &[u8],
+    ) -> Result<Vec<u8>, String> {
+        let mut tls = connect(host, verified_client_config(&grant.certificate_der)?).await?;
+        let authority = format!("{}.local", host.host_id);
+        let mut header = Zeroizing::new(format!(
+            "POST {path} HTTP/1.1\r\nHost: {authority}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            grant.token.as_str(), body.len()
+        ));
+        tls.write_all(header.as_bytes())
+            .await
+            .map_err(|_| "Companion report failed")?;
+        header.zeroize();
+        tls.write_all(body)
+            .await
+            .map_err(|_| "Companion report failed")?;
+        let mut response = Vec::new();
+        tls.take(MAX_HTTP_RESPONSE_BYTES + 1)
+            .read_to_end(&mut response)
+            .await
+            .map_err(|_| "Companion report response failed")?;
+        if response.len() as u64 > MAX_HTTP_RESPONSE_BYTES {
+            response.zeroize();
+            return Err("Companion report response exceeds size limit".into());
+        }
+        let parsed = parse_http_response(&response);
+        response.zeroize();
+        let (status, mut body) = parsed?;
+        if status != 200 {
+            body.zeroize();
+            return Err("Companion report was rejected by the Controller".into());
         }
         Ok(body)
     }
@@ -2013,6 +2175,7 @@ struct NativeCompanionService {
     probed_target: AsyncMutex<Option<native_companion_client::ProbedTarget>>,
     active_grant: AsyncMutex<Option<native_companion_client::ActiveGrant>>,
     client_status: Arc<Mutex<Option<CompanionClientView>>>,
+    client_frame: Arc<Mutex<Option<PublicState>>>,
     client_task: AsyncMutex<Option<JoinHandle<()>>>,
 }
 
@@ -2045,6 +2208,28 @@ fn publish_companion_client_status(
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
+fn companion_v2_envelope(state: &PublicState) -> Envelope<RuntimePublicSnapshot> {
+    Envelope::new(
+        state.runtime_instance_id.clone(),
+        Uuid::new_v4().to_string(),
+        state.revision,
+        MessageKind::State,
+        state.runtime.clone(),
+    )
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn clear_companion_client_frame(
+    app: &tauri::AppHandle,
+    frame: &Arc<Mutex<Option<PublicState>>>,
+) {
+    if let Ok(mut current) = frame.lock() {
+        *current = None;
+    }
+    let _ = app.emit("companion-projector-v2-disconnected", ());
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 async fn stop_companion_client(service: &NativeCompanionService) {
     if let Some(task) = service.client_task.lock().await.take() {
         task.abort();
@@ -2063,8 +2248,9 @@ async fn restart_companion_client(app: &tauri::AppHandle, service: &NativeCompan
     };
     let app = app.clone();
     let status = service.client_status.clone();
+    let frame = service.client_frame.clone();
     let task = tauri::async_runtime::spawn(async move {
-        companion_client_loop(app, status, grant).await;
+        companion_client_loop(app, status, frame, grant).await;
     });
     *service.client_task.lock().await = Some(task);
 }
@@ -2073,6 +2259,7 @@ async fn restart_companion_client(app: &tauri::AppHandle, service: &NativeCompan
 async fn companion_client_loop(
     app: tauri::AppHandle,
     status: Arc<Mutex<Option<CompanionClientView>>>,
+    frame: Arc<Mutex<Option<PublicState>>>,
     grant: native_companion_client::ActiveGrant,
 ) {
     let mut retry_seconds = 1_u64;
@@ -2081,6 +2268,7 @@ async fn companion_client_loop(
             .ok()
             .and_then(|hosts| hosts.into_iter().find(|host| host.host_id == grant.host_id));
         let Some(host) = host else {
+            clear_companion_client_frame(&app, &frame);
             publish_companion_client_status(
                 &app,
                 &status,
@@ -2098,21 +2286,29 @@ async fn companion_client_loop(
             &status,
             companion_client_view(&grant, &host.service_name, CompanionClientPhase::Connecting),
         );
+        clear_companion_client_frame(&app, &frame);
         let frame_app = app.clone();
         let frame_status = status.clone();
+        let frame_cache = frame.clone();
         let frame_grant = grant.clone();
         let service_name = host.service_name.clone();
         let result = native_companion_client::replicate(&host, &grant, move |state| {
+            let envelope = companion_v2_envelope(&state);
             let mut view =
                 companion_client_view(&frame_grant, &service_name, CompanionClientPhase::Connected);
             view.runtime_instance_id = Some(state.runtime_instance_id.clone());
             view.revision = Some(state.revision);
+            if let Ok(mut current) = frame_cache.lock() {
+                *current = Some(state.clone());
+            }
             publish_companion_client_status(&frame_app, &frame_status, view);
             let _ = frame_app.emit("companion-projector-frame", state);
+            let _ = frame_app.emit("companion-projector-v2-state", envelope);
         })
         .await;
         match result {
             Err(native_companion_client::SessionError::Authorization) => {
+                clear_companion_client_frame(&app, &frame);
                 publish_companion_client_status(
                     &app,
                     &status,
@@ -2125,6 +2321,7 @@ async fn companion_client_loop(
                 return;
             }
             Err(native_companion_client::SessionError::Retry(error)) => {
+                clear_companion_client_frame(&app, &frame);
                 eprintln!("Companion projector reconnecting: {error}");
                 publish_companion_client_status(
                     &app,
@@ -2845,6 +3042,94 @@ fn companion_client_status(
 
 #[tauri::command]
 #[cfg(any(target_os = "ios", target_os = "macos"))]
+fn companion_projector_v2_bootstrap(
+    state: State<'_, SharedNativeState>,
+    service: State<'_, NativeCompanionService>,
+) -> Result<Envelope<RuntimePublicSnapshot>, String> {
+    state.lock().map_err(|error| error.to_string())?.require_companion()?;
+    service
+        .client_frame
+        .lock()
+        .map_err(|error| error.to_string())?
+        .as_ref()
+        .map(companion_v2_envelope)
+        .ok_or_else(|| "Companion snapshot is not connected".into())
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn companion_projector_v2_bootstrap(
+    _state: State<'_, SharedNativeState>,
+) -> Result<Envelope<RuntimePublicSnapshot>, String> {
+    Err("native Companion projector is not available on this platform".into())
+}
+
+#[tauri::command]
+fn companion_projector_v2_query(
+    state: State<'_, SharedNativeState>,
+    path: String,
+) -> Result<serde_json::Value, String> {
+    let state = state.lock().map_err(|error| error.to_string())?;
+    companion_projector_v2_query_value(&state, &path)
+}
+
+fn companion_projector_v2_query_value(
+    state: &NativeState,
+    path: &str,
+) -> Result<serde_json::Value, String> {
+    if path.len() > 512 {
+        return Err("Companion projector query is too long".into());
+    }
+    state.require_companion()?;
+    match path {
+        "/api/v2/modes" => {
+            serde_json::to_value(registered_game_metadata()).map_err(|error| error.to_string())
+        }
+        "/api/v2/players" | "/api/v2/statistics/players" => Ok(serde_json::json!([])),
+        "/api/v2/host" => Ok(serde_json::json!({
+            "app_role": "companion_projector",
+            "board": {"enabled": false, "phase": "disabled"},
+            "test_events": false,
+        })),
+        _ => Err("unsupported Companion projector query".into()),
+    }
+}
+
+#[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+async fn companion_projector_v2_report(
+    state: State<'_, SharedNativeState>,
+    service: State<'_, NativeCompanionService>,
+    envelope: CommandEnvelope,
+) -> Result<CommandResult, String> {
+    {
+        let state = state.lock().map_err(|error| error.to_string())?;
+        state.require_companion()?;
+    }
+    if !runtime_v2_projector_report_allowed(&envelope.command) {
+        return Err("Companion may only report geometry or sound status".into());
+    }
+    let grant = service.active_grant.lock().await.clone()
+        .filter(native_companion_client::ActiveGrant::is_usable)
+        .ok_or_else(|| "Companion is not paired".to_owned())?;
+    let host = apple_bonjour::browser_snapshot()?
+        .into_iter()
+        .find(|host| host.host_id == grant.host_id)
+        .ok_or_else(|| "paired Controller is not available".to_owned())?;
+    native_companion_client::report(&host, &grant, &envelope).await
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn companion_projector_v2_report(
+    _state: State<'_, SharedNativeState>,
+    _envelope: CommandEnvelope,
+) -> Result<CommandResult, String> {
+    Err("native Companion projector is not available on this platform".into())
+}
+
+#[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 async fn app_role_select(
     app: tauri::AppHandle,
     state: State<'_, SharedNativeState>,
@@ -3146,6 +3431,7 @@ pub fn run() {
                 probed_target: AsyncMutex::new(None),
                 active_grant: AsyncMutex::new(active_grant),
                 client_status,
+                client_frame: Arc::new(Mutex::new(None)),
                 client_task: AsyncMutex::new(None),
             });
             #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -3229,6 +3515,9 @@ pub fn run() {
             companion_pairing_prepare,
             companion_pairing_complete,
             companion_client_status,
+            companion_projector_v2_bootstrap,
+            companion_projector_v2_query,
+            companion_projector_v2_report,
             app_role_select,
             projector_output_select
         ])
@@ -3451,6 +3740,27 @@ mod tests {
         })
         .await
         .expect("WebSocket subscription timeout");
+        let report = native_companion_client::report(
+            &target.host,
+            &active_grant,
+            &CommandEnvelope {
+                protocol_version: sdb_contracts::PROTOCOL_VERSION,
+                command_id: "companion-sound-ready".into(),
+                runtime_instance_id: initial.runtime_instance_id.clone(),
+                expected_revision: Some(initial.revision),
+                command: RuntimeCommand::ReportSoundStatus {
+                    status: sdb_contracts::SoundStatus::Ready,
+                },
+            },
+        )
+        .await
+        .expect("authenticated Companion report");
+        assert_eq!(report.revision, initial.revision + 1);
+        let reported = tokio::time::timeout(std::time::Duration::from_secs(3), received.recv())
+            .await
+            .expect("report state timeout")
+            .expect("report state frame");
+        assert_eq!(reported.runtime.settings.sound.status, sdb_contracts::SoundStatus::Ready);
         let updated = {
             let mut state = state.lock().expect("state");
             let public = state.ingest_test_hit().expect("test hit");
@@ -3464,8 +3774,12 @@ mod tests {
             .await
             .expect("state timeout")
             .expect("state frame");
-        assert_eq!(initial.revision + 1, replicated.revision);
+        assert_eq!(reported.revision + 1, replicated.revision);
         assert_eq!(replicated, updated);
+        let product = companion_v2_envelope(&replicated);
+        assert_eq!(product.runtime_instance_id, replicated.runtime_instance_id);
+        assert_eq!(product.revision, replicated.revision);
+        assert_eq!(product.payload, replicated.runtime);
         state
             .lock()
             .expect("state")
@@ -3521,6 +3835,18 @@ mod tests {
             assert_eq!(public.board.phase, BoardPhase::Disabled);
             assert!(state.ingest_test_hit().is_err());
             assert!(state.ingest_board_packet("stale-board", &[0; 10]).is_err());
+            assert!(
+                companion_projector_v2_query_value(&state, "/api/v2/modes")
+                    .expect("mode metadata")
+                    .as_array()
+                    .is_some_and(|modes| modes.len() == 24)
+            );
+            assert_eq!(
+                companion_projector_v2_query_value(&state, "/api/v2/host")
+                    .expect("read-only host")["test_events"],
+                false
+            );
+            assert!(companion_projector_v2_query_value(&state, "/api/v2/data/export").is_err());
             revision
         };
 
