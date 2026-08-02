@@ -147,6 +147,9 @@ impl DartEvent {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RuntimeCommand {
+    CreatePlayer {
+        player: PlayerRef,
+    },
     StartSession {
         session_id: String,
         players: Vec<PlayerRef>,
@@ -155,6 +158,7 @@ pub enum RuntimeCommand {
         game_type: String,
         options: Value,
     },
+    CancelPreparedGame,
     StartPreparedGame {
         game_id: String,
     },

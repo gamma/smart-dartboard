@@ -20,6 +20,9 @@ use thiserror::Error;
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RuntimeAction {
+    CreatePlayer {
+        player: PlayerRef,
+    },
     StartSession {
         session_id: String,
         players: Vec<PlayerRef>,
@@ -28,6 +31,7 @@ pub enum RuntimeAction {
         game_type: String,
         options: serde_json::Value,
     },
+    CancelPreparedGame,
     StartPreparedGame {
         game_id: String,
     },
@@ -435,6 +439,7 @@ impl<R: Repository> Runtime<R> {
 
 fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractError> {
     match command {
+        RuntimeCommand::CreatePlayer { player } => Ok(RuntimeAction::CreatePlayer { player }),
         RuntimeCommand::StartSession {
             session_id,
             players,
@@ -445,6 +450,7 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
         RuntimeCommand::PrepareGame { game_type, options } => {
             Ok(RuntimeAction::PrepareGame { game_type, options })
         }
+        RuntimeCommand::CancelPreparedGame => Ok(RuntimeAction::CancelPreparedGame),
         RuntimeCommand::StartPreparedGame { game_id } => {
             Ok(RuntimeAction::StartPreparedGame { game_id })
         }
@@ -564,8 +570,14 @@ fn runtime_contract_error(error: &RuntimeError) -> ContractError {
     contract_error(code, &error.to_string(), None)
 }
 
+#[allow(clippy::too_many_lines)] // One exhaustive match keeps every atomic runtime transition visible.
 fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result<(), RuntimeError> {
     match action {
+        RuntimeAction::CreatePlayer { player } => {
+            if !valid_player_profile(&player) {
+                return Err(SessionError::InvalidPlayer.into());
+            }
+        }
         RuntimeAction::StartSession {
             session_id,
             players,
@@ -575,6 +587,9 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
         }
         RuntimeAction::PrepareGame { game_type, options } => {
             snapshot.session.prepare_game(game_type, options)?;
+        }
+        RuntimeAction::CancelPreparedGame => {
+            snapshot.session.cancel_prepared_game()?;
         }
         RuntimeAction::StartPreparedGame { game_id } => {
             start_prepared_game(snapshot, game_id, false)?;
@@ -660,6 +675,20 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
         }
     }
     Ok(())
+}
+
+fn valid_player_profile(player: &PlayerRef) -> bool {
+    player.id.len() <= 128
+        && !player.id.is_empty()
+        && !player.name.trim().is_empty()
+        && player.name.chars().count() <= 32
+        && !player.avatar.is_empty()
+        && player.avatar.len() <= 32
+        && player.color.len() == 7
+        && player.color.starts_with('#')
+        && player.color[1..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn apply_player_boundary(

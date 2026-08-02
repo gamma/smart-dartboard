@@ -1940,6 +1940,76 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn setup_commands_persist_profiles_and_cancel_prepared_games() {
+        let app = test_app();
+        let commands = [
+            serde_json::json!({
+                "type":"create_player",
+                "player":{"id":"ada","name":"Ada","avatar":"nova","color":"#ff00aa"}
+            }),
+            serde_json::json!({
+                "type":"start_session",
+                "session_id":"setup-session",
+                "players":[{"id":"ada","name":"Ada","avatar":"nova","color":"#ff00aa"}]
+            }),
+            serde_json::json!({
+                "type":"prepare_game",
+                "game_type":"countup",
+                "options":{"rounds":5}
+            }),
+            serde_json::json!({"type":"cancel_prepared_game"}),
+        ];
+        for (revision, command) in commands.into_iter().enumerate() {
+            let result = post_command(
+                &app,
+                serde_json::json!({
+                    "protocol_version":PROTOCOL_VERSION,
+                    "command_id":format!("setup-{revision}"),
+                    "runtime_instance_id":"test-runtime",
+                    "expected_revision":revision,
+                    "command":command,
+                }),
+            )
+            .await;
+            assert_eq!(result["revision"], revision + 1);
+        }
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::get("/api/v2/players")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        let players: Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("players");
+        assert_eq!(players[0]["id"], "ada");
+
+        let state = app
+            .oneshot(
+                Request::get("/api/v2/runtime/snapshot")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        let state: Value =
+            serde_json::from_slice(&to_bytes(state.into_body(), usize::MAX).await.expect("body"))
+                .expect("state");
+        assert_eq!(
+            state["payload"]["session"]["state"]["screen"],
+            "game_select"
+        );
+        assert!(state["payload"]["session"]["state"]["prepared_game"].is_null());
+    }
+
+    #[tokio::test]
     #[allow(clippy::too_many_lines)] // Covers commands, history, replay and 404 as one API flow.
     async fn correction_commands_replay_x01_through_the_public_contract() {
         let app = test_app();

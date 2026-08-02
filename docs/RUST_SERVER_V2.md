@@ -4,9 +4,10 @@ Stand: 2026-08-02
 
 Der Rust-Server ist der parallele Migrationspfad für Linux und Docker. Er
 ersetzt die produktive Python-API noch nicht. Die bestehende UI wird weiterhin
-vom Python-Container bedient, bis Sessions, alle Modi, Statistiken und BLE
-paritätisch portiert sind. Der Vorschau-Server liefert deshalb absichtlich noch
-keine scheinbar funktionsfähigen Control-/Projector-Seiten aus.
+vom Python-Container bedient, bis RuntimeClient, Setup-Präferenzen, Statistik-
+und BLE-Pfade paritätisch angeschlossen sind. Der Vorschau-Server liefert
+deshalb absichtlich noch keine scheinbar funktionsfähigen Control-/Projector-
+Seiten aus.
 
 ## Start
 
@@ -96,6 +97,12 @@ Browser-POSTs und WebSockets akzeptieren nur dieselbe Origin. Clients ohne
 `Origin`, etwa lokale Diagnosewerkzeuge, bleiben möglich. Unvereinbare
 Protokollversionen, falsche Runtime-IDs und veraltete Revisionen liefern stabile
 Fehlercodes und passende HTTP-Statuscodes.
+
+Spielerprofile werden vor einer Session mit dem Runtime-Command
+`create_player` atomar angelegt. `cancel_prepared_game` führt aus der Anleitung
+zur Modusauswahl zurück, ohne ein Spiel anzulegen oder zu werten. Beide
+Mutationen laufen wie Spielbefehle über dasselbe `CommandEnvelope`, dieselbe
+Revision und dieselbe SQLite-Transaktion.
 
 Die beiden Board-Endpunkte sind keine Browser-API. Sie verlangen
 `Authorization: Bearer <SDB_BOARD_TOKEN>`. Bei aktiviertem BLE startet der

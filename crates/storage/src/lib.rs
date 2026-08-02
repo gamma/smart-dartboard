@@ -1250,6 +1250,17 @@ fn project_domain(
         serde_json::from_str(request.snapshot_json).map_err(|error| error.to_string())?;
 
     match &action {
+        RuntimeAction::CreatePlayer { player } => {
+            transaction
+                .execute(
+                    "INSERT INTO players(id, name, avatar, color)
+                     VALUES(?1, ?2, ?3, ?4)
+                     ON CONFLICT(id) DO UPDATE SET
+                       name=excluded.name, avatar=excluded.avatar, color=excluded.color",
+                    params![player.id, player.name, player.avatar, player.color],
+                )
+                .map_err(|error| error.to_string())?;
+        }
         RuntimeAction::StartSession {
             session_id,
             players,
@@ -1395,6 +1406,7 @@ fn project_domain(
             }
         }
         RuntimeAction::PrepareGame { .. }
+        | RuntimeAction::CancelPreparedGame
         | RuntimeAction::MarkGamePlaying
         | RuntimeAction::SelectStarter { .. }
         | RuntimeAction::NextGame

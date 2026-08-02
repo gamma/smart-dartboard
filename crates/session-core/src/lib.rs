@@ -199,6 +199,23 @@ impl SessionCore {
         Ok(&self.state)
     }
 
+    /// Returns from instructions to mode selection without starting a game.
+    ///
+    /// # Errors
+    ///
+    /// Requires an active session with a currently prepared game.
+    pub fn cancel_prepared_game(&mut self) -> Result<&SessionState, SessionError> {
+        self.require_active_session()?;
+        if self.state.screen != Screen::Instructions || self.state.prepared_game.is_none() {
+            return Err(SessionError::NoPreparedGame);
+        }
+        self.state.prepared_game = None;
+        self.state.selected_starter_id = self.state.default_starter_id.clone();
+        self.state.starter_selection = StarterSelection::Rotation;
+        self.state.screen = Screen::GameSelect;
+        Ok(&self.state)
+    }
+
     /// Chooses a host-selected manual or deterministic random starter.
     ///
     /// # Errors
@@ -506,6 +523,27 @@ mod tests {
         let lineup = session.start_game("game").expect("start");
         assert_eq!(lineup[0].id, "bob");
         assert_eq!(session.state.starter_selection, StarterSelection::Manual);
+    }
+
+    #[test]
+    fn cancelling_instructions_returns_to_game_selection() {
+        let mut session = SessionCore::default();
+        session
+            .start_session("session", players())
+            .expect("session");
+        session
+            .prepare_game("countup", serde_json::json!({"rounds": 5}))
+            .expect("prepare");
+        session
+            .select_starter("bob", StarterSelection::Manual)
+            .expect("starter");
+
+        session.cancel_prepared_game().expect("cancel");
+
+        assert_eq!(session.state.screen, Screen::GameSelect);
+        assert!(session.state.prepared_game.is_none());
+        assert_eq!(session.state.selected_starter_id.as_deref(), Some("ada"));
+        assert_eq!(session.state.starter_selection, StarterSelection::Rotation);
     }
 
     #[test]
