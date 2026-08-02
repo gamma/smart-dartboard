@@ -438,7 +438,12 @@ function renderConnection(){
   const hardware=appState.experience?.hardware;
   const boardReady=!hardware?.enabled || hardware.status==='connected';
   const cssClass=!appState.wsOk?'':boardReady?'online':'searching';
-  const label=!appState.wsOk?'OFFLINE':boardReady?'LIVE':hardware?.status==='error'?t('board_error'):t('board_searching');
+  const boardLabels={
+    error:'board_error',disconnected:'board_disconnected',bluetooth_off:'board_bluetooth_off',
+    permission_required:'board_permission_required',unavailable:'board_unavailable',
+    connecting:'board_connecting',searching:'board_searching',
+  };
+  const label=!appState.wsOk?'OFFLINE':boardReady?'LIVE':t(boardLabels[hardware?.status] || 'board_searching');
   element.innerHTML = `<i class="${cssClass}"></i>${label}`;
 }
 function render(){

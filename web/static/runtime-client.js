@@ -41,6 +41,9 @@
       this.socket=null;
       this.retryTimer=null;
       this.resyncing=null;
+      this.hostStopped=false;
+      this.hostSocket=null;
+      this.hostRetryTimer=null;
     }
 
     async request(path,options){
@@ -164,12 +167,44 @@
       return ()=>this.close();
     }
 
+    subscribeHost(listener){
+      this.hostStopped=false;
+      const connect=()=>{
+        if(this.hostStopped) return;
+        const protocol=this.location.protocol==='https:'?'wss':'ws';
+        this.hostSocket=new global.WebSocket(
+          `${protocol}://${this.location.host}/api/v2/host/events`,
+        );
+        this.hostSocket.onmessage=message=>{
+          try{ listener(JSON.parse(message.data)); }
+          catch(error){ listener(null,error); this.hostSocket?.close(); }
+        };
+        this.hostSocket.onclose=()=>{
+          if(!this.hostStopped) this.hostRetryTimer=global.setTimeout(connect,1000);
+        };
+        this.hostSocket.onerror=()=>this.hostSocket?.close();
+      };
+      connect();
+      return ()=>{
+        this.hostStopped=true;
+        if(this.hostRetryTimer) global.clearTimeout(this.hostRetryTimer);
+        this.hostRetryTimer=null;
+        this.hostSocket?.close();
+        this.hostSocket=null;
+      };
+    }
+
     close(){
       this.stopped=true;
       if(this.retryTimer) global.clearTimeout(this.retryTimer);
       this.retryTimer=null;
       this.socket?.close();
       this.socket=null;
+      this.hostStopped=true;
+      if(this.hostRetryTimer) global.clearTimeout(this.hostRetryTimer);
+      this.hostRetryTimer=null;
+      this.hostSocket?.close();
+      this.hostSocket=null;
     }
   }
 

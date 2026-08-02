@@ -8,9 +8,11 @@ const repository=resolve(import.meta.dirname,'../../..');
 const dataDirectory=await mkdtemp(`${tmpdir()}/sdb-rust-ui-`);
 const port='18082';
 const origin=`http://127.0.0.1:${port}`;
+const boardToken='webkit-board-token-0123456789abcdef0123456789abcdef';
 const server=spawn('cargo',['run','-p','sdb-server'],{
   cwd:repository,
-  env:{...process.env,SDB_BIND:'127.0.0.1',SDB_PORT:port,SDB_ENABLE_BLE:'0',
+  env:{...process.env,SDB_BIND:'127.0.0.1',SDB_PORT:port,SDB_ENABLE_BLE:'1',
+    SDB_BOARD_TOKEN:boardToken,
     SDB_ALLOW_TEST_EVENTS:'1',SDB_DATA_DIR:dataDirectory,SDB_WEB_DIR:resolve(repository,'web')},
   stdio:['ignore','pipe','pipe'],
 });
@@ -39,6 +41,14 @@ async function waitForEffectsDrained(){
   throw new Error('Committed platform effects were not acknowledged');
 }
 
+async function postBoardStatus(status){
+  const response=await fetch(`${origin}/api/v2/board/status`,{
+    method:'POST',headers:{authorization:`Bearer ${boardToken}`,'content-type':'application/json'},
+    body:JSON.stringify(status),
+  });
+  if(!response.ok) throw new Error(`Board status update failed: ${response.status}`);
+}
+
 let browser;
 try{
   await waitUntilReady();
@@ -54,6 +64,30 @@ try{
     page.on('pageerror',error=>browserErrors.push(error.message));
   }
   await Promise.all([control.goto(`${origin}/control`),projector.goto(`${origin}/projector`)]);
+  await Promise.all([control,projector].map(page=>page.waitForFunction(()=>
+    appState.experience?.hardware?.phase==='unavailable')));
+  await control.getByText('BOARD NICHT VERFÜGBAR').waitFor();
+  const boardRevision=await control.evaluate(()=>appState.experience.revision);
+  await postBoardStatus({phase:'scanning'});
+  await Promise.all([control,projector].map(page=>page.waitForFunction(()=>
+    appState.experience?.hardware?.phase==='scanning')));
+  await control.getByText('BOARD WIRD GESUCHT').waitFor();
+  await postBoardStatus({phase:'connecting'});
+  await Promise.all([control,projector].map(page=>page.waitForFunction(()=>
+    appState.experience?.hardware?.phase==='connecting')));
+  await control.getByText('BOARD WIRD VERBUNDEN').waitFor();
+  await postBoardStatus({phase:'ready',connection_id:'webkit-board'});
+  await Promise.all([control,projector].map(page=>page.waitForFunction(()=>
+    appState.experience?.hardware?.status==='connected')));
+  await control.getByText('LIVE').waitFor();
+  await postBoardStatus({phase:'reconnecting'});
+  await Promise.all([control,projector].map(page=>page.waitForFunction(()=>
+    appState.experience?.hardware?.status==='disconnected')));
+  await control.getByText('BOARD GETRENNT').waitFor();
+  await postBoardStatus({phase:'ready',connection_id:'webkit-board-reconnected'});
+  await Promise.all([control,projector].map(page=>page.waitForFunction(revision=>
+    appState.experience?.hardware?.status==='connected'
+      && appState.experience?.revision===revision,boardRevision)));
   await control.getByRole('button',{name:'Einstellungen'}).click();
   const diagnosticDownloadPromise=control.waitForEvent('download');
   await control.locator('[data-action="diagnostic-export"]').click();
@@ -215,7 +249,7 @@ try{
     ?.some(player=>player.id==='imported-webkit'));
   await control.getByText(/Import fertig: 1 Spieler/).waitFor();
   if(browserErrors.length) throw new Error(`Browser errors:\n${browserErrors.join('\n')}`);
-  console.log('Rust Runtime UI: setup, teams, modes, effects, play, analytics, replay, export and confirmed portable import passed in WebKit');
+  console.log('Rust Runtime UI: live board status, setup, teams, modes, effects, play, analytics, replay, export and confirmed portable import passed in WebKit');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');

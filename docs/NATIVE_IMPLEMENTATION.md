@@ -186,7 +186,10 @@ Umgesetzt und lokal verifiziert:
   Interpretation, begrenzter Deduplizierung und stabilen Fehlerzuständen. Ein
   unprivilegierter Linux-Bleak-Sidecar liefert nur Notifications und Status
   über token-authentisierte interne Endpunkte; der reale Containervertrag ist
-  ohne Hardware per D20-Rohpaket verifiziert.
+  ohne Hardware per D20-Rohpaket verifiziert. Der Hosted-Adapterstatus läuft
+  über einen eigenen Same-Origin-WebSocket live in Control und Projector, ohne
+  Spielrevisionen zu erzeugen. Der WebKit-Systemtest belegt Suche, Verbindung,
+  Ready, Trennung und Reconnect samt eindeutigen deutschen Statusmeldungen.
 - gemeinsamer macOS-/iOS-/iPadOS-CoreBluetooth-Host mit State Restoration,
   gespeicherter Peripheral-ID, Namens-/Service-Scan-Fallback und den Phasen
   Berechtigung, Scan, Verbindung, Serviceprüfung, Subscription, Ready und

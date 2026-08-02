@@ -68,11 +68,7 @@
       this.modes=modes;
       this.profiles=profiles;
       this.statistics=statistics;
-      if(this.core instanceof api.TauriRuntimeClient
-        || this.core instanceof api.ExternalProjectorRuntimeClient
-        || this.core instanceof api.CompanionProjectorRuntimeClient){
-        this.host=await this.core.query('/api/v2/host');
-      }
+      this.host=await this.core.query('/api/v2/host') || {};
       return this.experience();
     }
 
@@ -134,7 +130,13 @@
       const boardEnabled=boardPhase!=='disabled';
       const boardStatus=boardPhase==='ready'?'connected'
         : boardPhase==='error'?'error'
-        : boardEnabled?'searching':'disabled';
+        : boardPhase==='reconnecting'?'disconnected'
+        : boardPhase==='bluetooth_off'?'bluetooth_off'
+        : boardPhase==='permission_required'?'permission_required'
+        : boardPhase==='unavailable'?'unavailable'
+        : boardPhase==='connecting' || boardPhase==='discovering' || boardPhase==='subscribing'
+          ?'connecting'
+          :boardEnabled?'searching':'disabled';
       const game=this.normalizeGame();
       const rematchRemaining=Math.max(0,
         Number(session.rematch_armed_until_ms || 0)-Date.now());
@@ -175,7 +177,7 @@
         art_theme:settings.art_theme,
         ui_language:settings.ui_language,
         correction_lock:{active:Boolean(settings.correction_lock)},
-        hardware:{enabled:boardEnabled,status:boardStatus,
+        hardware:{enabled:boardEnabled,status:boardStatus,phase:boardPhase,
           test_events:Boolean(this.host.test_events ?? this.health.test_events)},
         native_host:this.host,
         rematch:{armed:rematchRemaining>0,expires_in_ms:rematchRemaining},
@@ -430,9 +432,7 @@
         const events=this.eventsFromEnvelope(this.envelope);
         if(events.length) this.publishEvents(events);
       });
-      if(this.core instanceof api.TauriRuntimeClient
-        || this.core instanceof api.ExternalProjectorRuntimeClient
-        || this.core instanceof api.CompanionProjectorRuntimeClient){
+      if(typeof this.core.subscribeHost==='function'){
         this.unsubscribeHost=this.core.subscribeHost((host,error)=>{
           if(error){ listener.onClose?.(error); return; }
           this.host=host || {};

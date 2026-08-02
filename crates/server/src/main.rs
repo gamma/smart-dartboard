@@ -48,6 +48,7 @@ struct AppState {
     states: broadcast::Sender<StateMessage>,
     allow_test_events: bool,
     board: Arc<Mutex<BoardState>>,
+    board_changes: broadcast::Sender<BoardStatus>,
     board_token: Option<Arc<str>>,
     companions: Arc<Mutex<PairingAuthority>>,
     companion_changes: broadcast::Sender<()>,
@@ -64,6 +65,13 @@ struct CompanionConfig {
 struct BoardState {
     status: BoardStatus,
     ingress: BoardIngress,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct HostState {
+    app_role: &'static str,
+    board: BoardStatus,
+    test_events: bool,
 }
 
 #[derive(Serialize)]
@@ -249,6 +257,7 @@ impl AppState {
         companion_config: Option<CompanionConfig>,
     ) -> Result<Self, sdb_storage::StorageError> {
         let (states, _) = broadcast::channel(64);
+        let (board_changes, _) = broadcast::channel(16);
         let (companion_changes, _) = broadcast::channel(16);
         let companion_devices = runtime.repository().companion_devices()?;
         Ok(Self {
@@ -263,6 +272,7 @@ impl AppState {
                 },
                 ingress: BoardIngress::new(),
             })),
+            board_changes,
             board_token: board_token.map(Arc::from),
             companions: Arc::new(Mutex::new(PairingAuthority::from_devices(
                 companion_devices,
@@ -324,6 +334,8 @@ fn router(state: AppState) -> Router {
         .nest_service("/static", ServeDir::new(web_dir.join("static")))
         .route("/api/v2", get(service_info))
         .route("/api/v2/health", get(health))
+        .route("/api/v2/host", get(host_state))
+        .route("/api/v2/host/events", get(host_websocket))
         .route("/api/v2/runtime/bootstrap", get(bootstrap))
         .route("/api/v2/runtime/snapshot", get(snapshot))
         .route("/api/v2/runtime/commands", post(command))
@@ -438,6 +450,24 @@ async fn health(State(state): State<AppState>) -> Result<Json<Health>, ApiError>
     }))
 }
 
+async fn host_state(State(state): State<AppState>) -> Result<Json<HostState>, ApiError> {
+    Ok(Json(current_host_state(&state)?))
+}
+
+fn current_host_state(state: &AppState) -> Result<HostState, ContractError> {
+    let board = state
+        .board
+        .lock()
+        .map_err(|_| internal_error("board lock poisoned"))?
+        .status
+        .clone();
+    Ok(HostState {
+        app_role: "controller",
+        board,
+        test_events: state.allow_test_events,
+    })
+}
+
 async fn board_status(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -461,6 +491,7 @@ async fn board_status(
     };
     let status = board.status.clone();
     drop(board);
+    let _ = state.board_changes.send(status.clone());
     let runtime = state
         .runtime
         .lock()
@@ -1194,6 +1225,47 @@ async fn websocket(
     Ok(upgrade.on_upgrade(move |socket| stream_states(socket, initial, receiver)))
 }
 
+async fn host_websocket(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    upgrade: WebSocketUpgrade,
+) -> Result<Response, ApiError> {
+    validate_websocket_origin(&headers)?;
+    let receiver = state.board_changes.subscribe();
+    let initial = current_host_state(&state)?;
+    Ok(upgrade.on_upgrade(move |socket| stream_host_states(socket, initial, receiver)))
+}
+
+async fn stream_host_states(
+    mut socket: axum::extract::ws::WebSocket,
+    initial: HostState,
+    mut receiver: broadcast::Receiver<BoardStatus>,
+) {
+    let test_events = initial.test_events;
+    if send_host_state(&mut socket, &initial).await.is_err() {
+        return;
+    }
+    while let Ok(board) = receiver.recv().await {
+        let state = HostState {
+            app_role: "controller",
+            board,
+            test_events,
+        };
+        if send_host_state(&mut socket, &state).await.is_err() {
+            return;
+        }
+    }
+    let _ = socket.send(Message::Close(None)).await;
+}
+
+async fn send_host_state(
+    socket: &mut axum::extract::ws::WebSocket,
+    state: &HostState,
+) -> Result<(), axum::Error> {
+    let json = serde_json::to_string(state).map_err(axum::Error::new)?;
+    socket.send(Message::Text(json.into())).await
+}
+
 async fn stream_states(
     mut socket: axum::extract::ws::WebSocket,
     initial: StateMessage,
@@ -1700,6 +1772,7 @@ mod tests {
         assert_eq!(bootstrap.status(), StatusCode::OK);
 
         for path in [
+            "/api/v2/host",
             "/api/v2/modes",
             "/api/v2/players",
             "/api/v2/history/sessions?limit=10",
@@ -2349,6 +2422,98 @@ mod tests {
             result["state"]["state"]["editable_darts"][0]["event"]["type"],
             "miss"
         );
+    }
+
+    #[tokio::test]
+    async fn hosted_board_status_streams_without_a_runtime_revision() {
+        let app = board_test_app();
+        let host = app
+            .clone()
+            .oneshot(
+                Request::get("/api/v2/host")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        let host: Value =
+            serde_json::from_slice(&to_bytes(host.into_body(), usize::MAX).await.expect("body"))
+                .expect("host state");
+        assert_eq!(host["app_role"], "controller");
+        assert_eq!(host["board"]["phase"], "unavailable");
+
+        let listener = tokio::net::TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
+            .await
+            .expect("listener");
+        let address = listener.local_addr().expect("address");
+        let server = tokio::spawn(axum::serve(listener, app.clone()).into_future());
+        let (mut board_states, _) = connect_async(format!("ws://{address}/api/v2/host/events"))
+            .await
+            .expect("connect host stream");
+        let initial: Value = serde_json::from_str(
+            board_states
+                .next()
+                .await
+                .expect("initial host state")
+                .expect("initial host message")
+                .to_text()
+                .expect("text frame"),
+        )
+        .expect("initial host JSON");
+        assert_eq!(initial["board"]["phase"], "unavailable");
+
+        post_board(
+            &app,
+            "/api/v2/board/status",
+            serde_json::json!({"phase": "scanning"}),
+        )
+        .await;
+        let scanning: Value = serde_json::from_str(
+            board_states
+                .next()
+                .await
+                .expect("scanning state")
+                .expect("scanning message")
+                .to_text()
+                .expect("text frame"),
+        )
+        .expect("scanning JSON");
+        assert_eq!(scanning["board"]["phase"], "scanning");
+
+        post_board(
+            &app,
+            "/api/v2/board/status",
+            serde_json::json!({"phase": "ready", "connection_id": "stream-link"}),
+        )
+        .await;
+        let ready: Value = serde_json::from_str(
+            board_states
+                .next()
+                .await
+                .expect("ready state")
+                .expect("ready message")
+                .to_text()
+                .expect("text frame"),
+        )
+        .expect("ready JSON");
+        assert_eq!(ready["board"]["phase"], "ready");
+
+        let runtime = app
+            .oneshot(
+                Request::get("/api/v2/runtime/bootstrap")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("runtime response");
+        let runtime: Value = serde_json::from_slice(
+            &to_bytes(runtime.into_body(), usize::MAX)
+                .await
+                .expect("runtime body"),
+        )
+        .expect("runtime JSON");
+        assert_eq!(runtime["revision"], 0);
+        server.abort();
     }
 
     #[tokio::test]

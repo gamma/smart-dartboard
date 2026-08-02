@@ -137,6 +137,8 @@ begrenztem Proxy-Netz.
 | `GET` | `/projector` | gemeinsame Projektoransicht mit Runtime-v2-Livestate |
 | `GET` | `/api/v2` | maschinenlesbare Dienst- und API-Information |
 | `GET` | `/api/v2/health` | Runtime-, Datenbank-, Board-, Protokoll- und Schemastatus |
+| `GET` | `/api/v2/host` | aktueller Hosted-Adapterstatus für Control und Projector |
+| `GET` | `/api/v2/host/events` | Same-Origin-WebSocket für Board- und Adapterstatus ohne Spielrevision |
 | `GET` | `/api/v2/runtime/bootstrap` | vollständiger versionierter Snapshot |
 | `GET` | `/api/v2/runtime/snapshot` | erneuter Snapshot nach Lücke oder Reconnect |
 | `POST` | `/api/v2/runtime/commands` | ein `CommandEnvelope` atomar anwenden |
@@ -261,6 +263,10 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 - kanonische Dart-Events übernehmen,
 - rohe FFF1-Notifications über den Linux-Bleak-Sidecar begrenzt puffern, im
   gemeinsamen Rust-Ingress decodieren und pro Verbindung deduplizieren,
+- Boardstatus vom Linux-Sidecar getrennt vom Spielzustand live an Control und
+  Projector streamen. Suche, Verbindungsaufbau, Ready, Reconnect, ausgeschaltetes
+  Bluetooth, fehlende Berechtigung und Adapterfehler erhalten eindeutige
+  Bedienmeldungen, ohne eine Runtime-Revision oder Spielstatistik zu erzeugen,
 - die Wurfquelle transportneutral als `board`, `projector_test` oder
   `manual_correction` führen; ein Projektor-Testwurf markiert das gesamte Spiel
   als Test und schließt es aus der Standardstatistik aus,
