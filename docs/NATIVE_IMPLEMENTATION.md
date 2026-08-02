@@ -119,6 +119,14 @@ Umgesetzt und lokal verifiziert:
   Post-Migration-Integritätsprüfung und append-only Runtime-Journal. Ein
   injizierter Fehler beim Journal-Insert rollt Snapshot und Deduplizierung mit
   zurück.
+- einmaliger, wiederanlaufbarer Import bestehender Python-Schema-2-Datenbanken
+  für den Linux-/Docker-Wechsel. Fehlt `runtime.sqlite`, wird `dartboard.db`
+  vollständig validiert, per SQLite-Online-Backup unverändert gesichert und nur
+  eine Arbeitskopie bis Schema 6 migriert. Profile, Historie, Würfe,
+  Auditereignisse und Setup-Präferenzen bleiben erhalten; inkompatible laufende
+  Altspiele werden in der Kopie ausdrücklich als unterbrochen markiert. Eine
+  vollständige anonymisierte Python-v2-Fixture belegt Inhalt, Backup,
+  Integrität, Settings-Übernahme und idempotenten Neustart,
 - Transaktionale Historienprojektion für Profile, Sessions, Spiele, Würfe,
   Gewinner und Endstände. Nur beendete Produktionsspiele fließen in die neue
   Spielerstatistik ein; Undo macht Wurf und Sieg unwirksam, ohne das
@@ -259,8 +267,9 @@ Noch nicht als produktionsreif nachgewiesen:
   Produktänderung; alle 24 heutigen Produktmodi sowie Historie, Replay,
   Heatmap, Modusstatistiken, Export und Trainingsempfehlungen sind im Rust-Pfad
   portiert,
-- vollständige Docker-Parität zur Python-Anwendung; der Session-/Spielkernfluss
-  und die statischen Oberflächen sind bereits im Container belegt,
+- vollständige Docker-Bedien- und Hardwareparität zur Python-Anwendung; der
+  Session-/Spielkernfluss, die statischen Oberflächen und der sichere
+  Bestandsdatenimport sind bereits belegt,
 - reale Linux-BlueZ-/Board-Abnahme des neuen Sidecars.
 
 ## Lokale Befehle

@@ -10,8 +10,8 @@ zum synchronen Testtreffer ist in WebKit belegt. Persistierte
 Setup-Präferenzen, Historie, Replay, Statistiken, Training, Export und die
 plattformweite Effect-Outbox sind angeschlossen. Er ersetzt den produktiven
 Python-Pfad trotzdem noch nicht: die Bedienoberfläche für gegnerische Teams,
-Bestandsdatenmigration und reale BLE-Hardware sind noch nicht vollständig
-qualifiziert.
+reale BLE-Hardware und die Bedienabnahme im Spielhallenbetrieb sind noch nicht
+vollständig qualifiziert.
 
 ## Start
 
@@ -37,6 +37,46 @@ http://127.0.0.1:8001/projector
 
 Der Container läuft ohne Root, ohne `privileged` und ohne Linux-Capabilities.
 `/data` enthält `runtime.sqlite`.
+
+## Einmaliger Import der Python-Datenbank
+
+Wenn im Datenverzeichnis noch keine `runtime.sqlite`, aber eine bisherige
+`dartboard.db` mit Python-Schema 2 liegt, importiert der Rust-Host sie beim
+ersten Start automatisch. Vor jeder Änderung erzeugt er mit der SQLite-Online-
+Backup-API den konsistenten, nicht überschriebenen Stand
+`dartboard.db.pre-rust-v6.bak`. Migriert wird ausschließlich eine davon
+abgeleitete Arbeitskopie; `dartboard.db` bleibt unverändert.
+
+Für einen kontrollierten Docker-Test zuerst den Python-Container stoppen und
+anschließend dessen Datenverzeichnis an die Rust-Vorschau geben:
+
+```bash
+docker compose -f compose.production.yml stop
+SDB_RUST_DATA_DIR=./data docker compose -f compose.rust.yml up --build -d
+docker compose -f compose.rust.yml logs dartboard
+curl http://127.0.0.1:8001/api/v2/health
+curl http://127.0.0.1:8001/api/v2/history/sessions
+```
+
+Profile, abgeschlossene Sessions, Spiele, Gewinner, Würfe, Auditereignisse und
+Statistikgrundlagen bleiben erhalten. Kalibrierung, Artwork-Theme, Sprache und
+Soundwahl werden in einen sicheren Runtime-Startzustand übernommen. Ein beim
+Wechsel noch laufendes Python-Spiel und seine aktive Session werden in der
+Rust-Kopie als `interrupted` mit Grund `legacy_runtime_migration` beendet, weil
+die inkompatiblen Live-Snapshots nicht still in einen anderen Ruleset-Core
+übersetzt werden dürfen. Das Original und das Backup behalten den vorherigen
+Zustand.
+
+Existiert bereits `runtime.sqlite`, hat sie immer Vorrang; Datenbanken werden
+nie automatisch zusammengeführt. Für einen erneuten Abnahmelauf die vorhandene
+Rust-Datei daher zuerst umbenennen und aufbewahren. Der nächste Import erzeugt
+für den dann aktuellen Python-Stand eine weitere Backupdatei mit numerischem
+Suffix, statt einen älteren Sicherungsstand zu überschreiben oder
+wiederzuverwenden. Den Host dabei immer zuerst stoppen und gegebenenfalls alle
+Dateien `runtime.sqlite*` gemeinsam archivieren; verwaiste WAL-/SHM-Sidecars
+ohne Hauptdatei entfernt der Importer vor dem neuen Lauf. Ein Rollback besteht
+nur darin, die Rust-Vorschau zu stoppen und den unveränderten Python-Host wieder
+zu starten. Python ignoriert `runtime.sqlite` und die Backupdateien.
 
 Mit echter BLE-Scheibe unter Linux läuft Bleak als separater, unprivilegierter
 Adapter. Zuerst ein zufälliges gemeinsames Secret in `.env` eintragen:
@@ -249,7 +289,6 @@ Noch offen und daher ausdrücklich kein Produktionsersatz:
   V2 eine zurückgestellte Produktänderung bleibt,
 - reale BlueZ-/Boardqualifizierung mit schneller Trefferfolge, Reconnect,
   Adapterausfall und Langzeittest,
-- Migration vorhandener Python-Datenbanken,
 - echte Bedien- und Hardwareabnahme des neuen UI-Pfads jenseits des
   automatisierten WebKit-Kernflusses.
 
@@ -278,6 +317,14 @@ ausdrücklich nicht in diese Tabelle.
 Die bereits seit Schema 1 angelegte `effect_outbox` wird nun produktiv genutzt:
 Sie speichert Effect-ID, erzeugende Revision, den versionierten
 `PlatformEffect` und den Status `pending`, `delivered` oder `discarded`.
+
+Der Dateiumstieg von Python auf Rust ist getrennt von diesen internen
+Schemamigrationen: Der Host erkennt ausschließlich die feste Kombination
+`dartboard.db` → `runtime.sqlite`, validiert das vollständige Python-Schema 2
+und `PRAGMA quick_check`, erstellt den oben beschriebenen Backup-Snapshot und
+benennt die fertig migrierte Arbeitsdatei erst danach atomar um. Eine
+unvollständige oder neuere Quelldatenbank wird abgelehnt, ohne das Original zu
+verändern.
 
 Migrationen laufen fortlaufend und transaktional; eine Datenbank mit neuerer
 unbekannter Schema-Version wird ohne Downgrade oder Schreibversuch abgelehnt. Nach jeder

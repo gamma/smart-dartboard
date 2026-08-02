@@ -1,26 +1,42 @@
 //! Transactional `SQLite` implementation of the runtime repository.
 
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OpenFlags, OptionalExtension, Transaction, backup::Backup, params};
 use sdb_companion::{CompanionRole, PairedDevice};
-use sdb_contracts::{DartEvent, DartSource, EffectDelivery, PlatformEffect};
+use sdb_contracts::{
+    ArtTheme, CalibrationSettings, DartEvent, DartSource, EffectDelivery, PlatformEffect,
+    ProjectorGeometry, RuntimeSettings, SoundOutput, SoundStatus, UiLanguage,
+};
 use sdb_runtime::{
     CommitOutcome, CommitRequest, Repository, RuntimeAction, RuntimeGame, RuntimeSnapshot,
 };
-use sdb_session_core::{Screen, SessionStatus};
+use sdb_session_core::{Screen, SessionCore, SessionStatus};
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, path::Path};
+use std::{
+    collections::HashMap,
+    fs,
+    path::{Path, PathBuf},
+    time::Duration,
+};
 use thiserror::Error;
 
 const CURRENT_SCHEMA_VERSION: u32 = 6;
 
 #[derive(Debug, Error)]
 pub enum StorageError {
+    #[error("filesystem operation failed: {0}")]
+    Io(#[from] std::io::Error),
     #[error("SQLite operation failed: {0}")]
     Sqlite(#[from] rusqlite::Error),
     #[error("database schema {found} is newer than supported schema {supported}")]
     UnsupportedSchema { found: u32, supported: u32 },
     #[error("database integrity check failed: {0}")]
     Integrity(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LegacyDatabaseImport {
+    pub source: PathBuf,
+    pub backup: PathBuf,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -241,6 +257,53 @@ impl SqliteRepository {
         Ok(Self { connection })
     }
 
+    /// Creates the new runtime database from a legacy Python database when no
+    /// runtime database exists yet. The source remains untouched and an
+    /// preserved pre-migration snapshot is retained beside it.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the legacy database is incompatible, copying or
+    /// migration fails, or the resulting database does not pass integrity
+    /// validation.
+    pub fn open_with_legacy_import(
+        runtime_path: impl AsRef<Path>,
+        legacy_path: impl AsRef<Path>,
+    ) -> Result<(Self, Option<LegacyDatabaseImport>), StorageError> {
+        let runtime_path = runtime_path.as_ref();
+        let legacy_path = legacy_path.as_ref();
+        if runtime_path.exists() || !legacy_path.exists() {
+            return Self::open(runtime_path).map(|repository| (repository, None));
+        }
+
+        validate_legacy_database(legacy_path)?;
+        remove_sidecar_files(runtime_path)?;
+        let backup_path = legacy_backup_path(legacy_path)?;
+        let backup_staging = staging_path(&backup_path)?;
+        remove_staging_file(&backup_staging)?;
+        online_backup(legacy_path, &backup_staging)?;
+        validate_legacy_database(&backup_staging)?;
+        fs::rename(&backup_staging, &backup_path)?;
+
+        let runtime_staging = staging_path(runtime_path)?;
+        remove_staging_file(&runtime_staging)?;
+        online_backup(&backup_path, &runtime_staging)?;
+        {
+            let mut repository = Self::open(&runtime_staging)?;
+            repository.finalize_legacy_import()?;
+            verify_integrity(&repository.connection)?;
+        }
+        fs::rename(&runtime_staging, runtime_path)?;
+        let repository = Self::open(runtime_path)?;
+        Ok((
+            repository,
+            Some(LegacyDatabaseImport {
+                source: legacy_path.to_path_buf(),
+                backup: backup_path,
+            }),
+        ))
+    }
+
     /// Opens an isolated in-memory repository.
     ///
     /// # Errors
@@ -259,6 +322,43 @@ impl SqliteRepository {
         Ok(self
             .connection
             .pragma_query_value(None, "user_version", |row| row.get(0))?)
+    }
+
+    fn finalize_legacy_import(&mut self) -> Result<(), StorageError> {
+        let settings = legacy_runtime_settings(&self.connection)?;
+        let snapshot = RuntimeSnapshot {
+            revision: 0,
+            game: None,
+            session: SessionCore::default(),
+            settings,
+        };
+        let snapshot_json = serde_json::to_string(&snapshot).map_err(|error| {
+            StorageError::Integrity(format!(
+                "cannot serialize imported runtime settings: {error}"
+            ))
+        })?;
+        let transaction = self.connection.transaction()?;
+        transaction.execute(
+            "INSERT INTO runtime_meta(singleton, revision, snapshot_json)
+             VALUES(1, 0, ?1)
+             ON CONFLICT(singleton) DO NOTHING",
+            [snapshot_json],
+        )?;
+        transaction.execute(
+            "UPDATE games SET status='interrupted', winner_id=NULL, result_type='',
+                    finish_reason='legacy_runtime_migration',
+                    ended_at=COALESCE(ended_at, CURRENT_TIMESTAMP)
+             WHERE status='running'",
+            [],
+        )?;
+        transaction.execute(
+            "UPDATE sessions SET status='interrupted',
+                    ended_at=COALESCE(ended_at, CURRENT_TIMESTAMP)
+             WHERE status='active'",
+            [],
+        )?;
+        transaction.commit()?;
+        Ok(())
     }
 
     /// Returns one small host preference, if present.
@@ -1477,6 +1577,166 @@ const fn is_false(value: &bool) -> bool {
     !*value
 }
 
+fn legacy_backup_path(path: &Path) -> Result<PathBuf, StorageError> {
+    let base = format!(".pre-rust-v{CURRENT_SCHEMA_VERSION}.bak");
+    for index in 0..10_000_u16 {
+        let suffix = if index == 0 {
+            base.clone()
+        } else {
+            format!("{base}.{index}")
+        };
+        let candidate = sibling_with_suffix(path, &suffix)?;
+        if !candidate.exists() {
+            return Ok(candidate);
+        }
+    }
+    Err(StorageError::Integrity(
+        "too many retained legacy database backups".into(),
+    ))
+}
+
+fn staging_path(path: &Path) -> Result<PathBuf, StorageError> {
+    sibling_with_suffix(path, ".importing")
+}
+
+fn sibling_with_suffix(path: &Path, suffix: &str) -> Result<PathBuf, StorageError> {
+    let file_name = path
+        .file_name()
+        .ok_or_else(|| StorageError::Integrity("database path has no file name".into()))?;
+    let mut suffixed = file_name.to_os_string();
+    suffixed.push(suffix);
+    Ok(path.with_file_name(suffixed))
+}
+
+fn remove_staging_file(path: &Path) -> Result<(), StorageError> {
+    if path.exists() {
+        fs::remove_file(path)?;
+    }
+    remove_sidecar_files(path)
+}
+
+fn remove_sidecar_files(path: &Path) -> Result<(), StorageError> {
+    for suffix in ["-wal", "-shm"] {
+        let mut sidecar = path.as_os_str().to_os_string();
+        sidecar.push(suffix);
+        let sidecar = PathBuf::from(sidecar);
+        if sidecar.exists() {
+            fs::remove_file(sidecar)?;
+        }
+    }
+    Ok(())
+}
+
+fn online_backup(source_path: &Path, destination_path: &Path) -> Result<(), StorageError> {
+    let source = Connection::open_with_flags(source_path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    let mut destination = Connection::open(destination_path)?;
+    {
+        let backup = Backup::new(&source, &mut destination)?;
+        backup.run_to_completion(128, Duration::from_millis(5), None)?;
+    }
+    verify_integrity(&destination)
+}
+
+fn validate_legacy_database(path: &Path) -> Result<(), StorageError> {
+    let connection = Connection::open_with_flags(path, OpenFlags::SQLITE_OPEN_READ_ONLY)?;
+    verify_integrity(&connection)?;
+    let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if version > 2 {
+        return Err(StorageError::Integrity(format!(
+            "legacy Python database schema {version} is not supported"
+        )));
+    }
+    for query in [
+        "SELECT id, name, avatar, color, created_at FROM players LIMIT 0",
+        "SELECT id, status, language, started_at, ended_at FROM sessions LIMIT 0",
+        "SELECT session_id, player_id, position FROM session_players LIMIT 0",
+        "SELECT id, session_id, game_type, status, options_json, winner_id, result_type, \
+                finish_reason, ruleset_version, app_version, environment, initial_state_json, \
+                final_state_json, started_at, ended_at FROM games LIMIT 0",
+        "SELECT game_id, player_id, position, final_score FROM game_players LIMIT 0",
+        "SELECT game_id, player_id FROM game_winners LIMIT 0",
+        "SELECT id, game_id, ordinal, event_type, player_id, source, payload_json, task_json, \
+                frame_json, effective, corrects_event_id, created_at FROM game_events LIMIT 0",
+        "SELECT id, game_id, seq, player_id, event_json, score_after, round_number, dart_in_turn, \
+                field, ring, multiplier, dart_score, mode_points, outcome, source, task_json, \
+                event_id, created_at FROM throws LIMIT 0",
+        "SELECT key, value_json, updated_at FROM runtime_state LIMIT 0",
+    ] {
+        connection.prepare(query).map_err(|error| {
+            StorageError::Integrity(format!(
+                "legacy Python database does not match schema 2: {error}"
+            ))
+        })?;
+    }
+    Ok(())
+}
+
+fn legacy_runtime_settings(connection: &Connection) -> Result<RuntimeSettings, StorageError> {
+    let mut settings = RuntimeSettings::default();
+    if let Some(calibration) =
+        legacy_runtime_value::<CalibrationSettings>(connection, "calibration")?
+        && valid_legacy_calibration(&calibration)
+    {
+        settings.calibration = calibration;
+    }
+    if let Some(geometry) =
+        legacy_runtime_value::<ProjectorGeometry>(connection, "projector_geometry")?
+        && geometry.width > 0
+        && geometry.height > 0
+    {
+        settings.projector_geometry = geometry;
+    }
+    if let Some(sound) = legacy_runtime_value::<serde_json::Value>(connection, "sound")? {
+        settings.sound.enabled = sound["enabled"].as_bool().unwrap_or(false);
+        settings.sound.output = match sound["output"].as_str() {
+            Some("controller") => SoundOutput::Controller,
+            Some("both") => SoundOutput::Both,
+            _ => SoundOutput::Projector,
+        };
+        settings.sound.status = if settings.sound.enabled {
+            SoundStatus::Starting
+        } else {
+            SoundStatus::Disabled
+        };
+    }
+    if let Some(theme) = legacy_runtime_value::<ArtTheme>(connection, "art_theme")? {
+        settings.art_theme = theme;
+    }
+    if let Some(language) = legacy_runtime_value::<UiLanguage>(connection, "ui_language")? {
+        settings.ui_language = language;
+    }
+    Ok(settings)
+}
+
+fn legacy_runtime_value<T: serde::de::DeserializeOwned>(
+    connection: &Connection,
+    key: &str,
+) -> Result<Option<T>, StorageError> {
+    let value = connection
+        .query_row(
+            "SELECT value_json FROM runtime_state WHERE key=?1",
+            [key],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?;
+    Ok(value.and_then(|json| serde_json::from_str(&json).ok()))
+}
+
+fn valid_legacy_calibration(calibration: &CalibrationSettings) -> bool {
+    calibration.scale.is_finite()
+        && (0.5..=2.0).contains(&calibration.scale)
+        && calibration.offset_x.is_finite()
+        && (-1.0..=1.0).contains(&calibration.offset_x)
+        && calibration.offset_y.is_finite()
+        && (-1.0..=1.0).contains(&calibration.offset_y)
+        && calibration.corners.iter().all(|point| {
+            point.x.is_finite()
+                && (0.0..=1.0).contains(&point.x)
+                && point.y.is_finite()
+                && (0.0..=1.0).contains(&point.y)
+        })
+}
+
 #[allow(clippy::too_many_lines)] // Sequential SQL is kept readable beside its schema version.
 fn migrate(connection: &Connection) -> Result<(), StorageError> {
     let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -1714,11 +1974,21 @@ fn validate_preference_key(key: &str) -> Result<(), StorageError> {
 
 fn verify_integrity(connection: &Connection) -> Result<(), StorageError> {
     let result: String = connection.pragma_query_value(None, "quick_check", |row| row.get(0))?;
-    if result == "ok" {
-        Ok(())
-    } else {
-        Err(StorageError::Integrity(result))
+    if result != "ok" {
+        return Err(StorageError::Integrity(result));
     }
+    let violation = connection
+        .prepare("PRAGMA foreign_key_check")?
+        .query_row([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        })
+        .optional()?;
+    if let Some((table, row_id)) = violation {
+        return Err(StorageError::Integrity(format!(
+            "foreign key violation in {table} row {row_id}"
+        )));
+    }
+    Ok(())
 }
 
 #[derive(Debug)]
@@ -3197,39 +3467,163 @@ mod tests {
     }
 
     #[test]
-    fn python_schema_two_database_is_extended_without_losing_profiles() {
+    fn python_schema_two_database_is_backed_up_and_imported_completely() {
         let temporary = std::env::temp_dir().join(format!(
-            "sdb-python-migration-{}-{}.sqlite",
+            "sdb-python-import-{}-{}",
             std::process::id(),
             std::thread::current().name().unwrap_or("test")
         ));
-        let _ = std::fs::remove_file(&temporary);
+        let _ = std::fs::remove_dir_all(&temporary);
+        std::fs::create_dir_all(&temporary).expect("temporary directory");
+        let legacy = temporary.join("dartboard.db");
+        let runtime = temporary.join("runtime.sqlite");
         {
-            let connection = Connection::open(&temporary).expect("legacy database");
+            let connection = Connection::open(&legacy).expect("legacy database");
             connection
-                .execute_batch(
-                    "
-                    CREATE TABLE players (
-                        id TEXT PRIMARY KEY,
-                        name TEXT NOT NULL,
-                        avatar TEXT NOT NULL DEFAULT 'comet',
-                        color TEXT NOT NULL DEFAULT '#28e7ff',
-                        created_at TEXT NOT NULL
-                    );
-                    INSERT INTO players(id, name, avatar, color, created_at)
-                    VALUES('legacy-ada', 'Ada', 'comet', '#28e7ff', '2026-01-01T00:00:00Z');
-                    PRAGMA user_version=2;
-                    ",
-                )
-                .expect("legacy Python schema slice");
+                .execute_batch(include_str!("../../../fixtures/databases/python-v2.sql"))
+                .expect("legacy Python fixture");
         }
-        let repository = SqliteRepository::open(&temporary).expect("migrate Python database");
+
+        let (repository, imported) =
+            SqliteRepository::open_with_legacy_import(&runtime, &legacy).expect("import database");
+        let imported = imported.expect("import result");
+        assert_eq!(imported.source, legacy);
+        assert_eq!(
+            imported.backup.file_name().and_then(|name| name.to_str()),
+            Some("dartboard.db.pre-rust-v6.bak")
+        );
         assert_eq!(repository.schema_version().expect("version"), 6);
         let profiles = repository.players().expect("profiles");
-        assert_eq!(profiles.len(), 1);
-        assert_eq!(profiles[0].id, "legacy-ada");
-        assert!(repository.load_snapshot().expect("runtime table").is_none());
-        std::fs::remove_file(temporary).expect("remove test database");
+        assert_eq!(profiles.len(), 2);
+        assert_eq!(profiles[0].avatar, "fox");
+        let finished = repository
+            .game_detail("game-finished")
+            .expect("game detail")
+            .expect("finished game");
+        assert_eq!(finished.game.winner_ids, ["ada"]);
+        assert_eq!(finished.throws[0].mode_points, -4);
+        let interrupted = repository
+            .game_detail("game-running")
+            .expect("game detail")
+            .expect("running game");
+        assert_eq!(interrupted.game.status, "interrupted");
+        assert_eq!(interrupted.game.finish_reason, "legacy_runtime_migration");
+        let active_session = repository
+            .session_detail("session-active")
+            .expect("session detail")
+            .expect("active session");
+        assert_eq!(active_session.session.status, "interrupted");
+        let snapshot: RuntimeSnapshot = serde_json::from_str(
+            &repository
+                .load_snapshot()
+                .expect("runtime table")
+                .expect("imported settings snapshot"),
+        )
+        .expect("runtime snapshot");
+        assert_eq!(snapshot.settings.art_theme, ArtTheme::Neon);
+        assert_eq!(snapshot.settings.ui_language, UiLanguage::En);
+        assert!(snapshot.settings.sound.enabled);
+        assert_eq!(snapshot.settings.sound.output, SoundOutput::Both);
+        assert!((snapshot.settings.calibration.scale - 1.1).abs() < f64::EPSILON);
+        drop(repository);
+
+        let legacy_connection = Connection::open(&legacy).expect("legacy source");
+        let legacy_game_status: String = legacy_connection
+            .query_row(
+                "SELECT status FROM games WHERE id='game-running'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("legacy status");
+        assert_eq!(legacy_game_status, "running");
+        drop(legacy_connection);
+        let backup_connection = Connection::open(&imported.backup).expect("migration backup");
+        let backup_version: u32 = backup_connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("backup version");
+        assert_eq!(backup_version, 2);
+        drop(backup_connection);
+
+        let (_, second_import) =
+            SqliteRepository::open_with_legacy_import(&runtime, &legacy).expect("reopen runtime");
+        assert!(second_import.is_none());
+        std::fs::remove_dir_all(temporary).expect("remove test directory");
+    }
+
+    #[test]
+    fn incompatible_legacy_database_is_rejected_before_any_copy_is_created() {
+        let temporary = std::env::temp_dir().join(format!(
+            "sdb-python-import-reject-{}-{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_dir_all(&temporary);
+        std::fs::create_dir_all(&temporary).expect("temporary directory");
+        let legacy = temporary.join("dartboard.db");
+        let runtime = temporary.join("runtime.sqlite");
+        let connection = Connection::open(&legacy).expect("incompatible database");
+        connection
+            .pragma_update(None, "user_version", 99)
+            .expect("future version");
+        drop(connection);
+
+        let error = SqliteRepository::open_with_legacy_import(&runtime, &legacy)
+            .expect_err("must reject incompatible source");
+        assert!(error.to_string().contains("schema 99"));
+        assert!(!runtime.exists());
+        assert!(!temporary.join("dartboard.db.pre-rust-v6.bak").exists());
+        let connection = Connection::open(&legacy).expect("unchanged source");
+        let version: u32 = connection
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .expect("source version");
+        assert_eq!(version, 99);
+        drop(connection);
+        std::fs::remove_dir_all(temporary).expect("remove test directory");
+    }
+
+    #[test]
+    fn a_later_reimport_uses_the_current_source_and_retains_the_first_backup() {
+        let temporary = std::env::temp_dir().join(format!(
+            "sdb-python-reimport-{}-{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_dir_all(&temporary);
+        std::fs::create_dir_all(&temporary).expect("temporary directory");
+        let legacy = temporary.join("dartboard.db");
+        let runtime = temporary.join("runtime.sqlite");
+        let connection = Connection::open(&legacy).expect("legacy database");
+        connection
+            .execute_batch(include_str!("../../../fixtures/databases/python-v2.sql"))
+            .expect("legacy Python fixture");
+        drop(connection);
+
+        let (repository, first) =
+            SqliteRepository::open_with_legacy_import(&runtime, &legacy).expect("first import");
+        drop(repository);
+        let first = first.expect("first import result");
+        std::fs::remove_file(&runtime).expect("archive first runtime outside this test");
+        let connection = Connection::open(&legacy).expect("updated legacy database");
+        connection
+            .execute(
+                "INSERT INTO players(id, name, avatar, color, created_at)
+                 VALUES('cara', 'Cara', 'star', '#00ffaa', '2026-07-03T18:00:00Z')",
+                [],
+            )
+            .expect("new Python profile");
+        drop(connection);
+
+        let (repository, second) =
+            SqliteRepository::open_with_legacy_import(&runtime, &legacy).expect("second import");
+        let second = second.expect("second import result");
+        assert_eq!(repository.players().expect("current profiles").len(), 3);
+        assert!(first.backup.exists());
+        assert_eq!(
+            second.backup.file_name().and_then(|name| name.to_str()),
+            Some("dartboard.db.pre-rust-v6.bak.1")
+        );
+        drop(repository);
+        std::fs::remove_dir_all(temporary).expect("remove test directory");
     }
 
     #[test]

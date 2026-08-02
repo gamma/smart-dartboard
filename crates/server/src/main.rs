@@ -154,8 +154,18 @@ impl From<PairedDevice> for CompanionDeviceView {
 async fn main() {
     let data_dir = PathBuf::from(env::var("SDB_DATA_DIR").unwrap_or_else(|_| "data".into()));
     std::fs::create_dir_all(&data_dir).expect("create data directory");
-    let repository =
-        SqliteRepository::open(data_dir.join("runtime.sqlite")).expect("open runtime database");
+    let (repository, legacy_import) = SqliteRepository::open_with_legacy_import(
+        data_dir.join("runtime.sqlite"),
+        data_dir.join("dartboard.db"),
+    )
+    .expect("open runtime database");
+    if let Some(import) = legacy_import {
+        println!(
+            "Imported legacy Python database {} (backup: {})",
+            import.source.display(),
+            import.backup.display()
+        );
+    }
     let runtime = Runtime::restore(Uuid::new_v4().to_string(), repository)
         .expect("restore committed runtime");
     let ble_enabled = env_flag("SDB_ENABLE_BLE", false);

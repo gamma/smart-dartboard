@@ -13,7 +13,7 @@ services:
     security_opt:
       - no-new-privileges:true
     volumes:
-      - ./data-rust:/data
+      - ${SDB_RUST_DATA_DIR:-./data-rust}:/data
     environment:
       SDB_ENABLE_BLE: "0"
     restart: unless-stopped

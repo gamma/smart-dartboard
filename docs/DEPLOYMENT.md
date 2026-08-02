@@ -63,10 +63,13 @@ Der Release-Workflow veröffentlicht ein Multi-Arch-Image für
 üblichen Mini-PC und auf einem 64-Bit-Raspberry-Pi.
 
 Der Rust-Migrationspfad besitzt zusätzlich ein minimales Linux-BLE-Sidecar.
-Solange API v2 noch nicht alle Spielmodi und Oberflächen ersetzt, wird es nur
-lokal aus `Dockerfile.ble` gebaut und nicht als produktives Release-Image
-beworben. Sein Container-Build und der authentisierte Rohpaket-Ingress laufen
-bereits in CI.
+Alle 24 Spielmodi und Oberflächen sind inzwischen portiert; bis zur realen
+BlueZ-/Board- und Bedienabnahme wird der Pfad trotzdem nur lokal aus
+`Dockerfile.rust` und `Dockerfile.ble` gebaut und nicht als produktives
+Release-Image beworben. Container-Build, authentisierter Rohpaket-Ingress und
+der verlustfreie Import einer bestehenden `data/dartboard.db` sind belegt. Die
+kontrollierte Import- und Rollback-Anleitung steht in
+[Rust Headless Server API v2](RUST_SERVER_V2.md#einmaliger-import-der-python-datenbank).
 
 Nach dem ersten Release die Paketseite unter GitHub öffnen und die Sichtbarkeit
 des Containerpakets prüfen. Für ein öffentliches Repository sollte das Image

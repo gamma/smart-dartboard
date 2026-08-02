@@ -198,6 +198,8 @@ erzeugen versionierte AMD64-/ARM64-Images in der GitHub Container Registry.
 - [Plattformübergreifende Zielarchitektur](docs/CROSS_PLATFORM_ARCHITECTURE.md)
 - [Portabilität für iOS und macOS](docs/APPLE_PORTABILITY.md)
 - [Portabilität für Android und ein eigenständiges Spieltablet](docs/ANDROID_PORTABILITY.md)
+- [Native Implementierung und verifizierter Plattformstand](docs/NATIVE_IMPLEMENTATION.md)
+- [Rust-Server v2 einschließlich Python-Datenimport](docs/RUST_SERVER_V2.md)
 - [Betrieb und Kiosk-Setup](docs/OPERATIONS.md)
 - [CI, Releases und Deployment](docs/DEPLOYMENT.md)
 - [Neue Spielmodule entwickeln](docs/GAME_PLUGINS.md)
