@@ -6,6 +6,7 @@ members = [
   "crates/companion",
   "crates/companion-transport",
   "crates/contracts",
+  "crates/diagnostics",
   "crates/game-core",
   "crates/protocol",
   "crates/runtime",

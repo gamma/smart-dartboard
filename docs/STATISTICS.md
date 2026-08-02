@@ -107,6 +107,12 @@ Der Export behält für Kompatibilität das portable Archivformat
 separat als `database_schema_version`. Runtime-Einstellungen, Boarddaten,
 Companion-Tokens und andere Secrets werden nicht exportiert.
 
+Dieser personenbezogene Datenexport ist absichtlich vom Diagnoseexport
+getrennt. **Einstellungen → Diagnose exportieren** erzeugt nur einen
+Health-Snapshot, Versionen, redigierte Konfiguration und rotierende Logs und
+weist mit `database_included: false` maschinenlesbar nach, dass keine Historie
+oder SQLite-Datei enthalten ist.
+
 ## Datenschutz und Aufbewahrung
 
 Alle Daten liegen ausschließlich in der lokalen SQLite-Datei

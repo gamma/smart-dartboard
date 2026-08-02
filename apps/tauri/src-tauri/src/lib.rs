@@ -14,12 +14,16 @@ use sdb_companion_transport::{
 use sdb_contracts::{
     CommandEnvelope, DartEvent, DartSource, Envelope, MessageKind, Ring, RuntimeCommand,
 };
+use sdb_diagnostics::{
+    DiagnosticContext, DiagnosticEnvironment, DiagnosticLevel, DiagnosticLogger, DiagnosticScope,
+    DiagnosticVersions,
+};
 use sdb_game_core::registered_game_metadata;
 use sdb_runtime::{CommandResult, Runtime, RuntimeAction, RuntimeGameState, RuntimePublicSnapshot};
-use sdb_storage::SqliteRepository;
+use sdb_storage::{CURRENT_SCHEMA_VERSION, SqliteRepository};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -70,6 +74,7 @@ struct NativeState {
     companion_states: broadcast::Sender<PublicState>,
     companion_changes: broadcast::Sender<()>,
     app_role: NativeAppRole,
+    diagnostics: DiagnosticLogger,
 }
 
 type SharedNativeState = Arc<Mutex<NativeState>>;
@@ -301,6 +306,7 @@ impl NativeState {
             companion_states,
             companion_changes,
             app_role,
+            diagnostics: DiagnosticLogger::memory(diagnostic_context("native-test")),
         })
     }
 
@@ -1007,8 +1013,7 @@ mod native_companion_transport {
     use super::{
         APP_HANDLE, COMPANION_PORT, CommandEnvelope, CommandResult, NativeState, PublicState,
         SharedNativeState, TlsIdentity, apple_bonjour, now_ms, publish_public_state,
-        runtime_v2_projector_report_allowed,
-        valid_effect_id,
+        record_diagnostic_error, runtime_v2_projector_report_allowed, valid_effect_id,
     };
     use axum::{
         Json, Router,
@@ -1081,6 +1086,10 @@ mod native_companion_transport {
                 .local_addr()
                 .map_err(|error| format!("companion listener address failed: {error}"))?;
             let handle = Handle::new();
+            let diagnostics = native
+                .lock()
+                .ok()
+                .map(|state| state.diagnostics.clone());
             let server = axum_server::from_tcp_rustls(listener, self.tls.clone())
                 .map_err(|error| format!("companion TLS listener failed: {error}"))?
                 .handle(handle.clone())
@@ -1088,8 +1097,16 @@ mod native_companion_transport {
             apple_bonjour::start(address.port(), &self.host_id, COMPANION_PROTOCOL_VERSION)
                 .inspect_err(|_| handle.shutdown())?;
             tauri::async_runtime::spawn(async move {
-                if let Err(error) = server.await {
-                    eprintln!("companion TLS server stopped: {error}");
+                if let Err(_error) = server.await {
+                    if let Some(diagnostics) = diagnostics {
+                        record_diagnostic_error(
+                            &diagnostics,
+                            "companion",
+                            "tls_server_stopped",
+                            "transport_error",
+                        );
+                    }
+                    eprintln!("Companion TLS server stopped; see diagnostics");
                 }
             });
             COMPANION_PORT.store(address.port(), Ordering::Release);
@@ -2484,9 +2501,15 @@ async fn companion_client_loop(
                 );
                 return;
             }
-            Err(native_companion_client::SessionError::Retry(error)) => {
+            Err(native_companion_client::SessionError::Retry(_error)) => {
                 clear_companion_client_frame(&app, &frame);
-                eprintln!("Companion projector reconnecting: {error}");
+                record_app_diagnostic_error(
+                    &app,
+                    "companion",
+                    "projector_reconnecting",
+                    "replication_retry",
+                );
+                eprintln!("Companion projector reconnecting; see diagnostics");
                 publish_companion_client_status(
                     &app,
                     &status,
@@ -2509,6 +2532,7 @@ async fn companion_client_loop(
 mod apple_board {
     use super::{
         APP_HANDLE, BoardFailureCode, BoardPhase, BoardStatus, NativeAppRole, SharedNativeState,
+        DiagnosticLevel, DiagnosticScope, board_failure_name, board_phase_name,
         publish_public_state,
     };
     use std::ffi::{CStr, c_char};
@@ -2588,6 +2612,19 @@ mod apple_board {
                     connection_id,
                 };
             }
+            let _ = state.diagnostics.record(
+                DiagnosticLevel::Info,
+                "board",
+                "status_changed",
+                DiagnosticScope {
+                    runtime_instance_id: Some(state.runtime.instance_id()),
+                    revision: Some(state.runtime.snapshot().revision),
+                    board_state: Some(board_phase_name(state.board_status.phase)),
+                    adapter_error_code: state.board_status.failure_code.map(board_failure_name),
+                    ..DiagnosticScope::default()
+                },
+                serde_json::json!({}),
+            );
             state.public()
         };
         publish_public_state(app, &public);
@@ -2623,11 +2660,38 @@ mod apple_board {
                 return;
             }
             match state.ingest_board_packet(&connection_id, raw) {
-                Ok(true) => state.public(),
+                Ok(true) => {
+                    let _ = state.diagnostics.record(
+                        DiagnosticLevel::Info,
+                        "board",
+                        "dart_applied",
+                        DiagnosticScope {
+                            runtime_instance_id: Some(state.runtime.instance_id()),
+                            revision: Some(state.runtime.snapshot().revision),
+                            board_state: Some("ready"),
+                            ..DiagnosticScope::default()
+                        },
+                        serde_json::json!({}),
+                    );
+                    state.public()
+                }
                 Ok(false) => return,
                 Err(error) => {
                     state.board_status.failure_code = Some(BoardFailureCode::RuntimeUnavailable);
                     state.board_status.detail = Some(error);
+                    let _ = state.diagnostics.record(
+                        DiagnosticLevel::Error,
+                        "board",
+                        "dart_runtime_rejected",
+                        DiagnosticScope {
+                            runtime_instance_id: Some(state.runtime.instance_id()),
+                            revision: Some(state.runtime.snapshot().revision),
+                            board_state: Some(board_phase_name(state.board_status.phase)),
+                            adapter_error_code: Some("runtime_unavailable"),
+                            ..DiagnosticScope::default()
+                        },
+                        serde_json::json!({}),
+                    );
                     state.public()
                 }
             }
@@ -2792,19 +2856,41 @@ fn runtime_v2_ack_effect(
     };
     let mut state = state.lock().map_err(|error| error.to_string())?;
     state.require_controller()?;
-    state
+    let acknowledged = state
         .runtime
         .acknowledge_effect(&effect_id, target)
-        .map_err(|error| error.to_string())
+        .map_err(|error| error.to_string())?;
+    let _ = state.diagnostics.record(
+        DiagnosticLevel::Info,
+        "effects",
+        "effect_acknowledged",
+        DiagnosticScope {
+            runtime_instance_id: Some(state.runtime.instance_id()),
+            revision: Some(state.runtime.snapshot().revision),
+            event_id: Some(&effect_id),
+            ..DiagnosticScope::default()
+        },
+        serde_json::json!({"target": target, "acknowledged": acknowledged}),
+    );
+    Ok(acknowledged)
 }
 
 #[tauri::command]
 fn runtime_v2_query(
+    window: tauri::WebviewWindow,
     state: State<'_, SharedNativeState>,
     path: String,
 ) -> Result<serde_json::Value, String> {
+    if !native_query_allowed(window.label(), &path) {
+        return Err("runtime query is unavailable for this window".into());
+    }
     let state = state.lock().map_err(|error| error.to_string())?;
     runtime_v2_query_value(&state, &path)
+}
+
+fn native_query_allowed(window_label: &str, path: &str) -> bool {
+    window_label == "control"
+        || (window_label == "projector" && matches!(path, "/api/v2/host" | "/api/v2/modes"))
 }
 
 fn runtime_v2_query_value(state: &NativeState, path: &str) -> Result<serde_json::Value, String> {
@@ -2848,6 +2934,26 @@ fn runtime_v2_query_value(state: &NativeState, path: &str) -> Result<serde_json:
         "/api/v2/data/export" => serde_json::to_value(
             repository.export_data().map_err(|error| error.to_string())?,
         ),
+        "/api/v2/diagnostics/export" => {
+            let export = state.diagnostics.export(
+                serde_json::json!({
+                    "status": if state.board_status.phase.is_healthy() { "ok" } else { "degraded" },
+                    "runtime": "ok",
+                    "database": "ok",
+                    "board": state.board_status.phase,
+                    "board_failure_code": state.board_status.failure_code,
+                    "companion": if state.companion_identity.available { "ready" } else { "disabled" },
+                    "revision": state.runtime.snapshot().revision,
+                }),
+                serde_json::json!({
+                    "app_role": state.app_role,
+                    "projector_output": state.projector_output,
+                    "test_events": cfg!(debug_assertions),
+                    "companion_enabled": state.companion_identity.available,
+                }),
+            ).map_err(|error| error.to_string())?;
+            serde_json::to_value(export)
+        }
         _ if route.starts_with("/api/v2/history/sessions/") => {
             let id = route.trim_start_matches("/api/v2/history/sessions/");
             serde_json::to_value(repository.session_detail(id).map_err(|error| error.to_string())?
@@ -2882,6 +2988,8 @@ fn runtime_v2_dispatch(
     state: State<'_, SharedNativeState>,
     envelope: CommandEnvelope,
 ) -> Result<CommandResult, String> {
+    let command_id = envelope.command_id.clone();
+    let command_type = runtime_command_type(&envelope.command);
     let (result, public) = {
         let mut state = state.lock().map_err(|error| error.to_string())?;
         state.require_controller()?;
@@ -2889,10 +2997,36 @@ fn runtime_v2_dispatch(
             .runtime
             .dispatch_envelope(envelope)
             .map_err(|error| error.message)?;
+        let _ = state.diagnostics.record(
+            DiagnosticLevel::Info,
+            "runtime",
+            "command_committed",
+            DiagnosticScope {
+                runtime_instance_id: Some(state.runtime.instance_id()),
+                revision: Some(result.revision),
+                session_id: result.session.session_id.as_deref(),
+                game_id: result.session.game_id.as_deref(),
+                event_id: Some(&command_id),
+                ..DiagnosticScope::default()
+            },
+            serde_json::json!({"command_type": command_type, "duplicate": result.duplicate}),
+        );
         (result, state.public())
     };
     publish_public_state(&app, &public);
     Ok(result)
+}
+
+fn runtime_command_type(command: &RuntimeCommand) -> String {
+    serde_json::to_value(command)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| "unknown".into())
 }
 
 #[tauri::command]
@@ -3177,12 +3311,18 @@ async fn companion_pairing_complete(
     }
     {
         let mut state = state.lock().map_err(|error| error.to_string())?;
-        if let Err(error) = state
+        if let Err(_error) = state
             .runtime
             .repository_mut()
             .save_preference(COMPANION_CLIENT_HOST_ID_PREFERENCE, &target.host.host_id)
         {
-            eprintln!("Companion host preference could not be saved: {error}");
+            record_diagnostic_error(
+                &state.diagnostics,
+                "companion",
+                "host_preference_save_failed",
+                "storage_error",
+            );
+            eprintln!("Companion host preference could not be saved; see diagnostics");
         }
     }
     let active_grant = native_companion_client::ActiveGrant {
@@ -3551,6 +3691,86 @@ fn now_ms() -> u64 {
         .unwrap_or(u64::MAX)
 }
 
+fn diagnostic_context(adapter: &str) -> DiagnosticContext {
+    DiagnosticContext {
+        versions: DiagnosticVersions {
+            app: env!("CARGO_PKG_VERSION").into(),
+            contract: sdb_contracts::PROTOCOL_VERSION,
+            schema: CURRENT_SCHEMA_VERSION,
+            rulesets: registered_game_metadata()
+                .into_iter()
+                .map(|mode| (mode.slug.into(), mode.ruleset_version))
+                .collect::<BTreeMap<_, _>>(),
+        },
+        environment: DiagnosticEnvironment::current(adapter, env!("CARGO_PKG_VERSION")),
+    }
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+const fn board_phase_name(phase: BoardPhase) -> &'static str {
+    match phase {
+        BoardPhase::Disabled => "disabled",
+        BoardPhase::Unavailable => "unavailable",
+        BoardPhase::PermissionRequired => "permission_required",
+        BoardPhase::BluetoothOff => "bluetooth_off",
+        BoardPhase::Scanning => "scanning",
+        BoardPhase::Connecting => "connecting",
+        BoardPhase::Discovering => "discovering",
+        BoardPhase::Subscribing => "subscribing",
+        BoardPhase::Ready => "ready",
+        BoardPhase::Reconnecting => "reconnecting",
+        BoardPhase::Error => "error",
+    }
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+const fn board_failure_name(code: BoardFailureCode) -> &'static str {
+    match code {
+        BoardFailureCode::AdapterUnavailable => "adapter_unavailable",
+        BoardFailureCode::PermissionDenied => "permission_denied",
+        BoardFailureCode::BluetoothPoweredOff => "bluetooth_powered_off",
+        BoardFailureCode::DeviceNotFound => "device_not_found",
+        BoardFailureCode::ConnectionFailed => "connection_failed",
+        BoardFailureCode::ServiceMissing => "service_missing",
+        BoardFailureCode::CharacteristicMissing => "characteristic_missing",
+        BoardFailureCode::SubscriptionFailed => "subscription_failed",
+        BoardFailureCode::QueueOverflow => "queue_overflow",
+        BoardFailureCode::RuntimeUnavailable => "runtime_unavailable",
+        BoardFailureCode::TransportError => "transport_error",
+    }
+}
+
+fn record_diagnostic_error(
+    diagnostics: &DiagnosticLogger,
+    component: &str,
+    event: &str,
+    code: &str,
+) {
+    let _ = diagnostics.record(
+        DiagnosticLevel::Error,
+        component,
+        event,
+        DiagnosticScope {
+            adapter_error_code: Some(code),
+            ..DiagnosticScope::default()
+        },
+        serde_json::json!({}),
+    );
+}
+
+fn record_app_diagnostic_error(
+    app: &tauri::AppHandle,
+    component: &str,
+    event: &str,
+    code: &str,
+) {
+    if let Some(state) = app.try_state::<SharedNativeState>()
+        && let Ok(state) = state.lock()
+    {
+        record_diagnostic_error(&state.diagnostics, component, event, code);
+    }
+}
+
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 fn prepare_companion_identity(repository: &mut SqliteRepository) -> Result<TlsIdentity, String> {
     if let Some(host_id) = repository
@@ -3582,6 +3802,10 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
+            let diagnostics = DiagnosticLogger::open(
+                data_dir.join("logs"),
+                diagnostic_context("tauri-native"),
+            )?;
             let mut repository = SqliteRepository::open(data_dir.join("runtime.sqlite"))
                 .map_err(std::io::Error::other)?;
             #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -3599,8 +3823,15 @@ pub fn run() {
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let (companion_identity, companion_transport) = match companion_setup {
                 Ok(setup) => (setup.0, Some(setup.1)),
-                Err(error) => {
-                    eprintln!("Companion setup is unavailable: {error}");
+                Err(_error) => {
+                    let _ = diagnostics.record(
+                        DiagnosticLevel::Warn,
+                        "companion",
+                        "identity_setup_failed",
+                        DiagnosticScope { adapter_error_code: Some("secure_identity_unavailable"), ..DiagnosticScope::default() },
+                        serde_json::json!({}),
+                    );
+                    eprintln!("Companion setup is unavailable; see diagnostics");
                     (
                         CompanionIdentity {
                             host_id: "unavailable-native-host".into(),
@@ -3619,6 +3850,22 @@ pub fn run() {
             };
             let mut native_state = NativeState::restore(repository, companion_identity)
                 .map_err(std::io::Error::other)?;
+            native_state.diagnostics = diagnostics.clone();
+            let _ = diagnostics.record(
+                DiagnosticLevel::Info,
+                "native",
+                "runtime_started",
+                DiagnosticScope {
+                    runtime_instance_id: Some(native_state.runtime.instance_id()),
+                    revision: Some(native_state.runtime.snapshot().revision),
+                    board_state: Some(if native_state.app_role == NativeAppRole::Controller { "unavailable" } else { "disabled" }),
+                    ..DiagnosticScope::default()
+                },
+                serde_json::json!({
+                    "app_role": native_state.app_role,
+                    "projector_output": native_state.projector_output,
+                }),
+            );
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let restore_companion = native_state.projector_output == ProjectorOutput::Companion
                 && native_state.app_role == NativeAppRole::Controller
@@ -3633,15 +3880,27 @@ pub fn run() {
                     let bytes = Zeroizing::new(bytes);
                     match native_companion_client::decode_stored_grant(&bytes) {
                         Ok(grant) => Some(grant),
-                        Err(error) => {
-                            eprintln!("Stored Companion grant is unavailable: {error}");
+                        Err(_error) => {
+                            record_diagnostic_error(
+                                &diagnostics,
+                                "companion",
+                                "stored_grant_decode_failed",
+                                "invalid_secure_grant",
+                            );
+                            eprintln!("Stored Companion grant is unavailable; see diagnostics");
                             None
                         }
                     }
                 }
                 Ok(None) => None,
-                Err(error) => {
-                    eprintln!("Companion client secure storage is unavailable: {error}");
+                Err(_error) => {
+                    record_diagnostic_error(
+                        &diagnostics,
+                        "companion",
+                        "secure_storage_load_failed",
+                        "secure_storage_error",
+                    );
+                    eprintln!("Companion client secure storage is unavailable; see diagnostics");
                     None
                 }
             };
@@ -3684,8 +3943,14 @@ pub fn run() {
             match app_role {
                 NativeAppRole::Controller => apple_board_host::install(),
                 NativeAppRole::CompanionProjector => {
-                    if let Err(error) = apple_bonjour::browser_start() {
-                        eprintln!("Companion discovery startup failed: {error}");
+                    if let Err(_error) = apple_bonjour::browser_start() {
+                        record_diagnostic_error(
+                            &diagnostics,
+                            "companion",
+                            "discovery_start_failed",
+                            "bonjour_error",
+                        );
+                        eprintln!("Companion discovery startup failed; see diagnostics");
                     } else {
                         let app_handle = app.handle().clone();
                         tauri::async_runtime::spawn(async move {
@@ -3701,8 +3966,14 @@ pub fn run() {
                 let companion_transport = companion_transport
                     .expect("restored Companion output requires an available transport");
                 tauri::async_runtime::spawn(async move {
-                    if let Err(error) = companion_transport.start(native_state.clone()).await {
-                        eprintln!("companion TLS startup failed: {error}");
+                    if let Err(_error) = companion_transport.start(native_state.clone()).await {
+                        record_app_diagnostic_error(
+                            &app_handle,
+                            "companion",
+                            "tls_start_failed",
+                            "transport_error",
+                        );
+                        eprintln!("Companion TLS startup failed; see diagnostics");
                         return;
                     }
                     let public = native_state.lock().ok().map(|state| state.public());
@@ -3814,11 +4085,20 @@ mod tests {
             "/api/v2/statistics/modes",
             "/api/v2/statistics/heatmap?player_id=test-player&include_test=true",
             "/api/v2/data/export",
+            "/api/v2/diagnostics/export",
         ] {
             assert!(runtime_v2_query_value(&state, path).is_ok(), "{path}");
         }
         let export = runtime_v2_query_value(&state, "/api/v2/data/export").expect("export");
         assert_eq!(export["schema_version"], 2);
+        let diagnostics = runtime_v2_query_value(&state, "/api/v2/diagnostics/export")
+            .expect("diagnostics");
+        assert_eq!(diagnostics["database_included"], false);
+        assert_eq!(diagnostics["versions"]["schema"], CURRENT_SCHEMA_VERSION);
+        assert!(native_query_allowed("control", "/api/v2/diagnostics/export"));
+        assert!(!native_query_allowed("projector", "/api/v2/diagnostics/export"));
+        assert!(!native_query_allowed("projector", "/api/v2/data/export"));
+        assert!(native_query_allowed("projector", "/api/v2/modes"));
         assert!(runtime_v2_query_value(&state, "/api/v2/history/games/missing").is_err());
         assert!(runtime_v2_query_value(&state, &"x".repeat(2_049)).is_err());
     }

@@ -151,6 +151,7 @@ begrenztem Proxy-Netz.
 | `GET` | `/api/v2/statistics/heatmap` | segmentgenaue Heatmap; optional nach Spieler, Session und Modus gefiltert |
 | `GET` | `/api/v2/training/{player_id}/recommendations` | lokale Trainingshinweise aus task-bezogenen Produktionswürfen |
 | `GET` | `/api/v2/data/export` | portables JSON-Archiv ohne Runtime-Einstellungen oder Secrets |
+| `POST` | `/api/v2/diagnostics/export` | bewusst ausgelöstes, redigiertes Diagnosepaket ohne Datenbank |
 
 Browser-POSTs und WebSockets akzeptieren nur dieselbe Origin. Clients ohne
 `Origin`, etwa lokale Diagnosewerkzeuge, bleiben möglich. Unvereinbare
@@ -165,6 +166,19 @@ Replay-Grundzustände, Action-Timeline und Historie verlassen die Runtime nicht
 `projector_test` angenommen, wenn der Host ausdrücklich mit
 `SDB_ALLOW_TEST_EVENTS=1` gestartet wurde. Im normalen Container ist die
 Funktion verborgen und serverseitig mit HTTP 403 gesperrt.
+
+Der Host schreibt strukturierte JSONL-Diagnosen nach
+`$SDB_DATA_DIR/logs/diagnostics.jsonl`. Bei 1 MiB wird atomar auf bis zu fünf
+Dateien rotiert. Die Datensätze enthalten App-, Contract-, Schema- und
+Ruleset-Versionen, Plattform/Adapter, pseudonymisierte Runtime-/Session-/Game-
+IDs, Revisionen sowie typisierte Board- und Effect-Ereignisse. Spielernamen,
+Tokens, Zertifikatsdaten, Gerätekennungen und BLE-Rohpakete werden redigiert
+oder gar nicht erst an den Logger übergeben.
+
+Das Diagnosepaket wird in der Controller-Einstellung **Diagnose exportieren**
+erzeugt. Es enthält Health, relevante Konfiguration und höchstens 2.000
+rotierte Logeinträge. `database_included` ist immer `false`; der personenbezogene
+Historienexport bleibt eine getrennte, ausdrücklich beschriftete Aktion.
 
 Spielerprofile werden vor einer Session mit dem Runtime-Command
 `create_player` atomar angelegt. `cancel_prepared_game` führt aus der Anleitung

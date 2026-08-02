@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
@@ -55,6 +55,15 @@ try{
   }
   await Promise.all([control.goto(`${origin}/control`),projector.goto(`${origin}/projector`)]);
   await control.getByRole('button',{name:'Einstellungen'}).click();
+  const diagnosticDownloadPromise=control.waitForEvent('download');
+  await control.locator('[data-action="diagnostic-export"]').click();
+  const diagnosticDownload=await diagnosticDownloadPromise;
+  const diagnosticArchive=JSON.parse(await readFile(await diagnosticDownload.path(),'utf8'));
+  if(diagnosticArchive.database_included!==false
+    || diagnosticArchive.versions?.schema!==6
+    || !diagnosticArchive.logs?.some(record=>record.event==='runtime_started')){
+    throw new Error('Expected a redacted diagnostics-only export initiated from settings');
+  }
   await control.locator('[data-action="art-theme"][data-theme="neon"]').click();
   await projector.waitForFunction(()=>appState.experience?.art_theme==='neon');
   await control.locator('[data-action="calibrate"]').click();

@@ -81,7 +81,14 @@
       return this.acceptEnvelope(envelope,{snapshot:true});
     }
 
-    query(path){ return this.request(path); }
+    query(path){
+      if(path==='/api/v2/diagnostics/export'){
+        return this.request(path,{
+          method:'POST',headers:{'content-type':'application/json'},body:'{}',
+        });
+      }
+      return this.request(path);
+    }
 
     acknowledgeEffect(effectId){
       return this.request(`/api/v2/runtime/effects/${viewTarget()}/${encodeURIComponent(effectId)}/ack`,{

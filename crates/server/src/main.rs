@@ -16,11 +16,16 @@ use sdb_contracts::{
     CommandEnvelope, ContractError, DartSource, EffectTarget, Envelope, ErrorCode, MessageKind,
     PROTOCOL_VERSION, RuntimeCommand,
 };
+use sdb_diagnostics::{
+    DiagnosticContext, DiagnosticEnvironment, DiagnosticLevel, DiagnosticLogger, DiagnosticScope,
+    DiagnosticVersions,
+};
 use sdb_game_core::{GameMetadata, registered_game_metadata};
 use sdb_runtime::{CommandResult, Runtime, RuntimePublicSnapshot};
-use sdb_storage::SqliteRepository;
+use sdb_storage::{CURRENT_SCHEMA_VERSION, SqliteRepository};
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::BTreeMap,
     env,
     net::{IpAddr, Ipv4Addr, SocketAddr},
     path::PathBuf,
@@ -47,6 +52,7 @@ struct AppState {
     companions: Arc<Mutex<PairingAuthority>>,
     companion_changes: broadcast::Sender<()>,
     companion_config: Option<Arc<CompanionConfig>>,
+    diagnostics: DiagnosticLogger,
 }
 
 #[derive(Debug)]
@@ -159,7 +165,7 @@ async fn main() {
         data_dir.join("dartboard.db"),
     )
     .expect("open runtime database");
-    if let Some(import) = legacy_import {
+    if let Some(import) = &legacy_import {
         println!(
             "Imported legacy Python database {} (backup: {})",
             import.source.display(),
@@ -168,6 +174,24 @@ async fn main() {
     }
     let runtime = Runtime::restore(Uuid::new_v4().to_string(), repository)
         .expect("restore committed runtime");
+    let diagnostics =
+        DiagnosticLogger::open(data_dir.join("logs"), diagnostic_context("hosted-http"))
+            .expect("open diagnostic log");
+    let runtime_id = runtime.instance_id().to_owned();
+    let revision = runtime.snapshot().revision;
+    if let Some(import) = &legacy_import {
+        let _ = diagnostics.record(
+            DiagnosticLevel::Info,
+            "storage",
+            "legacy_database_imported",
+            DiagnosticScope {
+                runtime_instance_id: Some(&runtime_id),
+                revision: Some(revision),
+                ..DiagnosticScope::default()
+            },
+            serde_json::json!({"backup_created": import.backup.exists()}),
+        );
+    }
     let ble_enabled = env_flag("SDB_ENABLE_BLE", false);
     let board_token = env::var("SDB_BOARD_TOKEN")
         .ok()
@@ -187,7 +211,24 @@ async fn main() {
     let companion_config = companion_config(bind_ip);
     let mut state = AppState::new(runtime, ble_enabled, board_token, companion_config)
         .expect("restore companion device grants");
+    state.diagnostics = diagnostics;
     state.allow_test_events = env_flag("SDB_ALLOW_TEST_EVENTS", false);
+    let _ = state.diagnostics.record(
+        DiagnosticLevel::Info,
+        "server",
+        "runtime_started",
+        DiagnosticScope {
+            runtime_instance_id: Some(&runtime_id),
+            revision: Some(revision),
+            board_state: Some(if ble_enabled {
+                "unavailable"
+            } else {
+                "disabled"
+            }),
+            ..DiagnosticScope::default()
+        },
+        serde_json::json!({"ble_enabled": ble_enabled, "test_events": state.allow_test_events}),
+    );
     let app = router(state);
     let address = SocketAddr::new(bind_ip, port);
     let listener = tokio::net::TcpListener::bind(address)
@@ -228,6 +269,7 @@ impl AppState {
             ))),
             companion_changes,
             companion_config: companion_config.map(Arc::new),
+            diagnostics: DiagnosticLogger::memory(diagnostic_context("hosted-http-test")),
         })
     }
 
@@ -327,6 +369,7 @@ fn router(state: AppState) -> Router {
             get(training_recommendations),
         )
         .route("/api/v2/data/export", get(export_data))
+        .route("/api/v2/diagnostics/export", post(export_diagnostics))
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),
@@ -407,7 +450,26 @@ async fn board_status(
         detail: request.detail,
         connection_id: request.connection_id,
     };
-    Ok(Json(board.status.clone()))
+    let status = board.status.clone();
+    drop(board);
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let _ = state.diagnostics.record(
+        DiagnosticLevel::Info,
+        "board",
+        "status_changed",
+        DiagnosticScope {
+            runtime_instance_id: Some(runtime.instance_id()),
+            revision: Some(runtime.snapshot().revision),
+            board_state: Some(board_phase_label(status.phase)),
+            adapter_error_code: status.failure_code.map(board_failure_label),
+            ..DiagnosticScope::default()
+        },
+        serde_json::json!({}),
+    );
+    Ok(Json(status))
 }
 
 async fn board_packet(
@@ -475,6 +537,31 @@ async fn board_packet(
         BoardIngressOutcome::Duplicate => BoardPacketResponse::Duplicate,
         BoardIngressOutcome::Rejected { reason } => BoardPacketResponse::Rejected { reason },
     };
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let (event, level) = match &response {
+        BoardPacketResponse::Applied { .. } => ("dart_applied", DiagnosticLevel::Info),
+        BoardPacketResponse::Duplicate => ("packet_duplicate", DiagnosticLevel::Info),
+        BoardPacketResponse::Button { .. } => ("button_received", DiagnosticLevel::Info),
+        BoardPacketResponse::Rejected { .. } => ("packet_rejected", DiagnosticLevel::Warn),
+        BoardPacketResponse::RuntimeRejected { .. } => {
+            ("dart_runtime_rejected", DiagnosticLevel::Warn)
+        }
+    };
+    let _ = state.diagnostics.record(
+        level,
+        "board",
+        event,
+        DiagnosticScope {
+            runtime_instance_id: Some(runtime.instance_id()),
+            revision: Some(runtime.snapshot().revision),
+            board_state: Some("ready"),
+            ..DiagnosticScope::default()
+        },
+        serde_json::json!({}),
+    );
     Ok(Json(response))
 }
 
@@ -766,6 +853,106 @@ async fn export_data(
     Ok((headers, Json(export)))
 }
 
+async fn export_diagnostics(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<(HeaderMap, Json<sdb_diagnostics::DiagnosticExport>), ApiError> {
+    validate_same_origin(&headers)?;
+    let board = state
+        .board
+        .lock()
+        .map_err(|_| internal_error("board lock poisoned"))?
+        .status
+        .clone();
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let health = serde_json::json!({
+        "status": if board.phase.is_healthy() { "ok" } else { "degraded" },
+        "runtime": "ok",
+        "database": "ok",
+        "board": board.phase,
+        "board_failure_code": board.failure_code,
+        "companion": if state.companion_config.is_some() { "ready" } else { "disabled" },
+        "revision": runtime.snapshot().revision,
+    });
+    let configuration = serde_json::json!({
+        "ble_enabled": board.enabled,
+        "test_events": state.allow_test_events,
+        "companion_enabled": state.companion_config.is_some(),
+    });
+    let export = state
+        .diagnostics
+        .export(health, configuration)
+        .map_err(|_| internal_error("diagnostic export failed"))?;
+    let mut response_headers = HeaderMap::new();
+    response_headers.insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static("attachment; filename=\"smart-dartboard-diagnostics.json\""),
+    );
+    Ok((response_headers, Json(export)))
+}
+
+fn diagnostic_context(adapter: &str) -> DiagnosticContext {
+    DiagnosticContext {
+        versions: DiagnosticVersions {
+            app: env!("CARGO_PKG_VERSION").into(),
+            contract: PROTOCOL_VERSION,
+            schema: CURRENT_SCHEMA_VERSION,
+            rulesets: registered_game_metadata()
+                .into_iter()
+                .map(|mode| (mode.slug.into(), mode.ruleset_version))
+                .collect::<BTreeMap<_, _>>(),
+        },
+        environment: DiagnosticEnvironment::current(adapter, env!("CARGO_PKG_VERSION")),
+    }
+}
+
+fn command_type(command: &RuntimeCommand) -> String {
+    serde_json::to_value(command)
+        .ok()
+        .and_then(|value| {
+            value
+                .get("type")
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_owned)
+        })
+        .unwrap_or_else(|| "unknown".into())
+}
+
+const fn board_phase_label(phase: BoardPhase) -> &'static str {
+    match phase {
+        BoardPhase::Disabled => "disabled",
+        BoardPhase::Unavailable => "unavailable",
+        BoardPhase::PermissionRequired => "permission_required",
+        BoardPhase::BluetoothOff => "bluetooth_off",
+        BoardPhase::Scanning => "scanning",
+        BoardPhase::Connecting => "connecting",
+        BoardPhase::Discovering => "discovering",
+        BoardPhase::Subscribing => "subscribing",
+        BoardPhase::Ready => "ready",
+        BoardPhase::Reconnecting => "reconnecting",
+        BoardPhase::Error => "error",
+    }
+}
+
+const fn board_failure_label(code: BoardFailureCode) -> &'static str {
+    match code {
+        BoardFailureCode::AdapterUnavailable => "adapter_unavailable",
+        BoardFailureCode::PermissionDenied => "permission_denied",
+        BoardFailureCode::BluetoothPoweredOff => "bluetooth_powered_off",
+        BoardFailureCode::DeviceNotFound => "device_not_found",
+        BoardFailureCode::ConnectionFailed => "connection_failed",
+        BoardFailureCode::ServiceMissing => "service_missing",
+        BoardFailureCode::CharacteristicMissing => "characteristic_missing",
+        BoardFailureCode::SubscriptionFailed => "subscription_failed",
+        BoardFailureCode::QueueOverflow => "queue_overflow",
+        BoardFailureCode::RuntimeUnavailable => "runtime_unavailable",
+        BoardFailureCode::TransportError => "transport_error",
+    }
+}
+
 async fn session_detail(
     State(state): State<AppState>,
     Path(session_id): Path<String>,
@@ -831,6 +1018,7 @@ async fn command(
         return Err(forbidden("projector test events are disabled").into());
     }
     let command_id = envelope.command_id.clone();
+    let command_type = command_type(&envelope.command);
     let result = {
         let mut runtime = state
             .runtime
@@ -840,6 +1028,24 @@ async fn command(
     };
     let message = state.snapshot(format!("{command_id}:state"))?;
     let _ = state.states.send(message);
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let _ = state.diagnostics.record(
+        DiagnosticLevel::Info,
+        "runtime",
+        "command_committed",
+        DiagnosticScope {
+            runtime_instance_id: Some(runtime.instance_id()),
+            revision: Some(result.revision),
+            session_id: result.session.session_id.as_deref(),
+            game_id: result.session.game_id.as_deref(),
+            event_id: Some(&command_id),
+            ..DiagnosticScope::default()
+        },
+        serde_json::json!({"command_type": command_type, "duplicate": result.duplicate}),
+    );
     Ok(Json(result))
 }
 
@@ -863,6 +1069,22 @@ async fn acknowledge_effect(
         .map_err(|_| internal_error("runtime lock poisoned"))?
         .acknowledge_effect(&effect_id, target)
         .map_err(|_| internal_error("effect acknowledgement failed"))?;
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let _ = state.diagnostics.record(
+        DiagnosticLevel::Info,
+        "effects",
+        "effect_acknowledged",
+        DiagnosticScope {
+            runtime_instance_id: Some(runtime.instance_id()),
+            revision: Some(runtime.snapshot().revision),
+            event_id: Some(&effect_id),
+            ..DiagnosticScope::default()
+        },
+        serde_json::json!({"target": target, "acknowledged": acknowledged}),
+    );
     Ok(Json(EffectAcknowledgement {
         effect_id,
         acknowledged,
@@ -1388,6 +1610,24 @@ mod tests {
                 .expect("response");
             assert_eq!(response.status(), StatusCode::OK, "{path}");
         }
+
+        let diagnostics = test_app()
+            .oneshot(
+                Request::post("/api/v2/diagnostics/export")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        let value: Value = serde_json::from_slice(
+            &to_bytes(diagnostics.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("diagnostic JSON");
+        assert_eq!(value["database_included"], false);
+        assert_eq!(value["versions"]["schema"], CURRENT_SCHEMA_VERSION);
     }
 
     #[tokio::test]

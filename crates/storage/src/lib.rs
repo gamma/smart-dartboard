@@ -19,7 +19,7 @@ use std::{
 };
 use thiserror::Error;
 
-const CURRENT_SCHEMA_VERSION: u32 = 6;
+pub const CURRENT_SCHEMA_VERSION: u32 = 6;
 
 #[derive(Debug, Error)]
 pub enum StorageError {

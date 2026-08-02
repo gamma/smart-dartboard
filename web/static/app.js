@@ -1264,6 +1264,10 @@ function controlSettings(){
         <div><span>${t('board_setup')}</span><h2>${t('calibrate_title')}</h2><p>${t('calibrate_settings_copy')}</p></div>
         ${actionButton(t('calibrate'),'calibrate','secondary')}
       </section>
+      <section class="settings-link-card diagnostic-export-card">
+        <div><span>${t('diagnostics')}</span><h2>${t('diagnostic_export_title')}</h2><p>${t('diagnostic_export_copy')}</p></div>
+        ${actionButton(t('diagnostic_export'),'diagnostic-export','secondary')}
+      </section>
       ${window.__TAURI__?`<section class="settings-link-card">
         <div><span>NATIVE HOST</span><h2>${language()==='en'?'Devices & Companion':'Geräte & Companion'}</h2><p>${language()==='en'?'Bluetooth, AirPlay / HDMI, device role and Companion pairing.':'Bluetooth, AirPlay / HDMI, Geräterolle und Companion-Kopplung.'}</p></div>
         ${actionButton(language()==='en'?'Open device setup':'Geräte-Setup öffnen','native-setup','secondary')}
@@ -2002,6 +2006,22 @@ document.addEventListener('click',async event=>{
       const link=document.createElement('a');
       link.href=url;
       link.download='smart-dartboard-history.json';
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(error){ showToast(error.message); }
+    finally{ target.disabled=false; }
+    return;
+  }
+  if(name==='diagnostic-export'){
+    target.disabled=true;
+    try{
+      const archive=await getJson('/api/diagnostics/export');
+      const url=URL.createObjectURL(new Blob([JSON.stringify(archive,null,2)],{type:'application/json'}));
+      const link=document.createElement('a');
+      link.href=url;
+      link.download='smart-dartboard-diagnostics.json';
       document.body.append(link);
       link.click();
       link.remove();

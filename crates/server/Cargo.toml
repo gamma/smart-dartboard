@@ -12,6 +12,7 @@ axum = { version = "0.8", features = ["ws"] }
 sdb-board = { path = "../board" }
 sdb-companion = { path = "../companion" }
 sdb-contracts = { path = "../contracts" }
+sdb-diagnostics = { path = "../diagnostics" }
 sdb-game-core = { path = "../game-core" }
 sdb-runtime = { path = "../runtime" }
 sdb-storage = { path = "../storage" }

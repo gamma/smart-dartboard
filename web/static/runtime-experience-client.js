@@ -397,6 +397,7 @@
         return this.core.query(path.replace('/api/training','/api/v2/training'));
       }
       if(path==='/api/data/export') return this.core.query('/api/v2/data/export');
+      if(path==='/api/diagnostics/export') return this.core.query('/api/v2/diagnostics/export');
       throw new Error(`Unsupported Rust UI query: ${path}`);
     }
 

@@ -877,6 +877,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sdb-diagnostics"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "sdb-game-core"
 version = "0.1.0"
 dependencies = [
@@ -917,6 +925,7 @@ dependencies = [
  "sdb-board",
  "sdb-companion",
  "sdb-contracts",
+ "sdb-diagnostics",
  "sdb-game-core",
  "sdb-runtime",
  "sdb-storage",

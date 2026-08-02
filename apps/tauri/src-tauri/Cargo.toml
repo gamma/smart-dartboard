@@ -25,6 +25,7 @@ sdb-board = { path = "../../../crates/board" }
 sdb-companion = { path = "../../../crates/companion" }
 sdb-companion-transport = { path = "../../../crates/companion-transport" }
 sdb-contracts = { path = "../../../crates/contracts" }
+sdb-diagnostics = { path = "../../../crates/diagnostics" }
 sdb-game-core = { path = "../../../crates/game-core" }
 sdb-runtime = { path = "../../../crates/runtime" }
 sdb-storage = { path = "../../../crates/storage" }

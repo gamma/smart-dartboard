@@ -175,6 +175,10 @@ docker compose ps
 
 `./data` wird nach `/app/data` eingebunden. Spieler, Sessions und laufende
 Spiele bleiben deshalb auch nach einem Container-Neubau erhalten.
+Rotierende, datensparsame Diagnose-Logs liegen im selben Volume unter
+`logs/`. Ein redigiertes Diagnosepaket lässt sich sichtbar über
+**Einstellungen → Diagnose exportieren** herunterladen; der separate
+Historienexport enthält dagegen bewusst die Spielerdaten.
 
 ## Tests
 

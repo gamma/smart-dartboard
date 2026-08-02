@@ -257,6 +257,9 @@ Umgesetzt und lokal verifiziert:
   Hostpräferenz in SQLite-Schema 6, erzeugt keine Runtime-Revision und lässt
   Session, Spiel und BLE-Verbindung unberührt. Nicht ausgewählte lokale
   Projector-Ausgänge werden neutral ausgeblendet.
+- rotierende, redigierte JSONL-Diagnosen im nativen App-Datenverzeichnis unter
+  `logs/`. Der Diagnoseexport ist nur aus den Control-Einstellungen aufrufbar
+  und enthält weder Datenbank noch Spielernamen, Tokens oder BLE-Rohpakete.
 
 Noch nicht als produktionsreif nachgewiesen:
 
