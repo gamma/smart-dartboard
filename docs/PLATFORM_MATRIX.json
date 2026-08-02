@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "updated": "2026-08-02",
+  "toolchains": {
+    "rust": {
+      "toolchain": "1.97.1",
+      "edition": "2024",
+      "msrv": "1.97.1",
+      "lockfile": "committed"
+    },
+    "node": {
+      "major": "26",
+      "npm_major": "11",
+      "lockfile": "apps/tauri/package-lock.json"
+    },
+    "python_legacy": {
+      "major_minor": "3.14",
+      "lockfile": "requirements.txt"
+    },
+    "tauri": {
+      "cli": "2.11.4",
+      "rust_runtime": "2.11.5"
+    },
+    "playwright": "1.62.1",
+    "sqlite": {
+      "rusqlite": "0.38.0",
+      "libsqlite3_sys": "0.36.0",
+      "bundled_sqlite": "3.51.1",
+      "features": ["backup", "bundled"]
+    },
+    "apple_build_baseline": {
+      "xcode": "26.6",
+      "swift": "toolchain bundled with Xcode"
+    }
+  },
+  "platforms": {
+    "linux_docker": {
+      "release_order": 1,
+      "support_level": "release_candidate",
+      "minimum": "Linux kernel and BlueZ supplied by the qualified host",
+      "distributions": ["Debian 12 Bookworm container"],
+      "architectures": ["amd64", "arm64"],
+      "build": "verified",
+      "installation": "verified_without_ble",
+      "hardware": "not_qualified",
+      "requirements": ["Docker Engine with Compose v2", "BlueZ system D-Bus for container BLE"]
+    },
+    "macos": {
+      "release_order": 2,
+      "support_level": "development_preview",
+      "minimum": "13.0",
+      "architectures": ["arm64"],
+      "build": "verified",
+      "installation": "not_packaged",
+      "hardware": "not_qualified",
+      "requirements": ["CoreBluetooth permission", "WebKit", "AirPlay or HDMI for direct projector output"]
+    },
+    "ios_ipados": {
+      "release_order": 3,
+      "support_level": "simulator_preview",
+      "minimum": "14.0",
+      "architectures": {
+        "arm64-device": "core_compile_verified",
+        "arm64-simulator": "bundle_verified",
+        "x86_64-simulator": "configured_not_verified"
+      },
+      "build": "simulator_bundle_verified",
+      "installation": "not_verified",
+      "hardware": "not_qualified",
+      "requirements": ["CoreBluetooth permission", "AirPlay or HDMI, or a paired Companion projector"]
+    },
+    "android": {
+      "release_order": 4,
+      "support_level": "planned",
+      "min_sdk": 31,
+      "target_sdk": 36,
+      "architectures": ["arm64-v8a"],
+      "build": "not_implemented",
+      "installation": "not_implemented",
+      "hardware": "not_qualified"
+    },
+    "windows": {
+      "release_order": 5,
+      "support_level": "planned",
+      "minimum": "Windows 10 1809 (build 17763)",
+      "architectures": ["x86_64", "arm64"],
+      "build": "not_implemented",
+      "installation": "not_implemented",
+      "hardware": "not_qualified"
+    }
+  },
+  "qualified_hardware": [],
+  "development_hardware": [
+    {
+      "kind": "dartboard",
+      "model": "Kings Dart Smart-Dartboard Dartworld C1 / SDB-BT",
+      "reference": "B0F6Y5ZJ3F",
+      "qualification": "legacy_runtime_only; Rust hardware matrix pending"
+    }
+  ]
+}

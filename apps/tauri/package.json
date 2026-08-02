@@ -3,6 +3,10 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": {
+    "node": "26.x",
+    "npm": "11.x"
+  },
   "scripts": {
     "tauri": "tauri",
     "dev": "tauri dev",
@@ -10,6 +14,7 @@
     "ios:init": "tauri ios init",
     "ios:build:sim": "node scripts/clean-ios-simulator-output.mjs && tauri ios build --debug --target aarch64-sim --no-sign --ci",
     "ios:dev": "tauri ios dev",
+    "test:chromium": "playwright test tests --browser=chromium --workers=1",
     "test:webkit": "playwright test tests --browser=webkit --workers=1",
     "test:rust-ui": "node scripts/test-rust-ui.mjs"
   },

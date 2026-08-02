@@ -849,6 +849,10 @@ Vor Milestone B wird eine versionierte Buildmatrix committed. Sie fixiert:
 Ein Ziel gilt erst als unterstützt, wenn Build, Installation und relevante
 Hardwaretests in dieser Matrix dokumentiert sind.
 
+Die versionierte Quelle liegt in
+[`PLATFORM_MATRIX.json`](PLATFORM_MATRIX.json); die lesbare Einordnung und der
+lokale Drift-Check stehen in [`PLATFORM_MATRIX.md`](PLATFORM_MATRIX.md).
+
 ## 18. Branch-, CI- und Release-Regeln
 
 - `main` bleibt bis zur Parität die produktive Python-/Docker-Version.

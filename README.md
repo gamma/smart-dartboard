@@ -203,6 +203,7 @@ erzeugen versionierte AMD64-/ARM64-Images in der GitHub Container Registry.
 - [Portabilität für iOS und macOS](docs/APPLE_PORTABILITY.md)
 - [Portabilität für Android und ein eigenständiges Spieltablet](docs/ANDROID_PORTABILITY.md)
 - [Native Implementierung und verifizierter Plattformstand](docs/NATIVE_IMPLEMENTATION.md)
+- [Build- und Plattformmatrix](docs/PLATFORM_MATRIX.md)
 - [Rust-Server v2 einschließlich Python-Datenimport](docs/RUST_SERVER_V2.md)
 - [Betrieb und Kiosk-Setup](docs/OPERATIONS.md)
 - [CI, Releases und Deployment](docs/DEPLOYMENT.md)

@@ -27,6 +27,7 @@
     "active": false,
     "targets": "all",
     "macOS": {
+      "minimumSystemVersion": "13.0",
       "infoPlist": "Info-macOS.plist",
       "entitlements": "Entitlements-macOS.plist"
     }
