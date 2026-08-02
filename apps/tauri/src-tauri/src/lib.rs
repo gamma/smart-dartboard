@@ -74,6 +74,9 @@ struct NativeState {
     companion_states: broadcast::Sender<PublicState>,
     companion_changes: broadcast::Sender<()>,
     app_role: NativeAppRole,
+    lifecycle: AppLifecyclePhase,
+    #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+    lifecycle_generation: u64,
     diagnostics: DiagnosticLogger,
 }
 
@@ -118,6 +121,14 @@ enum ProjectorOutput {
     LocalPreview,
 }
 
+#[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum AppLifecyclePhase {
+    #[default]
+    Active,
+    Suspended,
+}
+
 impl ProjectorOutput {
     fn parse(value: &str) -> Result<Self, String> {
         match value {
@@ -140,6 +151,8 @@ impl ProjectorOutput {
 #[derive(Debug, Clone, Deserialize, PartialEq, Serialize)]
 struct PublicState {
     app_role: NativeAppRole,
+    #[serde(default)]
+    lifecycle: AppLifecyclePhase,
     runtime_instance_id: String,
     revision: u64,
     counter: i64,
@@ -306,6 +319,8 @@ impl NativeState {
             companion_states,
             companion_changes,
             app_role,
+            lifecycle: AppLifecyclePhase::Active,
+            lifecycle_generation: 0,
             diagnostics: DiagnosticLogger::memory(diagnostic_context("native-test")),
         })
     }
@@ -324,6 +339,7 @@ impl NativeState {
         });
         PublicState {
             app_role: self.app_role,
+            lifecycle: self.lifecycle,
             runtime_instance_id: self.runtime.instance_id().into(),
             revision: self.runtime.snapshot().revision,
             counter,
@@ -340,6 +356,9 @@ impl NativeState {
     }
 
     fn select_app_role(&mut self, role: NativeAppRole) -> Result<PublicState, String> {
+        if self.lifecycle != AppLifecyclePhase::Active {
+            return Err("app role cannot change while the app is suspended".into());
+        }
         self.runtime
             .repository_mut()
             .save_preference(APP_ROLE_PREFERENCE, role.storage_value())
@@ -351,6 +370,43 @@ impl NativeState {
             self.board_status = BoardStatus::unavailable();
         }
         Ok(self.public())
+    }
+
+    #[cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
+    fn set_lifecycle(&mut self, phase: AppLifecyclePhase) -> Option<u64> {
+        if self.lifecycle == phase {
+            return None;
+        }
+        self.lifecycle = phase;
+        self.lifecycle_generation = self.lifecycle_generation.saturating_add(1);
+        self.board_status = if self.app_role == NativeAppRole::Controller {
+            BoardStatus {
+                enabled: true,
+                phase: BoardPhase::Reconnecting,
+                failure_code: None,
+                detail: (phase == AppLifecyclePhase::Suspended)
+                    .then(|| "App ist pausiert".to_owned()),
+                connection_id: None,
+            }
+        } else {
+            BoardStatus::disabled()
+        };
+        let _ = self.diagnostics.record(
+            DiagnosticLevel::Info,
+            "lifecycle",
+            match phase {
+                AppLifecyclePhase::Active => "app_resumed",
+                AppLifecyclePhase::Suspended => "app_suspended",
+            },
+            DiagnosticScope {
+                runtime_instance_id: Some(self.runtime.instance_id()),
+                revision: Some(self.runtime.snapshot().revision),
+                board_state: Some(board_phase_name(self.board_status.phase)),
+                ..DiagnosticScope::default()
+            },
+            serde_json::json!({"app_role": self.app_role}),
+        );
+        Some(self.lifecycle_generation)
     }
 
     fn ingest_test_hit(&mut self) -> Result<PublicState, String> {
@@ -472,18 +528,22 @@ impl NativeState {
     }
 
     fn require_controller(&self) -> Result<(), String> {
-        if self.app_role == NativeAppRole::Controller {
-            Ok(())
-        } else {
+        if self.app_role != NativeAppRole::Controller {
             Err("command is unavailable in Companion projector mode".into())
+        } else if self.lifecycle != AppLifecyclePhase::Active {
+            Err("command is unavailable while the app is suspended".into())
+        } else {
+            Ok(())
         }
     }
 
     fn require_companion(&self) -> Result<(), String> {
-        if self.app_role == NativeAppRole::CompanionProjector {
-            Ok(())
-        } else {
+        if self.app_role != NativeAppRole::CompanionProjector {
             Err("command is available only in Companion projector mode".into())
+        } else if self.lifecycle != AppLifecyclePhase::Active {
+            Err("command is unavailable while the app is suspended".into())
+        } else {
+            Ok(())
         }
     }
 }
@@ -2358,6 +2418,8 @@ struct NativeCompanionService {
     client_status: Arc<Mutex<Option<CompanionClientView>>>,
     client_frame: Arc<Mutex<Option<PublicState>>>,
     client_task: AsyncMutex<Option<JoinHandle<()>>>,
+    #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
+    lifecycle_gate: AsyncMutex<()>,
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -2434,6 +2496,94 @@ async fn restart_companion_client(app: &tauri::AppHandle, service: &NativeCompan
         companion_client_loop(app, status, frame, grant).await;
     });
     *service.client_task.lock().await = Some(task);
+}
+
+#[cfg(target_os = "ios")]
+fn handle_ios_lifecycle(app: &tauri::AppHandle, phase: AppLifecyclePhase) {
+    let Some(shared_state) = app.try_state::<SharedNativeState>() else {
+        return;
+    };
+    let transition = {
+        let Ok(mut state) = shared_state.lock() else {
+            return;
+        };
+        state
+            .set_lifecycle(phase)
+            .map(|generation| (generation, state.public()))
+    };
+    let Some((generation, public)) = transition else {
+        return;
+    };
+    publish_public_state(app, &public);
+
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let service = app.state::<NativeCompanionService>();
+        let _gate = service.lifecycle_gate.lock().await;
+        let Some(shared_state) = app.try_state::<SharedNativeState>() else {
+            return;
+        };
+        let (role, output, current) = {
+            let Ok(state) = shared_state.lock() else {
+                return;
+            };
+            (
+                state.app_role,
+                state.projector_output,
+                state.lifecycle == phase && state.lifecycle_generation == generation,
+            )
+        };
+        if !current {
+            return;
+        }
+
+        match phase {
+            AppLifecyclePhase::Suspended => {
+                apple_board_host::stop();
+                apple_bonjour::browser_stop();
+                stop_companion_client(&service).await;
+                clear_companion_client_frame(&app, &service.client_frame);
+                if let Some(transport) = &service.transport {
+                    transport.stop().await;
+                }
+            }
+            AppLifecyclePhase::Active => match role {
+                NativeAppRole::Controller => {
+                    apple_board_host::install();
+                    if output == ProjectorOutput::Companion
+                        && let Some(transport) = &service.transport
+                        && transport.start(shared_state.inner().clone()).await.is_err()
+                    {
+                        record_app_diagnostic_error(
+                            &app,
+                            "companion",
+                            "resume_tls_start_failed",
+                            "transport_error",
+                        );
+                    }
+                }
+                NativeAppRole::CompanionProjector => {
+                    if apple_bonjour::browser_start().is_err() {
+                        record_app_diagnostic_error(
+                            &app,
+                            "companion",
+                            "resume_discovery_failed",
+                            "bonjour_error",
+                        );
+                    } else {
+                        restart_companion_client(&app, &service).await;
+                    }
+                }
+            },
+        }
+        let public = shared_state.lock().ok().and_then(|state| {
+            (state.lifecycle == phase && state.lifecycle_generation == generation)
+                .then(|| state.public())
+        });
+        if let Some(public) = public {
+            publish_public_state(&app, &public);
+        }
+    });
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -2531,8 +2681,8 @@ async fn companion_client_loop(
 #[allow(unsafe_code)]
 mod apple_board {
     use super::{
-        APP_HANDLE, BoardFailureCode, BoardPhase, BoardStatus, NativeAppRole, SharedNativeState,
-        DiagnosticLevel, DiagnosticScope, board_failure_name, board_phase_name,
+        APP_HANDLE, AppLifecyclePhase, BoardFailureCode, BoardPhase, BoardStatus, NativeAppRole,
+        SharedNativeState, DiagnosticLevel, DiagnosticScope, board_failure_name, board_phase_name,
         publish_public_state,
     };
     use std::ffi::{CStr, c_char};
@@ -2600,6 +2750,9 @@ mod apple_board {
             let Ok(mut state) = state.lock() else {
                 return;
             };
+            if state.lifecycle == AppLifecyclePhase::Suspended {
+                return;
+            }
             if state.app_role == NativeAppRole::CompanionProjector {
                 state.board_status = BoardStatus::disabled();
             } else {
@@ -2656,7 +2809,9 @@ mod apple_board {
             let Ok(mut state) = state.lock() else {
                 return;
             };
-            if state.app_role == NativeAppRole::CompanionProjector {
+            if state.lifecycle == AppLifecyclePhase::Suspended
+                || state.app_role == NativeAppRole::CompanionProjector
+            {
                 return;
             }
             match state.ingest_board_packet(&connection_id, raw) {
@@ -3759,7 +3914,6 @@ fn diagnostic_context(adapter: &str) -> DiagnosticContext {
     }
 }
 
-#[cfg(any(target_os = "ios", target_os = "macos"))]
 const fn board_phase_name(phase: BoardPhase) -> &'static str {
     match phase {
         BoardPhase::Disabled => "disabled",
@@ -3851,7 +4005,7 @@ fn prepare_companion_identity(repository: &mut SqliteRepository) -> Result<TlsId
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
@@ -3981,6 +4135,7 @@ pub fn run() {
                 client_status,
                 client_frame: Arc::new(Mutex::new(None)),
                 client_task: AsyncMutex::new(None),
+                lifecycle_gate: AsyncMutex::new(()),
             });
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let _ = APP_HANDLE.set(app.handle().clone());
@@ -4084,8 +4239,30 @@ pub fn run() {
             app_role_select,
             projector_output_select
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running Smart Dartboard native M0");
+        .build(tauri::generate_context!())
+        .expect("error while building Smart Dartboard");
+    app.run(|app, event| {
+        #[cfg(target_os = "ios")]
+        if let tauri::RunEvent::WindowEvent {
+            label,
+            event: window_event,
+            ..
+        } = event
+            && label == "control"
+        {
+            match window_event {
+                tauri::WindowEvent::Suspended => {
+                    handle_ios_lifecycle(app, AppLifecyclePhase::Suspended);
+                }
+                tauri::WindowEvent::Resumed => {
+                    handle_ios_lifecycle(app, AppLifecyclePhase::Active);
+                }
+                _ => {}
+            }
+        }
+        #[cfg(not(target_os = "ios"))]
+        let _ = (app, event);
+    });
 }
 
 #[cfg(test)]
@@ -4191,6 +4368,48 @@ mod tests {
                 .expect_err("oversized archive")
                 .contains("16 MiB")
         );
+    }
+
+    #[test]
+    fn native_lifecycle_is_idempotent_and_preserves_the_committed_game() {
+        let mut state = NativeState::restore(
+            SqliteRepository::in_memory().expect("repository"),
+            test_companion_identity(),
+        )
+        .expect("native state");
+        state.board_status = BoardStatus {
+            enabled: true,
+            phase: BoardPhase::Ready,
+            failure_code: None,
+            detail: None,
+            connection_id: Some("before-suspend".into()),
+        };
+        let revision = state.runtime.snapshot().revision;
+        let game = state.runtime.snapshot().game.clone();
+
+        assert_eq!(state.set_lifecycle(AppLifecyclePhase::Suspended), Some(1));
+        assert_eq!(state.set_lifecycle(AppLifecyclePhase::Suspended), None);
+        assert_eq!(state.lifecycle, AppLifecyclePhase::Suspended);
+        assert_eq!(state.board_status.phase, BoardPhase::Reconnecting);
+        assert!(state.board_status.connection_id.is_none());
+        assert!(state.require_controller().is_err());
+        assert!(
+            state
+                .select_app_role(NativeAppRole::CompanionProjector)
+                .is_err()
+        );
+        assert_eq!(state.runtime.snapshot().revision, revision);
+        assert_eq!(state.runtime.snapshot().game, game);
+
+        assert_eq!(state.set_lifecycle(AppLifecyclePhase::Active), Some(2));
+        assert!(state.require_controller().is_ok());
+        assert_eq!(state.runtime.snapshot().revision, revision);
+        assert_eq!(state.runtime.snapshot().game, game);
+
+        let mut legacy = serde_json::to_value(state.public()).expect("public state");
+        legacy.as_object_mut().expect("object").remove("lifecycle");
+        let decoded: PublicState = serde_json::from_value(legacy).expect("legacy public state");
+        assert_eq!(decoded.lifecycle, AppLifecyclePhase::Active);
     }
 
     #[test]

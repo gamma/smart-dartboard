@@ -935,3 +935,11 @@ Der gemeinsame Rust-Core, versionierte Contracts, atomare Persistenz und ein
 austauschbarer Runtime-Client verhindern danach fachliche Plattform-Rewrites.
 Unvermeidliche Unterschiede bleiben in kleinen, testbaren Adaptern für BLE,
 Displays, Lifecycle, Audio und Packaging.
+
+Für iOS ist dieser Lifecycle-Adapter inzwischen konkret umgesetzt: Suspend
+sperrt neue Eingaben vor dem asynchronen Adapterabbau, stoppt BLE/Bonjour und
+Companion-Verbindungen geordnet und verändert den committed Spielzustand
+nicht. Resume startet rollenabhängig neu. Ein CI-Smoke-Test installiert die App
+auf einem iPad-Simulator und weist Suspend/Resume bei identischer
+Runtime-Revision in den redigierten Diagnoselogs nach. Reale
+Hintergrundzeitlimits und Reconnect-Verhalten bleiben Teil der Hardwareabnahme.

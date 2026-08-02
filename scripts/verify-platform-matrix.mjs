@@ -58,6 +58,8 @@ expect(ci.includes('playwright install chromium webkit'),'CI browser installatio
 expect(ci.includes('run test:chromium') && ci.includes('run test:webkit'),'CI browser coverage drift');
 expect(ci.includes('run build:macos:app') && ci.includes('Smart-Dartboard-macOS-unsigned.zip'),
   'CI macOS app bundle drift');
+expect(packageJson.scripts['test:ios:lifecycle']==='node scripts/test-ios-lifecycle.mjs'
+  && ci.includes('run test:ios:lifecycle'),'iOS lifecycle test drift');
 expect(release.includes('platforms: linux/amd64,linux/arm64'),'container architecture drift');
 expect(tauriJson.bundle.macOS.minimumSystemVersion===matrix.platforms.macos.minimum,
   'macOS deployment target drift');

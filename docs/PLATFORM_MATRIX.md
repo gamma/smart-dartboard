@@ -34,7 +34,7 @@ mit `--locked`, npm-Abhängigkeiten in CI mit `npm ci` gebaut.
 | --- | --- | --- | --- | --- |
 | 1 | Linux/Docker, AMD64 + ARM64 | Debian 12 Bookworm im Container | Build und Start ohne BLE | offen |
 | 2 | macOS ARM64 | macOS 13 | unsigniertes `.app`-Bundle in CI und lokaler Bundle-Start | offen |
-| 3 | iOS/iPadOS | iOS/iPadOS 14 | ARM64-Simulatorbundle | offen |
+| 3 | iOS/iPadOS | iOS/iPadOS 14 | ARM64-Simulatorbundle installiert, gestartet und Suspend/Resume geprüft | offen |
 | 4 | Android ARM64 | minSdk 31, targetSdk 36 | noch nicht implementiert | offen |
 | 5 | Windows x64/ARM64 | Windows 10 1809 | noch nicht implementiert | offen |
 

@@ -450,6 +450,14 @@ und denselben Rust/SQLite-Code. Der Import ist atomar, größenbegrenzt und nur
 für die Controller-Rolle freigegeben. Er ist bewusst noch keine bidirektionale
 Synchronisation; ID-Kollisionen werden abgelehnt statt automatisch aufgelöst.
 
+Auch der iOS-Lifecycle besitzt nun eine explizite Grenze. Beim Wechsel in den
+Hintergrund bleiben Session und Spiel atomar erhalten, während BLE und lokale
+Netzwerkrollen gestoppt werden; nach dem Vordergrundwechsel werden sie passend
+zur gespeicherten App-Rolle neu verbunden. Das ist im iPad-Simulator als echte
+Suspend/Resume-Sequenz geprüft. Verhalten mit realer Scheibe, iOS-
+Hintergrundzeitlimits und WLAN-/AirPlay-Unterbrechungen ist weiterhin ein
+Hardware-Gate, keine aus dem Simulator abgeleitete Supportaussage.
+
 ## 9. Empfohlene Umsetzungsschritte
 
 1. Mit einem minimalen M0-Spike CoreBluetooth, zwei WebViews sowie eigenständige

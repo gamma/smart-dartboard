@@ -265,6 +265,13 @@ Umgesetzt und lokal verifiziert:
   Importberechtigung. Die 16-MiB-Grenze, vollständige Vorabvalidierung,
   Kollisionserkennung, Transaktion und Integritätsprüfung gelten auf Desktop
   und iOS identisch. Die gemeinsame Web-UI bietet Dateiauswahl und Bestätigung.
+- expliziter iOS-App-Lifecycle: `applicationWillResignActive` wird über Tauri
+  als Suspend verarbeitet, sperrt sofort weitere Dart-/Companion-Commands und
+  stoppt BLE, Bonjour, Companion-Replikation sowie den lokalen TLS-Host
+  serialisiert. Beim Resume starten ausschließlich die Adapter der gewählten
+  Controller- oder Projector-Rolle neu. Runtime-Revision und laufendes Spiel
+  bleiben dabei committed und unverändert. Doppelte Lifecycle-Events sind
+  idempotent; Diagnoseereignisse machen Suspend und Resume nachvollziehbar.
 
 Noch nicht als produktionsreif nachgewiesen:
 
@@ -327,11 +334,17 @@ iOS-Simulator-Build:
 
 ```bash
 npm --prefix apps/tauri run ios:build:sim
+npm --prefix apps/tauri run test:ios:lifecycle
 ```
 
 Das Script entfernt vorab nur das generierte Simulator-Archiv und das bereits
 exportierte `.app`-Bundle. Das ist nötig, weil Tauri 2.11.4 beim wiederholten
 Simulator-Build ein vorhandenes Exportziel nicht selbst ersetzt.
+Der zweite Befehl installiert das Bundle auf einem verfügbaren iPad-Simulator,
+schickt die App durch Hintergrund und Vordergrund und belegt über die
+redigierten Diagnoselogs, dass `app_suspended` und `app_resumed` dieselbe
+Runtime-Revision behalten. Ein eigens gebooteter Simulator wird anschließend
+wieder heruntergefahren.
 
 Der M0-Zwei-Display-Test kann in einem Debug-Build mit dem Simulator-Argument
 `--m0-test-hit-after-start` reproduziert werden. Revision 1 ist dabei der
