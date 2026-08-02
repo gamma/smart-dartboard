@@ -69,6 +69,9 @@ BLOCK_DROP_FIXTURE = (
 DRAGON_EGGS_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "dragon_eggs_v2.json"
 )
+COOKIE_MONSTER_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "cookie_monster_v2.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -884,6 +887,56 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                 "darts_in_turn": state.darts_in_turn, "turn_score": state.turn_score,
                 "round_number": state.round_number, "status": state.status,
             }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_cookie_monster_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(COOKIE_MONSTER_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(2, fixture["ruleset_version"])
+        engine = GameEngine()
+        engine.reset(
+            "cookie_monster",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]), dict(command["event"])
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            mode = state.mode_state
+            values = lambda key: [mode[key][player.id] for player in state.players]
+            wave = mode["wave"][state.players[0].id]
+            actual = {
+                "scores": [player.score for player in state.players],
+                "streak": values("streak"),
+                "sugar": values("sugar"),
+                "wave": values("wave"),
+                "collected": values("collected"),
+                "layout": [
+                    [target, item["kind"]]
+                    for target, item in mode["layouts"][str(wave)].items()
+                ],
+                "last_effect": mode["last_effect"],
+                "effect_points": mode["effect_points"],
+                "cookie_wave": mode["cookie_wave"],
+                "random_cursor": state.random_cursor,
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+            }
+            actual["layout"].sort(key=lambda item: item[0])
+            step["expected"]["layout"].sort(key=lambda item: item[0])
             self.assertEqual(actual, step["expected"])
 
     def test_python_session_flow_matches_shared_rust_fixture(self) -> None:

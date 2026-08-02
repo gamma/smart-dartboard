@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict, List
 
 from .arcade import TARGET_POOL_NORMAL, finish_round_game, overlay_item
@@ -33,7 +32,7 @@ class CookieMonsterMode:
             GameOption("difficulty", "Spielstufe", "choice", "easy", [
                 {"value": "easy", "label": "Einfach · Snack Time", "description": "15 große Zahlenfelder; jeder Ring isst den Cookie. Bull gibt +30.", "description_en": "15 large number areas; any ring eats the cookie. Bull scores +30."},
                 {"value": "normal", "label": "Mittel · Cookie Hunt", "description": "12 exakte Cookies mit Gold und Schimmel. Bull verdoppelt oder rettet den Zug.", "description_en": "12 exact cookies with gold and mold. Bull doubles or saves the visit."},
-                {"value": "hard", "label": "Schwer · Sugar Rush", "description": "15 exakte, farbige Cookies; Serien aktivieren Sugar Rush. Bull verdoppelt oder rettet.", "description_en": "15 exact colored cookies; streaks trigger Sugar Rush. Bull doubles or saves."},
+                {"value": "hard", "label": "Schwer · Sugar Rush", "description": "12 exakte, farbige Cookies; Serien aktivieren Sugar Rush. Bull verdoppelt oder rettet.", "description_en": "12 exact colored cookies; streaks trigger Sugar Rush. Bull doubles or saves."},
             ]),
             GameOption("rounds", "Runden", "choice", 5, [
                 {"value": 5, "label": "5 Runden"},
@@ -47,6 +46,7 @@ class CookieMonsterMode:
             InstructionStep("Stufe wählen", "Easy nutzt große Zahlenfelder; Mittel ergänzt Gold; Schwer ergänzt Farben und Sugar Rush.", "combo"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -59,8 +59,10 @@ class CookieMonsterMode:
             "sugar": {player.id: False for player in state.players},
             "wave": {player.id: 1 for player in state.players},
             "collected": {player.id: [] for player in state.players},
-            "seed": random.randint(0, 2**31 - 1),  # nosec B311
             "layouts": {},
+            "last_effect": "",
+            "effect_points": 0,
+            "cookie_wave": 1,
         }
         self._layout(state, 1)
 
@@ -70,13 +72,16 @@ class CookieMonsterMode:
         if layout_key in layouts:
             return layouts[layout_key]
         difficulty = state.options.get("difficulty", "easy")
-        rng = random.Random(
-            f"{state.mode_state['seed']}:{difficulty}:{wave}"
-        )  # nosec B311
         if difficulty == "easy":
-            chosen_fields = rng.sample(range(1, 21), 15)
+            available_fields = list(range(1, 21))
+            chosen_fields = [
+                available_fields.pop(state.random_index(len(available_fields)))
+                for _ in range(15)
+            ]
             kinds = ["blue"] * 12 + ["moldy"] * 3
-            rng.shuffle(kinds)
+            for index in range(len(kinds) - 1, 0, -1):
+                swap_index = state.random_index(index + 1)
+                kinds[index], kinds[swap_index] = kinds[swap_index], kinds[index]
             layout = {
                 f"F{field}": {
                     "dart": {
@@ -94,13 +99,15 @@ class CookieMonsterMode:
             return layout
 
         pool = [dart for dart in TARGET_POOL_NORMAL if int(dart["field"]) != 25]
-        chosen = rng.sample(pool, 12)
+        chosen = [pool.pop(state.random_index(len(pool))) for _ in range(12)]
         kinds = (
             ["gold"] * 2 + ["blue"] * 7 + ["moldy"] * 3
             if difficulty == "normal"
             else ["gold"] * 2 + ["blue"] * 3 + ["green"] * 4 + ["moldy"] * 3
         )
-        rng.shuffle(kinds)
+        for index in range(len(kinds) - 1, 0, -1):
+            swap_index = state.random_index(index + 1)
+            kinds[index], kinds[swap_index] = kinds[swap_index], kinds[index]
         layout = {
             str(dart["label"]).upper(): {"dart": dart, "kind": kind}
             for dart, kind in zip(chosen, kinds)
@@ -149,6 +156,7 @@ class CookieMonsterMode:
         return str(event.get("label", "")).upper()
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        state.mode_state.update({"last_effect": "", "effect_points": 0})
         difficulty = state.options.get("difficulty", "easy")
         is_bull = event.get("type") == "hit" and int(event.get("field", 0)) == 25
         if is_bull:
@@ -156,6 +164,7 @@ class CookieMonsterMode:
             if difficulty == "easy":
                 player.score += 30
                 event["cookie_points"] = 30
+                state.mode_state.update({"last_effect": "cookie_milk", "effect_points": 30})
                 outcome = ThrowOutcome(30, "MILCH! +30")
                 return finish_round_game(
                     state, outcome, "{winner} gewinnt die Keksdose!"
@@ -164,6 +173,7 @@ class CookieMonsterMode:
             adjustment = current if current > 0 else -current if current < 0 else 0
             player.score += adjustment
             self._reset_streak(state, player)
+            state.mode_state.update({"last_effect": "cookie_milk", "effect_points": adjustment})
             message = f"MILK! Turn gerettet {adjustment:+d}" if current < 0 else f"MILK! Turn verdoppelt +{adjustment}"
             outcome = ThrowOutcome(adjustment, message)
             return finish_round_game(state, outcome, "{winner} gewinnt die Keksdose!")
@@ -184,6 +194,7 @@ class CookieMonsterMode:
             )
             player.score -= penalty
             event["effect"] = "cookie_moldy"
+            state.mode_state.update({"last_effect": "cookie_moldy", "effect_points": -penalty})
             outcome = ThrowOutcome(-penalty, f"SCHIMMEL! -{penalty}")
         else:
             base = (
@@ -224,12 +235,14 @@ class CookieMonsterMode:
                 self._layout(state, next_wave)
                 event["effect"] = "cookie_board_clear"
                 event["cookie_wave"] = next_wave
+                state.mode_state.update({"last_effect": "cookie_board_clear", "effect_points": points, "cookie_wave": next_wave})
                 outcome = ThrowOutcome(
                     points,
                     f"BOARD GEPUTZT! +{points} · Neue Cookies!",
                 )
             else:
                 event["effect"] = "cookie_eaten"
+                state.mode_state.update({"last_effect": "cookie_eaten", "effect_points": points, "cookie_wave": wave})
                 suffix = (
                     " · SUGAR RUSH GELADEN!"
                     if state.mode_state["sugar"][player.id]

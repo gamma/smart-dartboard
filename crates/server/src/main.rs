@@ -1177,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(19));
+        assert_eq!(modes.as_array().map(Vec::len), Some(20));
         assert!(
             modes
                 .as_array()
@@ -1260,6 +1260,7 @@ mod tests {
             })
         }));
         assert_block_drop_metadata(&modes);
+        assert_cookie_monster_metadata(&modes);
         assert_dragon_eggs_metadata(&modes);
     }
 
@@ -1297,6 +1298,21 @@ mod tests {
                     && mode["instructions"]
                         .as_array()
                         .is_some_and(|steps| steps.len() == 3)
+            })
+        }));
+    }
+
+    fn assert_cookie_monster_metadata(modes: &Value) {
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "cookie_monster"
+                    && mode["ruleset_version"] == 2
+                    && mode["artwork"] == "/static/assets/modes/cookie_monster.webp"
+                    && mode["options"][0]["default"] == "easy"
+                    && mode["options"][1]["default"] == 5
+                    && mode["instructions"]
+                        .as_array()
+                        .is_some_and(|steps| steps.len() == 4)
             })
         }));
     }
