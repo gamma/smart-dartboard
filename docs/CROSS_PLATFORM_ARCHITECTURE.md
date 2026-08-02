@@ -950,3 +950,11 @@ denselben serialisierten Lifecycle-Übergang. Der native App-Build prüft die
 Verlinkung und die gemeinsame Zustandslogik ist per Rust-Test belegt. Erst ein
 realer Sleep/Wake-Test mit angeschlossener Scheibe qualifiziert jedoch das
 Reconnect-Verhalten für den Spielhallenbetrieb.
+
+Der macOS-Host beobachtet zusätzlich Änderungen der Screen-Topologie. Im
+direkten Ausgabemodus bleibt die lokale Projector-WebView verborgen, solange
+kein eigenständiger erweiterter Desktop vorhanden ist; ein geeigneter
+AirPlay-/HDMI-Ausgang wird ohne Neustart automatisch rahmenlos belegt und beim
+Trennen wieder freigegeben. Spiegelung erfüllt diesen Vertrag nicht. Die
+deterministische Monitorauswahl ist automatisiert getestet, die reale
+AirPlay-/HDMI-Abnahme bleibt Teil von Meilenstein G/H.

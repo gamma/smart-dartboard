@@ -48,14 +48,14 @@ const APP_ROLE_PREFERENCE: &str = "app.role";
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 use std::sync::OnceLock;
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 use std::sync::atomic::AtomicU32;
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 use std::sync::atomic::{AtomicU16, Ordering};
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 static EXTERNAL_DISPLAY_COUNT: AtomicU32 = AtomicU32::new(0);
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 static COMPANION_PORT: AtomicU16 = AtomicU16::new(0);
@@ -550,12 +550,12 @@ impl NativeState {
     }
 }
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 fn external_display_count() -> u32 {
     EXTERNAL_DISPLAY_COUNT.load(Ordering::Relaxed)
 }
 
-#[cfg(not(target_os = "ios"))]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
 const fn external_display_count() -> u32 {
     0
 }
@@ -2596,6 +2596,178 @@ const fn lifecycle_phase_for_sleeping(sleeping: bool) -> AppLifecyclePhase {
     }
 }
 
+#[cfg(target_os = "macos")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct DisplayGeometry {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+#[cfg(target_os = "macos")]
+fn display_geometry(monitor: &tauri::window::Monitor) -> DisplayGeometry {
+    DisplayGeometry {
+        x: monitor.position().x,
+        y: monitor.position().y,
+        width: monitor.size().width,
+        height: monitor.size().height,
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn projector_display_index(
+    control: Option<DisplayGeometry>,
+    displays: &[DisplayGeometry],
+) -> Option<usize> {
+    displays
+        .iter()
+        .enumerate()
+        .filter(|(_, display)| Some(**display) != control)
+        .max_by_key(|(_, display)| {
+            (
+                u64::from(display.width) * u64::from(display.height),
+                -i64::from(display.x),
+                -i64::from(display.y),
+                display.width,
+                display.height,
+            )
+        })
+        .map(|(index, _)| index)
+}
+
+#[cfg(target_os = "macos")]
+fn arrange_macos_projector(app: &tauri::AppHandle) -> Result<(), String> {
+    let projector = app
+        .get_webview_window("projector")
+        .ok_or_else(|| "projector window is unavailable".to_owned())?;
+    let control = app.get_webview_window("control");
+    let displays = projector.available_monitors().map_err(|error| error.to_string())?;
+    let control_monitor = control
+        .as_ref()
+        .and_then(|window| window.current_monitor().ok().flatten())
+        .or_else(|| projector.primary_monitor().ok().flatten());
+    let geometries = displays.iter().map(display_geometry).collect::<Vec<_>>();
+    let control_geometry = control_monitor.as_ref().map(display_geometry);
+    let projector_index = projector_display_index(control_geometry, &geometries);
+    let display_count = u32::try_from(
+        geometries
+            .iter()
+            .filter(|display| Some(**display) != control_geometry)
+            .count(),
+    )
+    .unwrap_or(u32::MAX);
+    EXTERNAL_DISPLAY_COUNT.store(display_count, Ordering::Relaxed);
+    let _ = app.emit(
+        "display-status",
+        DisplayStatus {
+            external_display_count: display_count,
+        },
+    );
+
+    let (role, output, lifecycle) = app
+        .try_state::<SharedNativeState>()
+        .and_then(|state| {
+            state
+                .lock()
+                .ok()
+                .map(|state| (state.app_role, state.projector_output, state.lifecycle))
+        })
+        .ok_or_else(|| "native state is unavailable".to_owned())?;
+    if role != NativeAppRole::Controller || lifecycle != AppLifecyclePhase::Active {
+        projector
+            .set_fullscreen(false)
+            .map_err(|error| error.to_string())?;
+        return projector.hide().map_err(|error| error.to_string());
+    }
+
+    match output {
+        ProjectorOutput::Companion => {
+            projector
+                .set_fullscreen(false)
+                .map_err(|error| error.to_string())?;
+            projector.hide().map_err(|error| error.to_string())
+        }
+        ProjectorOutput::ExternalDisplay => {
+            let Some(index) = projector_index else {
+                projector
+                    .set_fullscreen(false)
+                    .map_err(|error| error.to_string())?;
+                return projector.hide().map_err(|error| error.to_string());
+            };
+            let monitor = &displays[index];
+            projector
+                .set_fullscreen(false)
+                .map_err(|error| error.to_string())?;
+            projector
+                .set_decorations(false)
+                .map_err(|error| error.to_string())?;
+            projector
+                .set_resizable(false)
+                .map_err(|error| error.to_string())?;
+            projector
+                .set_always_on_top(true)
+                .map_err(|error| error.to_string())?;
+            projector
+                .set_position(tauri::PhysicalPosition::new(
+                    monitor.position().x,
+                    monitor.position().y,
+                ))
+                .map_err(|error| error.to_string())?;
+            projector
+                .set_size(tauri::PhysicalSize::new(
+                    monitor.size().width,
+                    monitor.size().height,
+                ))
+                .map_err(|error| error.to_string())?;
+            projector.show().map_err(|error| error.to_string())?;
+            projector
+                .set_fullscreen(true)
+                .map_err(|error| error.to_string())
+        }
+        ProjectorOutput::LocalPreview => {
+            projector
+                .set_fullscreen(false)
+                .map_err(|error| error.to_string())?;
+            projector
+                .set_decorations(true)
+                .map_err(|error| error.to_string())?;
+            projector
+                .set_resizable(true)
+                .map_err(|error| error.to_string())?;
+            projector
+                .set_always_on_top(false)
+                .map_err(|error| error.to_string())?;
+            if let Some(monitor) = control_monitor {
+                let scale = monitor.scale_factor();
+                let width = (1280.0 * scale).round() as u32;
+                let height = (720.0 * scale).round() as u32;
+                let area = monitor.work_area();
+                let width = width.min(area.size.width);
+                let height = height.min(area.size.height);
+                let x = area.position.x
+                    + i32::try_from((area.size.width - width) / 2).unwrap_or_default();
+                let y = area.position.y
+                    + i32::try_from((area.size.height - height) / 2).unwrap_or_default();
+                projector
+                    .set_size(tauri::PhysicalSize::new(width, height))
+                    .map_err(|error| error.to_string())?;
+                projector
+                    .set_position(tauri::PhysicalPosition::new(x, y))
+                    .map_err(|error| error.to_string())?;
+            }
+            projector.show().map_err(|error| error.to_string())
+        }
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn refresh_macos_projector(app: &tauri::AppHandle) {
+    if let Err(error) = arrange_macos_projector(app) {
+        eprintln!("macOS projector layout failed: {error}");
+    }
+}
+
 #[cfg(any(target_os = "ios", target_os = "macos"))]
 async fn companion_client_loop(
     app: tauri::AppHandle,
@@ -2923,7 +3095,10 @@ mod apple_board_host {
 #[cfg(target_os = "macos")]
 #[allow(unsafe_code)]
 mod macos_lifecycle_host {
-    use super::{APP_HANDLE, handle_apple_lifecycle, lifecycle_phase_for_sleeping};
+    use super::{
+        APP_HANDLE, handle_apple_lifecycle, lifecycle_phase_for_sleeping,
+        refresh_macos_projector,
+    };
 
     #[link(name = "sdb_apple_board_transport", kind = "static")]
     unsafe extern "C" {
@@ -2945,6 +3120,15 @@ mod macos_lifecycle_host {
             return;
         };
         handle_apple_lifecycle(app, lifecycle_phase_for_sleeping(sleeping));
+        refresh_macos_projector(app);
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn sdb_app_screen_parameters_changed() {
+        let Some(app) = APP_HANDLE.get() else {
+            return;
+        };
+        refresh_macos_projector(app);
     }
 }
 
@@ -2956,7 +3140,7 @@ fn publish_to_external_projector(state: &NativeState) {
 #[cfg(not(target_os = "ios"))]
 fn publish_to_external_projector(_state: &NativeState) {}
 
-#[cfg(target_os = "ios")]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
 #[derive(Clone, Serialize)]
 struct DisplayStatus {
     external_display_count: u32,
@@ -3784,6 +3968,8 @@ async fn app_role_select(
             .map_err(|error| error.to_string())?
             .public();
         publish_public_state(&app, &public);
+        #[cfg(target_os = "macos")]
+        refresh_macos_projector(&app);
         return Ok(public);
     }
 
@@ -3801,6 +3987,8 @@ async fn app_role_select(
     }
     let public = state.lock().map_err(|error| error.to_string())?.public();
     publish_public_state(&app, &public);
+    #[cfg(target_os = "macos")]
+    refresh_macos_projector(&app);
     Ok(public)
 }
 
@@ -3867,6 +4055,8 @@ async fn projector_output_select(
             .public()
     };
     publish_public_state(&app, &public);
+    #[cfg(target_os = "macos")]
+    refresh_macos_projector(&app);
     Ok(public)
 }
 
@@ -4248,7 +4438,10 @@ pub fn run() {
             )
             .title("Smart Dartboard · Projector")
             .inner_size(1280.0, 720.0)
+            .visible(!cfg!(target_os = "macos"))
             .build()?;
+            #[cfg(target_os = "macos")]
+            refresh_macos_projector(app.handle());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -4303,6 +4496,20 @@ pub fn run() {
         #[cfg(target_os = "macos")]
         {
             let _ = app;
+            if let tauri::RunEvent::WindowEvent {
+                label,
+                event: window_event,
+                ..
+            } = &event
+                && label == "control"
+                && matches!(
+                    window_event,
+                    tauri::WindowEvent::Moved(_)
+                        | tauri::WindowEvent::ScaleFactorChanged { .. }
+                )
+            {
+                refresh_macos_projector(app);
+            }
             if matches!(event, tauri::RunEvent::Exit) {
                 macos_lifecycle_host::stop();
             }
@@ -4469,6 +4676,39 @@ mod tests {
         assert_eq!(
             lifecycle_phase_for_sleeping(false),
             AppLifecyclePhase::Active
+        );
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_projector_uses_the_largest_independent_display() {
+        let control = DisplayGeometry {
+            x: 0,
+            y: 0,
+            width: 3_024,
+            height: 1_964,
+        };
+        let displays = [
+            control,
+            DisplayGeometry {
+                x: 3_024,
+                y: 0,
+                width: 1_920,
+                height: 1_080,
+            },
+            DisplayGeometry {
+                x: -2_560,
+                y: 0,
+                width: 2_560,
+                height: 1_440,
+            },
+        ];
+        assert_eq!(projector_display_index(Some(control), &displays), Some(2));
+        assert_eq!(projector_display_index(Some(control), &[control]), None);
+        assert_eq!(
+            projector_display_index(Some(control), &[control, control]),
+            None,
+            "mirrored displays are not independent projector outputs"
         );
     }
 

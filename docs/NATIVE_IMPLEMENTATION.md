@@ -52,7 +52,13 @@ Umgesetzt und lokal verifiziert:
   separate Geräte-/Companion-Setup bleibt als schmale native Hostoberfläche
   erhalten. Board-, Reconnect- und Displaystatus fließen über einen getrennten
   read-only Host-Eventkanal live in die Produkt-UI,
-- macOS-Tauri-App mit Control- und Projector-Fenster,
+- macOS-Tauri-App mit Control- und Projector-Fenster. Bei `AirPlay / HDMI`
+  bleibt das Projector-Fenster ohne eigenständigen zweiten Desktop verborgen;
+  ein neu angeschlossener oder geänderter Ausgang wird automatisch erkannt,
+  auf den größten vom Control-Screen verschiedenen Monitor gelegt und dort
+  rahmenlos im Vollbild angezeigt. Gespiegelte Displays gelten ausdrücklich
+  nicht als eigenständiger Projector. `Vorschau auf diesem Gerät` stellt das
+  Fenster wieder zentriert und bedienfreundlich auf dem Control-Screen dar,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,
 - nativer Apple-DisplayHost mit eigener Projector-WKWebView auf `TVOut`; sie
   lädt die gemeinsame `projector.html` samt Artworks aus dem eingebetteten

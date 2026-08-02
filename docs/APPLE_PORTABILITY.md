@@ -466,6 +466,17 @@ echter Sleep/Wake-Lauf mit verbundenem Board ist weiterhin Teil der
 Hardwarequalifikation und wird nicht durch einen reinen Build als bestanden
 gewertet.
 
+Der macOS-Displaypfad reagiert außerdem auf
+`NSApplicationDidChangeScreenParametersNotification`. Die App unterscheidet
+den Monitor des Control-Fensters von eigenständigen erweiterten Desktops,
+wählt bei mehreren Ausgängen deterministisch den größten, legt den Projector
+rahmenlos darüber und reagiert ohne Neustart auf An- und Abstecken. Reines
+Spiegeln zählt nicht als Projector-Ausgang. Ohne zweiten Desktop bleibt die
+Projector-WebView im Modus `AirPlay / HDMI` verborgen; die bewusst gewählte
+lokale Vorschau erscheint dagegen zentriert auf dem Control-Screen. Auswahl-
+und Randfalllogik sowie App-Bundle sind automatisiert geprüft, reale AirPlay-
+und HDMI-Hardware noch nicht.
+
 ## 9. Empfohlene Umsetzungsschritte
 
 1. Mit einem minimalen M0-Spike CoreBluetooth, zwei WebViews sowie eigenständige

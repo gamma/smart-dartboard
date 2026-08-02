@@ -63,8 +63,10 @@ expect(packageJson.scripts['test:ios:lifecycle']==='node scripts/test-ios-lifecy
   && ci.includes('run test:ios:lifecycle'),'iOS lifecycle test drift');
 expect(macLifecycle.includes('NSWorkspaceWillSleepNotification')
   && macLifecycle.includes('NSWorkspaceDidWakeNotification')
-  && macLifecycle.includes('sdb_app_sleep_changed'),
-  'macOS sleep/wake lifecycle adapter drift');
+  && macLifecycle.includes('sdb_app_sleep_changed')
+  && macLifecycle.includes('NSApplicationDidChangeScreenParametersNotification')
+  && macLifecycle.includes('sdb_app_screen_parameters_changed'),
+  'macOS lifecycle/display adapter drift');
 expect(release.includes('platforms: linux/amd64,linux/arm64'),'container architecture drift');
 expect(tauriJson.bundle.macOS.minimumSystemVersion===matrix.platforms.macos.minimum,
   'macOS deployment target drift');
