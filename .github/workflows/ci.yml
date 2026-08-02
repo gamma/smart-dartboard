@@ -184,6 +184,23 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Build unsigned iOS device archive
+        run: npm --prefix apps/tauri run ios:build:device
+
+      - name: Archive unsigned iOS device build
+        run: >-
+          ditto -c -k --sequesterRsrc --keepParent
+          "apps/tauri/src-tauri/gen/apple/build/sdb-native-m0_iOS.xcarchive"
+          /tmp/Smart-Dartboard-iOS-device-unsigned.xcarchive.zip
+
+      - name: Upload unsigned iOS device archive
+        uses: actions/upload-artifact@v7
+        with:
+          name: Smart-Dartboard-iOS-device-unsigned
+          path: /tmp/Smart-Dartboard-iOS-device-unsigned.xcarchive.zip
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Build unsigned iOS simulator app
         run: npm --prefix apps/tauri run ios:build:sim
 

@@ -351,16 +351,25 @@ macOS und iOS verwenden dabei bereits die dauerhafte Produktkennung
 `de.gammaproduction.smart-dartboard`; die frühere Spike-Kennung mit `.m0`
 wird nicht in künftige Installationen oder Store-Einträge übernommen.
 
-iOS-Simulator-Build:
+iOS-Gerätearchive und Simulator-Build:
 
 ```bash
+npm --prefix apps/tauri run ios:build:device
 npm --prefix apps/tauri run ios:build:sim
 npm --prefix apps/tauri run test:ios:lifecycle
 ```
 
-Das Script entfernt vorab nur das generierte Simulator-Archiv und das bereits
-exportierte `.app`-Bundle. Das ist nötig, weil Tauri 2.11.4 beim wiederholten
-Simulator-Build ein vorhandenes Exportziel nicht selbst ersetzt.
+`ios:build:device` erzeugt ohne Apple-Team und Signatur ein vollständiges
+ARM64-`.xcarchive` unter
+`apps/tauri/src-tauri/gen/apple/build/sdb-native-m0_iOS.xcarchive`. CI stellt
+es sieben Tage als Diagnose- und Packaging-Artefakt bereit. Das Archive ist
+noch keine installierbare IPA und kein TestFlight-Build: Installation auf
+einem iPhone oder iPad erfordert ein ausgewähltes Development Team,
+Provisioning und Code Signing.
+
+Das Simulator-Script entfernt vorab nur das generierte Simulator-Archiv und
+das bereits exportierte `.app`-Bundle. Das ist nötig, weil Tauri 2.11.4 beim
+wiederholten Simulator-Build ein vorhandenes Exportziel nicht selbst ersetzt.
 Der zweite Befehl installiert das Bundle auf einem verfügbaren iPad-Simulator,
 schickt die App durch Hintergrund und Vordergrund und belegt über die
 redigierten Diagnoselogs, dass `app_suspended` und `app_resumed` dieselbe

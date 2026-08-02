@@ -38,6 +38,9 @@ expect(packageJson.devDependencies['@tauri-apps/cli']===matrix.toolchains.tauri.
 expect(packageJson.devDependencies['@playwright/test']===matrix.toolchains.playwright,'Playwright drift');
 expect(packageJson.scripts['build:macos:app']==='tauri build --bundles app --no-sign --ci',
   'macOS app bundle command drift');
+expect(packageJson.scripts['ios:build:device']===
+  'node scripts/clean-ios-device-output.mjs && tauri ios build --target aarch64 --no-sign --archive-only --ci',
+  'iOS device archive command drift');
 expect(inlineVersion(nativeCargo,'tauri')===matrix.toolchains.tauri.rust_runtime,
   'Tauri Rust runtime drift');
 expect(packageVersion(rootLock,'rusqlite')===matrix.toolchains.sqlite.rusqlite,'rusqlite drift');
@@ -59,6 +62,9 @@ expect(ci.includes('playwright install chromium webkit'),'CI browser installatio
 expect(ci.includes('run test:chromium') && ci.includes('run test:webkit'),'CI browser coverage drift');
 expect(ci.includes('run build:macos:app') && ci.includes('Smart-Dartboard-macOS-unsigned.zip'),
   'CI macOS app bundle drift');
+expect(ci.includes('run ios:build:device')
+  && ci.includes('Smart-Dartboard-iOS-device-unsigned.xcarchive.zip'),
+  'CI iOS device archive drift');
 expect(packageJson.scripts['test:ios:lifecycle']==='node scripts/test-ios-lifecycle.mjs'
   && ci.includes('run test:ios:lifecycle'),'iOS lifecycle test drift');
 expect(macLifecycle.includes('NSWorkspaceWillSleepNotification')

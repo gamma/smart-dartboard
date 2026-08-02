@@ -34,7 +34,7 @@ mit `--locked`, npm-Abhängigkeiten in CI mit `npm ci` gebaut.
 | --- | --- | --- | --- | --- |
 | 1 | Linux/Docker, AMD64 + ARM64 | Debian 12 Bookworm im Container | Build und Start ohne BLE | offen |
 | 2 | macOS ARM64 | macOS 13 | unsigniertes `.app`-Bundle in CI und lokaler Bundle-Start | offen |
-| 3 | iOS/iPadOS | iOS/iPadOS 14 | ARM64-Simulatorbundle installiert, gestartet und Suspend/Resume geprüft | offen |
+| 3 | iOS/iPadOS | iOS/iPadOS 14 | unsigniertes ARM64-Gerätearchive gebaut; Simulatorbundle installiert, gestartet und Suspend/Resume geprüft | offen |
 | 4 | Android ARM64 | minSdk 31, targetSdk 36 | noch nicht implementiert | offen |
 | 5 | Windows x64/ARM64 | Windows 10 1809 | noch nicht implementiert | offen |
 
@@ -47,6 +47,9 @@ Die Linux-BLE-Freigabe verlangt einen Host mit BlueZ und erreichbarem
 System-D-Bus. Docker Desktop auf macOS oder Windows qualifiziert diesen Pfad
 nicht. Für Apple bleiben Signierung, echte CoreBluetooth-Scheibe,
 AirPlay/HDMI, Audio, Reconnect und der dokumentierte Soak-Test offen.
+Das iOS-`.xcarchive` belegt Geräte-Compilation und Packaging, ist ohne
+Development Team, Provisioning und Signatur aber weder installierbare IPA noch
+TestFlight-Release.
 
 ## Hardwarestatus
 

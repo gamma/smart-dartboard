@@ -13,6 +13,7 @@
     "build": "tauri build --no-bundle",
     "build:macos:app": "tauri build --bundles app --no-sign --ci",
     "ios:init": "tauri ios init",
+    "ios:build:device": "node scripts/clean-ios-device-output.mjs && tauri ios build --target aarch64 --no-sign --archive-only --ci",
     "ios:build:sim": "node scripts/clean-ios-simulator-output.mjs && tauri ios build --debug --target aarch64-sim --no-sign --ci",
     "test:ios:lifecycle": "node scripts/test-ios-lifecycle.mjs",
     "ios:dev": "tauri ios dev",

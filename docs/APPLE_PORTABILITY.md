@@ -458,6 +458,13 @@ Suspend/Resume-Sequenz geprüft. Verhalten mit realer Scheibe, iOS-
 Hintergrundzeitlimits und WLAN-/AirPlay-Unterbrechungen ist weiterhin ein
 Hardware-Gate, keine aus dem Simulator abgeleitete Supportaussage.
 
+Zusätzlich wird die native Hülle als vollständiges, bewusst unsigniertes
+ARM64-Gerätearchive gebaut und in CI kurzzeitig bereitgestellt. Damit sind
+iPhone-/iPad-Gerätecompilation und Packaging belegt. Das Archive ist ohne
+Development Team und Provisioning weder installierbar noch ein TestFlight-
+oder App-Store-Nachweis; diese Aussagen bleiben bis zum Lauf auf echter
+Hardware ausdrücklich offen.
+
 macOS verwendet für Systemruhe und Aufwachen denselben Zustandsübergang. Ein
 kleiner AppKit-Adapter beobachtet die beiden `NSWorkspace`-Benachrichtigungen;
 Rust serialisiert danach Adapterabbau und Wiederanlauf genauso wie auf iOS.
