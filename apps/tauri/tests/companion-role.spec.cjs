@@ -4,6 +4,36 @@ const path = require('node:path');
 
 const uiUrl = pathToFileURL(path.resolve(__dirname, '../../../web/native.html')).href + '?role=control';
 
+test('controller setup exposes no legacy M0 test command', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.__nativeCalls = [];
+    window.__TAURI__ = {
+      core: {
+        invoke: async command => {
+          window.__nativeCalls.push(command);
+          if(command==='runtime_query') return {
+            app_role:'controller',runtime_instance_id:'controller-runtime',revision:0,counter:0,
+            external_display_count:0,board:{enabled:true,phase:'scanning'},
+            projector_output:'external_display',companion_port:null,companion_available:false,
+            companion_protocol_version:2,
+          };
+          if(command==='companion_discovery_stop') return null;
+          if(command==='companion_devices') return [];
+          throw new Error(`unexpected native command: ${command}`);
+        },
+      },
+      event: {listen:async()=>()=>{}},
+    };
+  });
+
+  await page.goto(uiUrl);
+  await expect(page.getByRole('heading',{name:/Board und Projector/})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Testtreffer senden'})).toHaveCount(0);
+  expect(await page.evaluate(()=>window.__nativeCalls)).toContain('runtime_query');
+  expect(await page.evaluate(()=>window.__nativeCalls)).not.toContain('runtime_dispatch');
+  expect(await page.evaluate(()=>window.__nativeCalls)).not.toContain('runtime_bootstrap');
+});
+
 test('companion discovery requires fingerprint confirmation before pairing', async ({ page }) => {
   await page.addInitScript(() => {
     const publicState = {
@@ -58,7 +88,7 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
         invoke: async (command, args = {}) => {
           window.__nativeCalls.push({ command, args });
           switch (command) {
-            case 'runtime_bootstrap':
+            case 'runtime_query':
               return publicState;
             case 'companion_discovery_start':
             case 'companion_discovery_stop':
@@ -144,9 +174,6 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
     manualFingerprint: 'A1B2-C3D4-E5F6-0718',
     code: '123456'
   });
-  expect(await page.evaluate(() =>
-    window.__nativeCalls.some(call => call.command === 'runtime_dispatch'))).toBe(false);
-
   await page.evaluate(() => {
     window.__nativeEvents['companion-projector-status']({ payload: {
       host_id: '991708fa-c4e7-419f-ad1d-c44f01891b03',

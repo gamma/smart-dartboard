@@ -31,8 +31,6 @@ fn main() {
     }
     let attributes =
         tauri_build::Attributes::new().app_manifest(tauri_build::AppManifest::new().commands(&[
-            "runtime_bootstrap",
-            "runtime_dispatch",
             "runtime_query",
             "runtime_v2_import_data",
             "companion_pairing_open",

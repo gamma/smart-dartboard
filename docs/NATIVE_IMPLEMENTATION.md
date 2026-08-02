@@ -52,6 +52,11 @@ Umgesetzt und lokal verifiziert:
   separate Geräte-/Companion-Setup bleibt als schmale native Hostoberfläche
   erhalten. Board-, Reconnect- und Displaystatus fließen über einen getrennten
   read-only Host-Eventkanal live in die Produkt-UI,
+- die frühere öffentliche M0-Bridge `runtime_dispatch("increment")` und ihr
+  Testtreffer-Button sind aus Command-Registry, Capabilities und Geräte-Setup
+  entfernt. Das Setup liest seinen Hoststatus nur noch über `runtime_query`;
+  der automatische T20-Nachweis ist ausschließlich ein interner
+  Debug-Startparameter und keine WebView-Autorität,
 - macOS-Tauri-App mit Control- und Projector-Fenster. Bei `AirPlay / HDMI`
   bleibt das Projector-Fenster ohne eigenständigen zweiten Desktop verborgen;
   ein neu angeschlossener oder geänderter Ausgang wird automatisch erkannt,

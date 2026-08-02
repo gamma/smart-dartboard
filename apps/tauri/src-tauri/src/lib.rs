@@ -11,9 +11,9 @@ use sdb_companion::{
 use sdb_companion_transport::{
     SecretStore, TlsIdentity, certificate_sha256, load_identity, load_or_create_identity,
 };
-use sdb_contracts::{
-    CommandEnvelope, DartEvent, DartSource, Envelope, MessageKind, Ring, RuntimeCommand,
-};
+use sdb_contracts::{CommandEnvelope, DartSource, Envelope, MessageKind, RuntimeCommand};
+#[cfg(debug_assertions)]
+use sdb_contracts::{DartEvent, Ring};
 use sdb_diagnostics::{
     DiagnosticContext, DiagnosticEnvironment, DiagnosticLevel, DiagnosticLogger, DiagnosticScope,
     DiagnosticVersions,
@@ -66,6 +66,7 @@ static APPLE_NETWORK_TEST_LOCK: AsyncMutex<()> = AsyncMutex::const_new(());
 
 struct NativeState {
     runtime: Runtime<SqliteRepository>,
+    #[cfg(debug_assertions)]
     next_dart_seq: u64,
     #[cfg(any(target_os = "ios", target_os = "macos", test))]
     board_ingress: BoardIngress,
@@ -293,6 +294,7 @@ impl NativeState {
             Runtime::restore(runtime_instance_id, repository).map_err(|error| error.to_string())?;
         Ok(Self {
             runtime,
+            #[cfg(debug_assertions)]
             next_dart_seq: 1,
             #[cfg(any(target_os = "ios", target_os = "macos", test))]
             board_ingress: BoardIngress::new(),
@@ -400,6 +402,7 @@ impl NativeState {
         Some(self.lifecycle_generation)
     }
 
+    #[cfg(debug_assertions)]
     fn ingest_test_hit(&mut self) -> Result<PublicState, String> {
         self.require_controller()?;
         let seq = self.next_dart_seq;
@@ -427,6 +430,7 @@ impl NativeState {
         Ok(self.public())
     }
 
+    #[cfg(debug_assertions)]
     fn start_m0_test_game(&mut self) -> Result<(), String> {
         self.require_controller()?;
         if self.runtime.snapshot().game.is_some() {
@@ -3198,16 +3202,11 @@ pub extern "C" fn sdb_external_display_changed(display_count: u32) {
 }
 
 #[tauri::command]
-fn runtime_bootstrap(state: State<'_, SharedNativeState>) -> Result<PublicState, String> {
+fn runtime_query(state: State<'_, SharedNativeState>) -> Result<PublicState, String> {
     state
         .lock()
         .map(|state| state.public())
         .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-fn runtime_query(state: State<'_, SharedNativeState>) -> Result<PublicState, String> {
-    runtime_bootstrap(state)
 }
 
 fn runtime_v2_envelope(state: &NativeState) -> Envelope<RuntimePublicSnapshot> {
@@ -4151,18 +4150,7 @@ fn projector_output_select(
     Ok(public)
 }
 
-#[tauri::command]
-fn runtime_dispatch(
-    app: tauri::AppHandle,
-    state: State<'_, SharedNativeState>,
-    action: String,
-) -> Result<PublicState, String> {
-    if !cfg!(debug_assertions) || action != "increment" {
-        return Err("unsupported M0 action".into());
-    }
-    increment_runtime(&app, &state)
-}
-
+#[cfg(debug_assertions)]
 fn increment_runtime(
     app: &tauri::AppHandle,
     state: &SharedNativeState,
@@ -4582,9 +4570,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            runtime_bootstrap,
             runtime_query,
-            runtime_dispatch,
             runtime_v2_bootstrap,
             runtime_v2_snapshot,
             runtime_v2_ack_effect,

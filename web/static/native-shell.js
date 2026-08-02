@@ -19,7 +19,6 @@ function render(payload){
 
 function renderProjectorValues(payload){
   const counter=String(payload.counter ?? 0);
-  document.querySelector('#counter').textContent=counter;
   document.querySelector('#previewCounter').textContent=counter;
   document.querySelector('#companionCounter').textContent=counter;
 }
@@ -323,15 +322,12 @@ async function start(){
     document.querySelector('#status').textContent='Native Tauri Bridge fehlt';
     return;
   }
-  const initial=await tauri.core.invoke('runtime_bootstrap');
+  const initial=await tauri.core.invoke('runtime_query');
   render(initial);
   await tauri.event.listen('runtime-state',event=>render(event.payload));
   await tauri.event.listen('display-status',event=>renderDisplayStatus(event.payload.external_display_count ?? 0));
   await tauri.event.listen('companion-projector-status',event=>renderCompanionClientStatus(event.payload));
   await tauri.event.listen('companion-projector-frame',event=>renderCompanionFrame(event.payload));
-  document.querySelector('#increment').addEventListener('click',async()=>{
-    render(await tauri.core.invoke('runtime_dispatch',{action:'increment'}));
-  });
   if(role==='control'){
     setupAppRole();
     setupCompanionClient();

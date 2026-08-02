@@ -5,7 +5,6 @@
   "windows": ["projector"],
   "permissions": [
     "core:default",
-    "allow-runtime-bootstrap",
     "allow-runtime-query",
     "allow-runtime-v2-bootstrap",
     "allow-runtime-v2-snapshot",

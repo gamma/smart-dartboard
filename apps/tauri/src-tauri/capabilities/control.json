@@ -1,13 +1,11 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "control",
-  "description": "Interactive controller can read and mutate the M0 runtime.",
+  "description": "Interactive controller can operate the versioned runtime and native setup.",
   "windows": ["control"],
   "permissions": [
     "core:default",
-    "allow-runtime-bootstrap",
     "allow-runtime-query",
-    "allow-runtime-dispatch",
     "allow-runtime-v2-bootstrap",
     "allow-runtime-v2-snapshot",
     "allow-runtime-v2-ack-effect",

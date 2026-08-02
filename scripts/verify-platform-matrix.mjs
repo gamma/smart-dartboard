@@ -3,10 +3,13 @@ import { readFile } from 'node:fs/promises';
 const read=path=>readFile(new URL(`../${path}`,import.meta.url),'utf8');
 const matrix=JSON.parse(await read('docs/PLATFORM_MATRIX.json'));
 const [rustToolchain,workspace,nativeCargo,nativePackage,nativeLock,rootLock,
-  storageCargo,tauriConfig,xcodeProject,macLifecycle,iosDisplay,rustDocker,bleDocker,ci,release]=await Promise.all([
+  storageCargo,tauriConfig,nativeBuild,controlCapability,projectorCapability,nativeShell,
+  xcodeProject,macLifecycle,iosDisplay,rustDocker,bleDocker,ci,release]=await Promise.all([
   read('rust-toolchain.toml'),read('Cargo.toml'),read('apps/tauri/src-tauri/Cargo.toml'),
   read('apps/tauri/package.json'),read('apps/tauri/package-lock.json'),read('Cargo.lock'),
   read('crates/storage/Cargo.toml'),read('apps/tauri/src-tauri/tauri.conf.json'),
+  read('apps/tauri/src-tauri/build.rs'),read('apps/tauri/src-tauri/capabilities/control.json'),
+  read('apps/tauri/src-tauri/capabilities/projector.json'),read('web/static/native-shell.js'),
   read('apps/tauri/src-tauri/gen/apple/sdb-native-m0.xcodeproj/project.pbxproj'),
   read('apps/tauri/src-tauri/gen/apple/Sources/sdb-native-m0/AppLifecycleHost.mm'),
   read('apps/tauri/src-tauri/gen/apple/Sources/sdb-native-m0/ProjectorDisplayHost.mm'),
@@ -68,6 +71,13 @@ expect(ci.includes('run ios:build:device')
   'CI iOS device archive drift');
 expect(packageJson.scripts['test:ios:lifecycle']==='node scripts/test-ios-lifecycle.mjs'
   && ci.includes('run test:ios:lifecycle'),'iOS lifecycle test drift');
+expect(!nativeBuild.includes('"runtime_bootstrap"') && !nativeBuild.includes('"runtime_dispatch"')
+  && !controlCapability.includes('allow-runtime-bootstrap')
+  && !controlCapability.includes('allow-runtime-dispatch')
+  && !projectorCapability.includes('allow-runtime-bootstrap')
+  && nativeShell.includes("invoke('runtime_query')")
+  && !nativeShell.includes("invoke('runtime_dispatch')"),
+  'legacy M0 command surface drift');
 expect(macLifecycle.includes('NSWorkspaceWillSleepNotification')
   && macLifecycle.includes('NSWorkspaceDidWakeNotification')
   && macLifecycle.includes('sdb_app_sleep_changed')
