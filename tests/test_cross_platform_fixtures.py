@@ -81,6 +81,9 @@ DART_SWEEPER_FIXTURE = (
 DARTS_BINGO_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "darts_bingo_v2.json"
 )
+BOSS_FIGHT_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "boss_fight_v1.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -1104,6 +1107,53 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                 "round_number": state.round_number,
                 "status": state.status,
                 "winner_id": state.winner_id,
+                "winner_ids": state.winner_ids,
+                "result_type": state.result_type,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_boss_fight_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(BOSS_FIGHT_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(1, fixture["ruleset_version"])
+        engine = GameEngine()
+        engine.reset(
+            "boss_fight",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]), dict(command["event"])
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            mode = state.mode_state
+            actual = {
+                "scores": [player.score for player in state.players],
+                "boss_hp": mode["boss_hp"],
+                "max_hp": mode["max_hp"],
+                "weak": [
+                    [target["label"], target["field"], target["ring"]]
+                    for target in mode["weak"]
+                ],
+                "last_effect": mode["last_effect"],
+                "effect_damage": mode["effect_damage"],
+                "effect_weak": mode["effect_weak"],
+                "effect_player_id": mode["effect_player_id"],
+                "random_cursor": state.random_cursor,
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
                 "winner_ids": state.winner_ids,
                 "result_type": state.result_type,
             }

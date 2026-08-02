@@ -1,9 +1,13 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict
 
-from .arcade import choose_targets, overlay_item, result_message, same_target
+from .arcade import (
+    choose_targets_for_state,
+    overlay_item,
+    result_message,
+    same_target,
+)
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -34,14 +38,33 @@ class BossFightMode:
         player.score = 0; player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        weak = choose_targets(int(options.get("weak_points", 3)), "normal")
-        state.mode_state = {"boss_hp": int(options.get("boss_hp", 1000)), "weak": weak}
+        maximum = int(options.get("boss_hp", 1000))
+        weak = choose_targets_for_state(
+            state, int(options.get("weak_points", 3)), "normal"
+        )
+        state.mode_state = {
+            "boss_hp": maximum,
+            "max_hp": maximum,
+            "weak": weak,
+            "last_effect": "",
+            "effect_damage": 0,
+            "effect_weak": False,
+            "effect_player_id": None,
+        }
         state.message = "Boss Fight!"
 
     def _refresh_weak(self, state: Any) -> None:
-        state.mode_state["weak"] = choose_targets(int(state.options.get("weak_points", 3)), "normal")
+        state.mode_state["weak"] = choose_targets_for_state(
+            state, int(state.options.get("weak_points", 3)), "normal"
+        )
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        state.mode_state.update({
+            "last_effect": "",
+            "effect_damage": 0,
+            "effect_weak": False,
+            "effect_player_id": None,
+        })
         is_hit = event.get("type") == "hit"
         weak = state.mode_state.get("weak", [])
         base = int(event.get("score", 0)) if is_hit else 0
@@ -54,10 +77,17 @@ class BossFightMode:
             )
             if is_weak:
                 self._refresh_weak(state)
+            state.mode_state.update({
+                "last_effect": "boss_weak" if is_weak else "boss_hit",
+                "effect_damage": damage,
+                "effect_weak": is_weak,
+                "effect_player_id": player.id,
+            })
         if state.mode_state["boss_hp"] <= 0:
             _, result = result_message(
                 state.players, "Boss besiegt! MVP: {winner}"
             )
+            state.mode_state["last_effect"] = "boss_defeated"
             return ThrowOutcome(
                 turn_value=damage,
                 message=result,
@@ -69,6 +99,7 @@ class BossFightMode:
         final_player = state.current_player_index == len(state.players) - 1
         final_round = state.round_number >= int(state.options.get("rounds", 8))
         if final_dart and final_player and final_round:
+            state.mode_state["last_effect"] = "boss_victory"
             return ThrowOutcome(
                 turn_value=damage,
                 message=f"Boss gewinnt mit {state.mode_state['boss_hp']} HP!",
@@ -91,6 +122,7 @@ class BossFightMode:
             state.winner_id = None
             state.winner_ids = []
             state.result_type = "challenge_loss"
+            state.mode_state["last_effect"] = "boss_victory"
             state.message = (
                 f"Boss gewinnt mit {state.mode_state['boss_hp']} HP!"
             )

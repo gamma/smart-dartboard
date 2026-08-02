@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 mod arcade;
 mod avoid_bomb;
 mod block_drop;
+mod boss_fight;
 mod candy_cannon;
 mod color_clash;
 mod cookie_monster;
@@ -28,6 +29,7 @@ mod treasure_hunt;
 
 use avoid_bomb::AVOID_BOMB_MODE;
 use block_drop::BLOCK_DROP_MODE;
+use boss_fight::BOSS_FIGHT_MODE;
 use candy_cannon::CANDY_CANNON_MODE;
 use color_clash::COLOR_CLASH_MODE;
 use cookie_monster::COOKIE_MONSTER_MODE;
@@ -1220,9 +1222,10 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 21] = [
+static MODES: [&'static dyn GameMode; 22] = [
     &AVOID_BOMB_MODE,
     &BLOCK_DROP_MODE,
+    &BOSS_FIGHT_MODE,
     &CRICKET_MODE,
     &CANDY_CANNON_MODE,
     &COLOR_CLASH_MODE,

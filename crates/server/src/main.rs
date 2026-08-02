@@ -1177,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(23));
+        assert_eq!(modes.as_array().map(Vec::len), Some(24));
         assert_cricket_metadata(&modes);
         assert!(modes.as_array().is_some_and(|items| {
             items
@@ -1252,6 +1252,7 @@ mod tests {
             })
         }));
         assert_block_drop_metadata(&modes);
+        assert_boss_fight_metadata(&modes);
         assert_cookie_monster_metadata(&modes);
         assert_dart_sweeper_metadata(&modes);
         assert_darts_bingo_metadata(&modes);
@@ -1277,6 +1278,23 @@ mod tests {
                             && legend.iter().any(|item| {
                                 item["icon"] == "drop" && item["secondary_color"] == "#e76f51"
                             })
+                    })
+            })
+        }));
+    }
+
+    fn assert_boss_fight_metadata(modes: &Value) {
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "boss_fight"
+                    && mode["ruleset_version"] == 1
+                    && mode["artwork"] == "/static/assets/modes/boss_fight.webp"
+                    && mode["options"].as_array().is_some_and(|options| {
+                        options
+                            .iter()
+                            .map(|option| option["key"].as_str())
+                            .collect::<Vec<_>>()
+                            == [Some("boss_hp"), Some("weak_points"), Some("rounds")]
                     })
             })
         }));

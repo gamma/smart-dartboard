@@ -1264,6 +1264,37 @@ class GameEngineTests(unittest.TestCase):
         self.assertIsNone(engine.state.winner_id)
         self.assertIn("Boss gewinnt", engine.state.message)
 
+    def test_boss_fight_uses_shared_deterministic_weak_points(self):
+        first = GameEngine()
+        second = GameEngine()
+        for engine in (first, second):
+            engine.reset(
+                "boss_fight",
+                ["Ada", "Bob"],
+                options={"boss_hp": 600, "weak_points": 3, "rounds": 5},
+                random_seed=42,
+            )
+        self.assertEqual(
+            first.state.mode_state["weak"], second.state.mode_state["weak"]
+        )
+        self.assertEqual(3, first.state.random_cursor)
+
+    def test_boss_fight_skip_can_end_the_final_team_round(self):
+        engine = GameEngine()
+        engine.reset(
+            "boss_fight",
+            ["Ada", "Bob"],
+            options={"boss_hp": 600, "weak_points": 3, "rounds": 5},
+            random_seed=42,
+        )
+        engine.state.current_player_index = 1
+        engine.state.round_number = 5
+
+        engine.next_player()
+
+        self.assertEqual("finished", engine.state.status)
+        self.assertEqual("challenge_loss", engine.state.result_type)
+
     def test_invalid_plugin_option_is_rejected(self):
         engine = GameEngine()
         with self.assertRaisesRegex(ValueError, "Unknown options"):

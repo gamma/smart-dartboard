@@ -1,0 +1,37 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 1,
+  "random_seed": 42,
+  "players": [{"id":"ada","name":"Ada"},{"id":"bob","name":"Bob"}],
+  "options": {"boss_hp":600,"weak_points":2,"rounds":5},
+  "steps": [
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":1,"field":20,"ring":"triple","multiplier":3,"label":"T20","score":60}},
+      "expected":{"scores":[60,0],"boss_hp":540,"max_hp":600,"weak":[["D4",4,"double"],["D13",13,"double"]],"last_effect":"boss_hit","effect_damage":60,"effect_weak":false,"effect_player_id":"ada","random_cursor":2,"current_player_index":0,"darts_in_turn":1,"turn_score":60,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":2,"field":4,"ring":"double","multiplier":2,"label":"D4","score":8}},
+      "expected":{"scores":[76,0],"boss_hp":524,"max_hp":600,"weak":[["S7",7,"single_outer"],["D6",6,"double"]],"last_effect":"boss_weak","effect_damage":16,"effect_weak":true,"effect_player_id":"ada","random_cursor":4,"current_player_index":0,"darts_in_turn":2,"turn_score":76,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"miss","seq":3,"label":"MISS","score":0}},
+      "expected":{"scores":[76,0],"boss_hp":524,"max_hp":600,"weak":[["S7",7,"single_outer"],["D6",6,"double"]],"last_effect":"","effect_damage":0,"effect_weak":false,"effect_player_id":null,"random_cursor":4,"current_player_index":0,"darts_in_turn":3,"turn_score":76,"round_number":1,"status":"hold","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"continue"},
+      "expected":{"scores":[76,0],"boss_hp":524,"max_hp":600,"weak":[["S7",7,"single_outer"],["D6",6,"double"]],"last_effect":"","effect_damage":0,"effect_weak":false,"effect_player_id":null,"random_cursor":4,"current_player_index":1,"darts_in_turn":0,"turn_score":0,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":4,"field":7,"ring":"single_outer","multiplier":1,"label":"S7","score":7}},
+      "expected":{"scores":[76,14],"boss_hp":510,"max_hp":600,"weak":[["D9",9,"double"],["T4",4,"triple"]],"last_effect":"boss_weak","effect_damage":14,"effect_weak":true,"effect_player_id":"bob","random_cursor":6,"current_player_index":1,"darts_in_turn":1,"turn_score":14,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"correct","action_id":2,"event":{"type":"hit","seq":999,"field":4,"ring":"single_outer","multiplier":1,"label":"S4","score":4}},
+      "expected":{"scores":[64,7],"boss_hp":529,"max_hp":600,"weak":[["D4",4,"double"],["D13",13,"double"]],"last_effect":"boss_hit","effect_damage":7,"effect_weak":false,"effect_player_id":"bob","random_cursor":2,"current_player_index":1,"darts_in_turn":1,"turn_score":7,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"correct","action_id":2,"event":{"type":"hit","seq":999,"field":4,"ring":"double","multiplier":2,"label":"D4","score":8}},
+      "expected":{"scores":[76,14],"boss_hp":510,"max_hp":600,"weak":[["D9",9,"double"],["T4",4,"triple"]],"last_effect":"boss_weak","effect_damage":14,"effect_weak":true,"effect_player_id":"bob","random_cursor":6,"current_player_index":1,"darts_in_turn":1,"turn_score":14,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    }
+  ]
+}
