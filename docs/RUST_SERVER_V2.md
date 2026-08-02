@@ -38,6 +38,12 @@ http://127.0.0.1:8001/projector
 Der Container läuft ohne Root, ohne `privileged` und ohne Linux-Capabilities.
 `/data` enthält `runtime.sqlite`.
 
+Ein reguläres `docker stop`, `docker restart` oder Compose-Stop sendet
+`SIGTERM`. Der Rust-Host behandelt dieses Signal ebenso wie `Ctrl-C`, beendet
+den Axum-Listener geordnet und lässt bestehende Requests auslaufen. CI stoppt
+den echten Container mit einem Fünf-Sekunden-Limit, erwartet Exit-Code 0,
+startet ihn erneut und prüft danach den zuvor committed Spielstand.
+
 ## Einmaliger Import der Python-Datenbank
 
 Wenn im Datenverzeichnis noch keine `runtime.sqlite`, aber eine bisherige

@@ -92,6 +92,11 @@ den ersten Start sollte die Adresse leer bleiben, damit das Board über
    **Testton** auslösen. Die Einstellungen bleiben auch während einer Session
    erreichbar und verändern den aktuellen Spielscreen nicht.
 
+Container immer mit `docker compose stop`, `docker compose restart` oder
+`docker stop` beenden. Der Rust-Host verarbeitet das dabei gesendete `SIGTERM`
+geordnet und behält den letzten atomar committed Spielstand für den Neustart.
+`docker kill` und ein erzwungenes `docker rm -f` bleiben Notfallmaßnahmen.
+
 Ohne verbundenes BLE-Board läuft die Projektoransicht im Testmodus. In diesem
 Modus erzeugt ein Klick auf ein Scheibensegment den entsprechenden Treffer;
 für einen Fehlwurf steht daneben **MISS** bereit.

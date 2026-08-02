@@ -441,7 +441,11 @@ jobs:
           assert rematch['result']['session']['screen'] == 'countdown', rematch
           open('/tmp/rust-instance-before', 'w').write(bootstrap['runtime_instance_id'])
           PY
-          docker restart "$container_name" >/dev/null
+          SECONDS=0
+          docker stop --time 5 "$container_name" >/dev/null
+          test "$(docker inspect "$container_name" --format '{{.State.ExitCode}}')" = 0
+          test "$SECONDS" -lt 5
+          docker start "$container_name" >/dev/null
           for attempt in {1..30}; do
             if curl --fail --silent --show-error \
               http://127.0.0.1:18081/api/v2/runtime/bootstrap > /tmp/rust-recovered.json; then
