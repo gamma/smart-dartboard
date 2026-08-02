@@ -100,8 +100,12 @@ Umgesetzt und lokal verifiziert:
   Mitglieder laufen durch Session-, Game- und Public State. Ein Teamsieg zählt
   weiterhin atomar als Sieg und drei Sessionpunkte für jedes Mitglied. Explizite
   gegnerische Teamaufteilungen werden bereits als vollständige, disjunkte
-  Spielerpartition validiert und können von künftigen `teams`-Modi verwendet
-  werden,
+  Spielerpartition validiert. In der gemeinsamen Control UI lassen sich zwei
+  feste Teams bereits bei der Spielerauswahl point-and-click zusammenstellen;
+  ein Klick auf einen Spieler verschiebt ihn zur Gegenseite, und leere Teams
+  blockieren den Sessionstart. Die Konfiguration bleibt in der Modusauswahl
+  sichtbar und kann von künftigen `teams`-Modi ohne neuen Transportpfad
+  verwendet werden,
 - das native Projector-Fenster und der iOS-External-Display-Host erhalten genau
   eine begrenzte Reporting-Bridge: Sie dürfen ihre Geometrie und ihren
   Soundstatus melden, aber weder Kalibrierung noch Spiel oder sonstiges Setup

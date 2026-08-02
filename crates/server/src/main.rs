@@ -1397,6 +1397,7 @@ mod tests {
             "/projector",
             "/static/runtime-client.js",
             "/static/runtime-experience-client.js",
+            "/static/team.css",
         ] {
             let response = test_app()
                 .oneshot(Request::get(path).body(Body::empty()).expect("request"))

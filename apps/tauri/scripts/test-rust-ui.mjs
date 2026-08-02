@@ -86,11 +86,43 @@ try{
   await control.getByRole('button',{name:'Session starten'}).click();
   await control.locator('input[name="name"]').fill('Ada');
   await control.getByRole('button',{name:'Spieler anlegen'}).click();
+  await control.waitForFunction(()=>appState.experience?.players?.some(player=>player.name==='Ada'));
+  await control.locator('input[name="name"]').fill('Bob');
+  await control.getByRole('button',{name:'Spieler anlegen'}).click();
+  await control.waitForFunction(()=>appState.experience?.players?.some(player=>player.name==='Bob'));
+  await control.locator('[data-action="team-setup"][data-mode="teams"]').click();
+  await control.waitForFunction(()=>document.querySelectorAll('.team-columns article').length===2);
+  const firstTeamPlayer=control.locator('.team-columns [data-action="assign-team"]').first();
+  const firstTeamPlayerId=await firstTeamPlayer.getAttribute('data-id');
+  const initialTeam=await control.evaluate(id=>appState.teamAssignments.get(id),firstTeamPlayerId);
+  await firstTeamPlayer.click();
+  await control.waitForFunction(({id,team})=>appState.teamAssignments.get(id)!==team,
+    {id:firstTeamPlayerId,team:initialTeam});
+  if(!await control.locator('[data-action="start-session"]').isDisabled()){
+    throw new Error('Expected an empty team to block session start');
+  }
+  await control.locator(`[data-action="assign-team"][data-id="${firstTeamPlayerId}"]`).click();
+  await control.waitForFunction(({id,team})=>appState.teamAssignments.get(id)===team,
+    {id:firstTeamPlayerId,team:initialTeam});
   const sessionStart=control.locator('[data-action="start-session"]');
   await sessionStart.waitFor({state:'visible'});
   await control.waitForFunction(()=>!document.querySelector('[data-action="start-session"]')?.disabled);
+  await control.setViewportSize({width:768,height:1024});
+  const tabletLayout=await control.evaluate(()=>({
+    clientWidth:document.documentElement.clientWidth,
+    scrollWidth:document.documentElement.scrollWidth,
+    teamColumns:document.querySelectorAll('.team-columns article').length,
+  }));
+  if(tabletLayout.scrollWidth!==tabletLayout.clientWidth || tabletLayout.teamColumns!==2){
+    throw new Error(`Team editor overflowed the tablet viewport: ${JSON.stringify(tabletLayout)}`);
+  }
+  await control.setViewportSize({width:1366,height:900});
   await sessionStart.click();
   await control.waitForFunction(()=>document.querySelectorAll('.mode-card').length===24);
+  const configuredTeams=await control.evaluate(()=>appState.experience.session.teams);
+  if(configuredTeams?.length!==2 || configuredTeams.some(team=>team.player_ids.length!==1)){
+    throw new Error('Expected the point-and-click two-team partition in session state');
+  }
   if(await control.locator('.mode-card').count()!==24) throw new Error('Expected 24 mode cards');
   if(await control.locator('.mode-card .mode-format').count()!==4){
     throw new Error('Expected four explicitly marked cooperative modes');
@@ -99,7 +131,7 @@ try{
   await control.getByText('ALLE SPIELEN IN EINEM TEAM').waitFor();
   await projector.getByText('ALLE SPIELEN IN EINEM TEAM').waitFor();
   const cooperativeTeam=await control.evaluate(()=>appState.experience.session.active_game_teams?.[0]);
-  if(cooperativeTeam?.id!=='coop' || cooperativeTeam.player_ids.length!==1){
+  if(cooperativeTeam?.id!=='coop' || cooperativeTeam.player_ids.length!==2){
     throw new Error('Expected one materialized cooperative team');
   }
   await control.locator('[data-action="back-games"]').click();
@@ -130,7 +162,7 @@ try{
   await control.waitForSelector('.history-dashboard');
   await control.waitForFunction(()=>{
     const history=appState.history;
-    return history.players.length===1 && history.sessions.length===1
+    return history.players.length===2 && history.sessions.length===1
       && history.modes.some(mode=>mode.game_type==='x01' && mode.finished===1)
       && history.heatmap?.total_darts===1;
   });
@@ -144,7 +176,7 @@ try{
     throw new Error('Expected portable export with one session and two games');
   }
   if(browserErrors.length) throw new Error(`Browser errors:\n${browserErrors.join('\n')}`);
-  console.log('Rust Runtime UI: setup, 24 modes, cooperative teams, effects, synchronized play, analytics, history, replay and export passed in WebKit');
+  console.log('Rust Runtime UI: setup, team editor, 24 modes, cooperative teams, effects, synchronized play, analytics, history, replay and export passed in WebKit');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');

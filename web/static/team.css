@@ -1,0 +1,182 @@
+.team-editor {
+  --accent: var(--cyan);
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.team-editor > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.team-editor .choice-label {
+  margin: 0 0 5px;
+}
+
+.team-editor header p,
+.team-editor-help,
+.team-columns article section > p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.team-format-choice {
+  width: min(320px, 45%);
+  flex: 0 0 auto;
+}
+
+.team-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.team-columns article {
+  padding: 14px;
+  border: 1px solid color-mix(in srgb, var(--team) 38%, var(--line));
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--team) 8%, rgba(0, 0, 0, 0.18));
+}
+
+.team-columns article > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 10px;
+}
+
+.team-columns article > div > i {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--team);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--team) 70%, transparent);
+}
+
+.team-columns article > div > b {
+  font-size: 17px;
+}
+
+.team-columns article > div > small {
+  margin-left: auto;
+  color: var(--muted);
+  font-weight: 900;
+}
+
+.team-columns article > section {
+  display: grid;
+  gap: 7px;
+}
+
+.team-columns article > section > button {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.24);
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.team-columns article > section > button:hover {
+  border-color: var(--team);
+}
+
+.team-columns article > section .avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  font-size: 17px;
+}
+
+.team-columns article > section > button > i {
+  color: var(--muted);
+  font-size: 10px;
+  font-style: normal;
+}
+
+.team-columns article section > p {
+  padding: 13px;
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  text-align: center;
+}
+
+.team-editor-help {
+  margin-top: 11px;
+}
+
+.session-team-strip {
+  margin: 0 0 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.session-team-strip > span {
+  display: block;
+  margin-bottom: 9px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.12em;
+}
+
+.session-team-strip > div {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.session-team-strip article {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  align-items: center;
+  gap: 8px;
+  min-width: 230px;
+  padding: 9px 11px;
+  border: 1px solid color-mix(in srgb, var(--team) 35%, var(--line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--team) 8%, transparent);
+}
+
+.session-team-strip article i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--team);
+}
+
+.session-team-strip article small {
+  color: var(--muted);
+  text-align: right;
+}
+
+@media (max-width: 700px) {
+  .team-editor > header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .team-format-choice {
+    width: 100%;
+  }
+
+  .team-columns {
+    grid-template-columns: 1fr;
+  }
+}

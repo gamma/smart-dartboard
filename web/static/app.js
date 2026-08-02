@@ -14,6 +14,8 @@ const appState = {
   wsOk: false,
   serverInstance: null,
   selectedPlayers: new Set(),
+  teamSetup: false,
+  teamAssignments: new Map(),
   audio: null,
   countdownTimer: null,
   lastCueKey: null,
@@ -61,6 +63,10 @@ const AVATARS = [
   {id:'party', emoji:'🥳', label:'Party'},
 ];
 const COLORS = ['#28e7ff','#ffb52b','#3dff91','#ff4f79','#a77bff','#ffffff'];
+const SESSION_TEAMS = [
+  {id:'team-a',name:'Team A',color:'#28e7ff'},
+  {id:'team-b',name:'Team B',color:'#ff4f79'},
+];
 const NEON_MODE_ASSETS = new Set([
   'avoid_bomb','block_drop','boss_fight','candy_cannon','color_clash',
   'cookie_monster','countup','cricket','dart_sweeper','darts_bingo',
@@ -504,19 +510,67 @@ function controlAttract(){
 }
 
 function playerCard(player, selected){
+  const team=SESSION_TEAMS.find(item=>item.id===appState.teamAssignments.get(player.id));
+  const status=selected
+    ? (appState.teamSetup && team ? team.name : t('selected'))
+    : t('tap');
   return `<button class="player-select ${selected ? 'selected' : ''}" data-action="toggle-player" data-id="${escapeHtml(player.id)}">
     <span class="avatar avatar-${escapeHtml(player.avatar)}" style="--player:${escapeHtml(player.color)}" aria-label="${escapeHtml(player.avatar)}">${avatarEmoji(player.avatar)}</span>
-    <span><b>${escapeHtml(player.name)}</b><small>${selected ? t('selected') : t('tap')}</small></span>
+    <span><b>${escapeHtml(player.name)}</b><small>${escapeHtml(status)}</small></span>
     <i>${selected ? '✓' : '+'}</i>
   </button>`;
+}
+function syncTeamAssignments(){
+  for(const playerId of [...appState.teamAssignments.keys()]){
+    if(!appState.selectedPlayers.has(playerId)) appState.teamAssignments.delete(playerId);
+  }
+  for(const playerId of appState.selectedPlayers){
+    if(appState.teamAssignments.has(playerId)) continue;
+    const counts=SESSION_TEAMS.map(team=>[...appState.teamAssignments.values()].filter(id=>id===team.id).length);
+    appState.teamAssignments.set(playerId,SESSION_TEAMS[counts[0]<=counts[1]?0:1].id);
+  }
+}
+function configuredSessionTeams(){
+  if(!appState.teamSetup) return [];
+  syncTeamAssignments();
+  return SESSION_TEAMS.map(team=>({
+    ...team,
+    player_ids:[...appState.selectedPlayers].filter(id=>appState.teamAssignments.get(id)===team.id),
+  }));
+}
+function teamSetupValid(){
+  const teams=configuredSessionTeams();
+  return !appState.teamSetup || (appState.selectedPlayers.size>=2 && teams.every(team=>team.player_ids.length));
+}
+function teamEditor(players){
+  syncTeamAssignments();
+  const playerById=new Map(players.map(player=>[player.id,player]));
+  const teams=configuredSessionTeams();
+  return `<section class="team-editor ${appState.teamSetup?'enabled':''}">
+    <header><div><div class="choice-label">${t('session_format')}</div><p>${t('team_setup_copy')}</p></div>
+      <div class="segmented team-format-choice">
+        <button type="button" class="${appState.teamSetup?'':'selected'}" data-action="team-setup" data-mode="individual">${t('individual_play')}</button>
+        <button type="button" class="${appState.teamSetup?'selected':''}" data-action="team-setup" data-mode="teams">${t('two_teams')}</button>
+      </div>
+    </header>
+    ${appState.teamSetup?`<div class="team-columns">${teams.map((team,index)=>`<article style="--team:${team.color}">
+      <div><i></i><b>${team.name}</b><small>${team.player_ids.length}</small></div>
+      <section>${team.player_ids.map(id=>{
+        const player=playerById.get(id);
+        if(!player) return '';
+        return `<button type="button" data-action="assign-team" data-id="${escapeHtml(id)}" title="${escapeHtml(t('move_to_other_team'))}"><span class="avatar" style="--player:${escapeHtml(player.color)}">${avatarEmoji(player.avatar)}</span><b>${escapeHtml(player.name)}</b><i>→ ${SESSION_TEAMS[1-index].name}</i></button>`;
+      }).join('') || `<p>${t('team_needs_player')}</p>`}</section>
+    </article>`).join('')}</div><p class="team-editor-help">${t('team_assignment_help')}</p>`:''}
+  </section>`;
 }
 function controlPlayers(){
   const players = appState.experience.players;
   const cards = players.map(player => playerCard(player, appState.selectedPlayers.has(player.id))).join('');
+  const canStart=appState.selectedPlayers.size>0 && teamSetupValid();
   return `<section class="control-scene">
     ${sceneHeader(t('step_players'),t('who_plays'),t('choose_players'))}
     <div class="player-layout">
-      <div class="selection-grid">${cards || `<div class="empty-state">${t('create_first_player')}</div>`}</div>
+      <div><div class="selection-grid">${cards || `<div class="empty-state">${t('create_first_player')}</div>`}</div>${teamEditor(players)}</div>
       <form id="newPlayerForm" class="new-player-card">
         <h2>${t('new_player')}</h2>
         <label>${t('name')}<input name="name" maxlength="32" autocomplete="off" placeholder="${t('player_name')}" required></label>
@@ -534,7 +588,7 @@ function controlPlayers(){
     <footer class="sticky-actions">
       ${actionButton(t('back'),'home','ghost')}
       <div>${t('players_selected',{count:`<b>${appState.selectedPlayers.size}</b>`})}</div>
-      ${actionButton(t('continue_games'),'start-session','primary',appState.selectedPlayers.size ? '' : 'disabled')}
+      ${actionButton(t('continue_games'),'start-session','primary',canStart ? '' : 'disabled')}
     </footer>
   </section>`;
 }
@@ -561,11 +615,17 @@ function activeTeamPanel(mode){
   const players=appState.experience.session?.players || [];
   return `<aside class="active-team-panel"><span>${mode.format==='cooperative'?t('one_coop_team'):t('configured_teams')}</span>${teams.map(team=>`<div style="--team:${escapeHtml(team.color)}"><b>${escapeHtml(team.name)}</b><small>${team.player_ids.map(id=>players.find(player=>player.id===id)?.name).filter(Boolean).map(escapeHtml).join(' · ')}</small></div>`).join('')}</aside>`;
 }
+function sessionTeamStrip(){
+  const session=appState.experience.session;
+  if(!session?.teams?.length) return '';
+  return `<aside class="session-team-strip"><span>${t('configured_teams')}</span><div>${session.teams.map(team=>`<article style="--team:${escapeHtml(team.color)}"><i></i><b>${escapeHtml(team.name)}</b><small>${team.player_ids.map(id=>session.players.find(player=>player.id===id)?.name).filter(Boolean).map(escapeHtml).join(' · ')}</small></article>`).join('')}</div></aside>`;
+}
 function controlGameSelect(){
   const session = appState.experience.session;
   return `<section class="control-scene">
     ${sceneHeader(t('step_games'),t('choose_game'),t('modes_ready',{count:session?.players.length || 0}))}
     ${sessionScoreStrip()}
+    ${sessionTeamStrip()}
     <div class="mode-grid">${appState.experience.modes.map(modeCard).join('')}</div>
     <footer class="sticky-actions">
       <div class="footer-actions">${actionButton(t('statistics'),'open-history','ghost')}${actionButton(t('end_session'),'end-session','ghost')}</div>
@@ -2025,7 +2085,10 @@ document.addEventListener('click',async event=>{
       return;
     }
     if(appState.localView){ appState.localView=null; renderControl(); return; }
-    appState.selectedPlayers.clear(); await action('/api/session/close'); return;
+    appState.selectedPlayers.clear();
+    appState.teamAssignments.clear();
+    appState.teamSetup=false;
+    await action('/api/session/close'); return;
   }
   if(name==='calibrate'){
     appState.calibrationReturn={
@@ -2037,10 +2100,34 @@ document.addEventListener('click',async event=>{
     return;
   }
   if(name==='toggle-player'){
-    appState.selectedPlayers.has(target.dataset.id) ? appState.selectedPlayers.delete(target.dataset.id) : appState.selectedPlayers.add(target.dataset.id);
+    if(appState.selectedPlayers.has(target.dataset.id)){
+      appState.selectedPlayers.delete(target.dataset.id);
+      appState.teamAssignments.delete(target.dataset.id);
+    }else if(appState.selectedPlayers.size>=8){
+      showToast(t('maximum_players')); return;
+    }else{
+      appState.selectedPlayers.add(target.dataset.id);
+      syncTeamAssignments();
+    }
     renderControl(); return;
   }
-  if(name==='start-session'){ await action('/api/session/start',{player_ids:[...appState.selectedPlayers]}); return; }
+  if(name==='team-setup'){
+    appState.teamSetup=target.dataset.mode==='teams';
+    syncTeamAssignments();
+    renderControl(); return;
+  }
+  if(name==='assign-team'){
+    const current=appState.teamAssignments.get(target.dataset.id);
+    appState.teamAssignments.set(target.dataset.id,current===SESSION_TEAMS[0].id?SESSION_TEAMS[1].id:SESSION_TEAMS[0].id);
+    renderControl(); return;
+  }
+  if(name==='start-session'){
+    if(!teamSetupValid()){ showToast(t('teams_need_split')); return; }
+    await action('/api/session/start',{
+      player_ids:[...appState.selectedPlayers],teams:configuredSessionTeams(),
+    });
+    return;
+  }
   if(name==='select-mode'){ await action('/api/game/prepare',{game_type:target.dataset.mode,options:{}}); return; }
   if(name==='set-option'){
     const value=/^-?\d+(\.\d+)?$/.test(target.dataset.value)?Number(target.dataset.value):target.dataset.value;
@@ -2129,7 +2216,10 @@ document.addEventListener('click',async event=>{
   }
   if(name==='next-game'){ await action('/api/game/next'); return; }
   if(name==='end-session'){ await action('/api/session/end'); return; }
-  if(name==='close-session'){ appState.selectedPlayers.clear(); await action('/api/session/close'); return; }
+  if(name==='close-session'){
+    appState.selectedPlayers.clear(); appState.teamAssignments.clear(); appState.teamSetup=false;
+    await action('/api/session/close'); return;
+  }
   if(name==='save-calibration'){
     const corners=appState.experience.calibration.corners;
     await action('/api/calibration',{...appState.experience.calibration,corners});
@@ -2173,7 +2263,12 @@ document.addEventListener('submit',async event=>{
   event.preventDefault();
   const data=new FormData(event.target);
   const player=await action('/api/players',{name:data.get('name'),avatar:data.get('avatar'),color:data.get('color')});
-  appState.selectedPlayers.add(player.id);
+  if(appState.selectedPlayers.size<8){
+    appState.selectedPlayers.add(player.id);
+    syncTeamAssignments();
+  }else{
+    showToast(t('maximum_players'));
+  }
   renderControl();
 });
 document.addEventListener('input',event=>{
