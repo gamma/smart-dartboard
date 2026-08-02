@@ -3997,7 +3997,12 @@ mod tests {
         let mut unknown = portable_x01_archive(true);
         unknown["players"][0]["unexpected"] = serde_json::json!(true);
         assert!(repository.import_data(unknown).is_err());
-        assert!(repository.players().expect("unknown fields rejected").is_empty());
+        assert!(
+            repository
+                .players()
+                .expect("unknown fields rejected")
+                .is_empty()
+        );
 
         let mut inconsistent = portable_x01_archive(true);
         inconsistent["games"][0]["detail"]["game"]["darts"] = serde_json::json!(2);
