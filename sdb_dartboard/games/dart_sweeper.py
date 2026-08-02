@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict, List
 
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
@@ -37,6 +36,7 @@ class DartSweeperMode:
             InstructionStep("Gemeinsam räumen", "Bull hilft beim Scannen. Räumt alle sicheren Zahlen vor dem letzten Leben.", "mine"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -46,14 +46,18 @@ class DartSweeperMode:
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
         preset = PRESETS[str(options.get("preset", "classic"))]
         state.mode_state = {
-            "seed": random.randint(0, 2**31 - 1),  # nosec B311
             "seeded": False,
+            "direct_hit_seen": False,
             "mines": [],
             "revealed": {},
             "exploded": [],
             "lives": preset["lives"],
             "max_lives": preset["lives"],
             "mine_count": preset["mines"],
+            "last_effect": "",
+            "effect_points": 0,
+            "effect_field": 0,
+            "revealed_count": 0,
         }
         state.message = "Der erste Treffer ist garantiert sicher!"
 
@@ -72,11 +76,31 @@ class DartSweeperMode:
             immediate = self._neighbors(safe_field)[:2]
             excluded = {safe_field, *immediate}
         available = [field for field in BOARD_ORDER if field not in excluded]
-        rng = random.Random(int(state.mode_state["seed"]))  # nosec B311
-        state.mode_state["mines"] = sorted(
-            rng.sample(available, int(state.mode_state["mine_count"]))
-        )
+        chosen = [
+            available.pop(state.random_index(len(available)))
+            for _ in range(int(state.mode_state["mine_count"]))
+        ]
+        state.mode_state["mines"] = sorted(chosen)
         state.mode_state["seeded"] = True
+
+    def _ensure_first_direct_safe(self, state: Any, field: int) -> None:
+        protected = {field, *self._neighbors(field)[:2]}
+        mines = set(int(value) for value in state.mode_state["mines"])
+        conflicts = sorted(mines & protected)
+        replacements = self._safe_covered(state)
+        replacements = [value for value in replacements if value not in protected]
+        for mine in conflicts:
+            mines.remove(mine)
+            replacement = replacements.pop(
+                state.random_index(len(replacements))
+            )
+            mines.add(replacement)
+        state.mode_state["mines"] = sorted(mines)
+        state.mode_state["direct_hit_seen"] = True
+        for revealed in list(state.mode_state["revealed"]):
+            state.mode_state["revealed"][revealed] = self._count(
+                state, int(revealed)
+            )
 
     def _count(self, state: Any, field: int) -> int:
         mines = set(state.mode_state["mines"])
@@ -98,6 +122,26 @@ class DartSweeperMode:
         state.mode_state["revealed"][str(field)] = count
         return count
 
+    @staticmethod
+    def _award_team(state: Any, points: int) -> None:
+        for teammate in state.players:
+            teammate.score += points
+
+    @staticmethod
+    def _set_effect(
+        state: Any,
+        effect: str,
+        points: int = 0,
+        field: int = 0,
+        revealed: int = 0,
+    ) -> None:
+        state.mode_state.update({
+            "last_effect": effect,
+            "effect_points": points,
+            "effect_field": field,
+            "revealed_count": revealed,
+        })
+
     def _finish_if_needed(
         self,
         state: Any,
@@ -107,6 +151,7 @@ class DartSweeperMode:
         safe_total = 20 - len(state.mode_state["mines"])
         revealed = len(state.mode_state["revealed"])
         if revealed >= safe_total:
+            self._set_effect(state, "sweeper_win", points)
             return ThrowOutcome(
                 points,
                 "MINENFELD GERÄUMT! Das Team gewinnt!",
@@ -115,6 +160,8 @@ class DartSweeperMode:
                 result_type="team_win",
             )
         if int(state.mode_state["lives"]) <= 0:
+            if state.mode_state.get("last_effect") != "mine_explosion":
+                self._set_effect(state, "mine_explosion", points)
             return ThrowOutcome(
                 points,
                 "BOOM! Keine Leben mehr · Team-Niederlage",
@@ -124,31 +171,44 @@ class DartSweeperMode:
         return ThrowOutcome(points, message)
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        del player
+        self._set_effect(state, "")
         is_hit = event.get("type") == "hit"
         field = int(event.get("field", 0) or 0)
         is_bull = is_hit and field == 25
-        if not state.mode_state["seeded"]:
-            self._seed(state, None if is_bull or not is_hit else field)
 
         if not is_hit:
             return self._finish_if_needed(state, 0, "MISS · Das Minenfeld bleibt verdeckt")
 
         if is_bull:
+            if not state.mode_state["seeded"]:
+                self._seed(state, None)
             amount = 2 if int(event.get("multiplier", 1)) == 2 else 1
             safe = self._safe_covered(state)
-            rng = random.Random(  # nosec B311
-                f"{state.mode_state['seed']}:{len(state.mode_state['revealed'])}:bull"
-            )
-            chosen = rng.sample(safe, min(amount, len(safe)))
+            reserve = 0 if state.mode_state.get("direct_hit_seen", True) else 3
+            amount = min(amount, max(0, len(safe) - reserve))
+            chosen = [
+                safe.pop(state.random_index(len(safe)))
+                for _ in range(amount)
+            ]
             for target in chosen:
                 self._reveal(state, target)
             points = len(chosen) * 5
-            player.score += points
+            self._award_team(state, points)
+            self._set_effect(
+                state, "sweeper_scan", points, 25, len(chosen)
+            )
             return self._finish_if_needed(
                 state,
                 points,
                 f"BULL-SCANNER! {len(chosen)} sichere Felder +{points}",
             )
+
+        if not state.mode_state["seeded"]:
+            self._seed(state, field)
+            state.mode_state["direct_hit_seen"] = True
+        elif not state.mode_state.get("direct_hit_seen", True):
+            self._ensure_first_direct_safe(state, field)
 
         mines = set(state.mode_state["mines"])
         if field in mines:
@@ -156,6 +216,7 @@ class DartSweeperMode:
                 state.mode_state["exploded"].append(field)
                 state.mode_state["lives"] = max(0, int(state.mode_state["lives"]) - 1)
                 event["effect"] = "mine_explosion"
+                self._set_effect(state, "mine_explosion", 0, field)
                 return self._finish_if_needed(
                     state,
                     0,
@@ -175,7 +236,10 @@ class DartSweeperMode:
             self._reveal(state, neighbor)
             bonus_count += 1
         points += bonus_count * 5
-        player.score += points
+        self._award_team(state, points)
+        self._set_effect(
+            state, "sweeper_reveal", points, field, 1 + bonus_count
+        )
         return self._finish_if_needed(
             state,
             points,

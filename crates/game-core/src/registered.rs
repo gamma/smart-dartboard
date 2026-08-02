@@ -10,6 +10,7 @@ mod block_drop;
 mod candy_cannon;
 mod color_clash;
 mod cookie_monster;
+mod dart_sweeper;
 mod dragon_eggs;
 mod eight_ball;
 mod ghost_chase;
@@ -29,6 +30,7 @@ use block_drop::BLOCK_DROP_MODE;
 use candy_cannon::CANDY_CANNON_MODE;
 use color_clash::COLOR_CLASH_MODE;
 use cookie_monster::COOKIE_MONSTER_MODE;
+use dart_sweeper::DART_SWEEPER_MODE;
 use dragon_eggs::DRAGON_EGGS_MODE;
 use eight_ball::EIGHT_BALL_MODE;
 use ghost_chase::GHOST_CHASE_MODE;
@@ -1216,13 +1218,14 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 19] = [
+static MODES: [&'static dyn GameMode; 20] = [
     &AVOID_BOMB_MODE,
     &BLOCK_DROP_MODE,
     &CRICKET_MODE,
     &CANDY_CANNON_MODE,
     &COLOR_CLASH_MODE,
     &COOKIE_MONSTER_MODE,
+    &DART_SWEEPER_MODE,
     &DRAGON_EGGS_MODE,
     &EIGHT_BALL_MODE,
     &GHOST_CHASE_MODE,

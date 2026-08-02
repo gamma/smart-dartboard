@@ -1177,16 +1177,8 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(21));
-        assert!(
-            modes
-                .as_array()
-                .is_some_and(|items| items.iter().any(|mode| mode["slug"] == "cricket"
-                    && mode["artwork"] == "/static/assets/modes/cricket.webp"
-                    && mode["instructions"]
-                        .as_array()
-                        .is_some_and(|steps| steps.len() == 4)))
-        );
+        assert_eq!(modes.as_array().map(Vec::len), Some(22));
+        assert_cricket_metadata(&modes);
         assert!(modes.as_array().is_some_and(|items| {
             items
                 .iter()
@@ -1261,6 +1253,7 @@ mod tests {
         }));
         assert_block_drop_metadata(&modes);
         assert_cookie_monster_metadata(&modes);
+        assert_dart_sweeper_metadata(&modes);
         assert_dragon_eggs_metadata(&modes);
         assert_space_defender_metadata(&modes);
     }
@@ -1284,6 +1277,18 @@ mod tests {
                                 item["icon"] == "drop" && item["secondary_color"] == "#e76f51"
                             })
                     })
+            })
+        }));
+    }
+
+    fn assert_cricket_metadata(modes: &Value) {
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "cricket"
+                    && mode["artwork"] == "/static/assets/modes/cricket.webp"
+                    && mode["instructions"]
+                        .as_array()
+                        .is_some_and(|steps| steps.len() == 4)
             })
         }));
     }
@@ -1314,6 +1319,22 @@ mod tests {
                     && mode["instructions"]
                         .as_array()
                         .is_some_and(|steps| steps.len() == 4)
+            })
+        }));
+    }
+
+    fn assert_dart_sweeper_metadata(modes: &Value) {
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "dart_sweeper"
+                    && mode["ruleset_version"] == 2
+                    && mode["artwork"] == "/static/assets/modes/dart_sweeper.webp"
+                    && mode["options"][0]["default"] == "classic"
+                    && mode["min_players"] == 1
+                    && mode["max_players"] == 8
+                    && mode["instructions"]
+                        .as_array()
+                        .is_some_and(|steps| steps.len() == 3)
             })
         }));
     }

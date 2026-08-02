@@ -659,7 +659,11 @@ class CartoonModeTests(unittest.TestCase):
     def test_dart_sweeper_multiplier_does_not_protect_direct_mine(self):
         engine = GameEngine()
         engine.reset("dart_sweeper", ["Ada"], options={"preset": "classic"})
-        engine.state.mode_state.update({"seeded": True, "mines": [20, 1, 2, 3, 4]})
+        engine.state.mode_state.update({
+            "seeded": True,
+            "direct_hit_seen": True,
+            "mines": [20, 1, 2, 3, 4],
+        })
         lives = engine.state.mode_state["lives"]
         engine.handle_event(hit(20, "triple", 3, 1))
         self.assertEqual(lives - 1, engine.state.mode_state["lives"])
@@ -675,11 +679,51 @@ class CartoonModeTests(unittest.TestCase):
     def test_dart_sweeper_exploded_mine_only_costs_one_life(self):
         engine = GameEngine()
         engine.reset("dart_sweeper", ["Ada"], options={"preset": "classic"})
-        engine.state.mode_state.update({"seeded": True, "mines": [20, 1, 2, 3, 4]})
+        engine.state.mode_state.update({
+            "seeded": True,
+            "direct_hit_seen": True,
+            "mines": [20, 1, 2, 3, 4],
+        })
         lives = engine.state.mode_state["lives"]
         engine.handle_event(hit(20, seq=1))
         engine.handle_event(hit(20, seq=2))
         self.assertEqual(lives - 1, engine.state.mode_state["lives"])
+
+    def test_dart_sweeper_miss_does_not_consume_first_hit_safety(self):
+        engine = GameEngine()
+        engine.reset(
+            "dart_sweeper", ["Ada"], options={"preset": "classic"}, random_seed=42
+        )
+        engine.handle_event(MISS)
+        self.assertFalse(engine.state.mode_state["seeded"])
+        engine.handle_event(hit(20, seq=1))
+        protected = {20, 5, 1}
+        self.assertTrue(protected.isdisjoint(engine.state.mode_state["mines"]))
+
+    def test_dart_sweeper_bull_then_direct_hit_keeps_safe_halo(self):
+        engine = GameEngine()
+        engine.reset(
+            "dart_sweeper", ["Ada"], options={"preset": "expert"}, random_seed=42
+        )
+        engine.handle_event(hit(25, "double_bull", 2, 1))
+        engine.handle_event(hit(20, seq=2))
+        protected = {20, 5, 1}
+        self.assertTrue(protected.isdisjoint(engine.state.mode_state["mines"]))
+        self.assertTrue(engine.state.mode_state["direct_hit_seen"])
+
+    def test_dart_sweeper_awards_reveals_to_the_entire_team(self):
+        engine = GameEngine()
+        engine.reset(
+            "dart_sweeper",
+            [{"id": "ada", "name": "Ada"}, {"id": "bob", "name": "Bob"}],
+            options={"preset": "classic"},
+            random_seed=42,
+        )
+        engine.handle_event(hit(20, seq=1))
+        self.assertEqual(
+            engine.state.players[0].score, engine.state.players[1].score
+        )
+        self.assertGreater(engine.state.players[0].score, 0)
 
 
 if __name__ == "__main__":

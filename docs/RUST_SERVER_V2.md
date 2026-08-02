@@ -127,11 +127,11 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 - CountUp, X01, Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King
   of the Board, Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon,
   Lightning Round, Mini Golf, Simon Says, Treasure Hunt, Block Drop, Dragon
-  Eggs, Cookie Monster und Space Defender starten;
+  Eggs, Cookie Monster, Space Defender und DartSweeper starten;
   Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board,
   Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round,
   Mini Golf, Simon Says, Treasure Hunt, Block Drop, Dragon Eggs, Cookie Monster
-  und Space Defender nutzen dieselbe generische, statische
+  sowie Space Defender und DartSweeper nutzen dieselbe generische, statische
   Modus-Registry statt neuer Runtime- oder Serverzweige,
 - Sessionprofile einschließlich Avatar und Spielerfarbe bleiben beim Start
   eines Registry-Spiels erhalten; ältere Snapshots ohne diese Felder werden

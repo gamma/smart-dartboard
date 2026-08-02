@@ -1,0 +1,48 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 2,
+  "random_seed": 42,
+  "players": [
+    {"id":"ada","name":"Ada","avatar":"fox","color":"#ff00aa"},
+    {"id":"bob","name":"Bob","avatar":"comet","color":"#00ffaa"}
+  ],
+  "options": {"preset":"expert"},
+  "steps": [
+    {
+      "command":{"type":"dart","event":{"type":"miss","seq":1,"label":"MISS","score":0}},
+      "expected":{"scores":[0,0],"seeded":false,"direct_hit_seen":false,"mines":[],"revealed":[],"exploded":[],"lives":2,"last_effect":"","effect_points":0,"effect_field":0,"revealed_count":0,"random_cursor":0,"current_player_index":0,"darts_in_turn":1,"turn_score":0,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":2,"field":25,"ring":"double_bull","multiplier":2,"label":"DBull","score":50}},
+      "expected":{"scores":[10,10],"seeded":true,"direct_hit_seen":false,"mines":[4,7,9,10,14,16,20],"revealed":[[5,2],[18,2]],"exploded":[],"lives":2,"last_effect":"sweeper_scan","effect_points":10,"effect_field":25,"revealed_count":2,"random_cursor":9,"current_player_index":0,"darts_in_turn":2,"turn_score":10,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":3,"field":20,"ring":"single_outer","multiplier":1,"label":"S20","score":20}},
+      "expected":{"scores":[30,30],"seeded":true,"direct_hit_seen":true,"mines":[4,7,9,10,14,16,17],"revealed":[[5,1],[18,1],[20,0]],"exploded":[],"lives":2,"last_effect":"sweeper_reveal","effect_points":20,"effect_field":20,"revealed_count":1,"random_cursor":10,"current_player_index":0,"darts_in_turn":3,"turn_score":30,"round_number":1,"status":"hold","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"continue"},
+      "expected":{"scores":[30,30],"seeded":true,"direct_hit_seen":true,"mines":[4,7,9,10,14,16,17],"revealed":[[5,1],[18,1],[20,0]],"exploded":[],"lives":2,"last_effect":"sweeper_reveal","effect_points":20,"effect_field":20,"revealed_count":1,"random_cursor":10,"current_player_index":1,"darts_in_turn":0,"turn_score":0,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":4,"field":4,"ring":"triple","multiplier":3,"label":"T4","score":12}},
+      "expected":{"scores":[30,30],"seeded":true,"direct_hit_seen":true,"mines":[4,7,9,10,14,16,17],"revealed":[[5,1],[18,1],[20,0]],"exploded":[4],"lives":1,"last_effect":"mine_explosion","effect_points":0,"effect_field":4,"revealed_count":0,"random_cursor":10,"current_player_index":1,"darts_in_turn":1,"turn_score":0,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":5,"field":4,"ring":"single_outer","multiplier":1,"label":"S4","score":4}},
+      "expected":{"scores":[30,30],"seeded":true,"direct_hit_seen":true,"mines":[4,7,9,10,14,16,17],"revealed":[[5,1],[18,1],[20,0]],"exploded":[4],"lives":1,"last_effect":"","effect_points":0,"effect_field":0,"revealed_count":0,"random_cursor":10,"current_player_index":1,"darts_in_turn":2,"turn_score":0,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":6,"field":7,"ring":"double","multiplier":2,"label":"D7","score":14}},
+      "expected":{"scores":[30,30],"seeded":true,"direct_hit_seen":true,"mines":[4,7,9,10,14,16,17],"revealed":[[5,1],[18,1],[20,0]],"exploded":[4,7],"lives":0,"last_effect":"mine_explosion","effect_points":0,"effect_field":7,"revealed_count":0,"random_cursor":10,"current_player_index":1,"darts_in_turn":3,"turn_score":0,"round_number":1,"status":"finished","winner_ids":[],"result_type":"challenge_loss"}
+    },
+    {
+      "command":{"type":"correct","action_id":7,"event":{"type":"hit","seq":99,"field":1,"ring":"single_outer","multiplier":1,"label":"S1","score":1}},
+      "expected":{"scores":[40,40],"seeded":true,"direct_hit_seen":true,"mines":[4,7,9,10,14,16,17],"revealed":[[1,1],[5,1],[18,1],[20,0]],"exploded":[4],"lives":1,"last_effect":"sweeper_reveal","effect_points":10,"effect_field":1,"revealed_count":1,"random_cursor":10,"current_player_index":1,"darts_in_turn":3,"turn_score":10,"round_number":1,"status":"hold","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"continue"},
+      "expected":{"scores":[40,40],"seeded":true,"direct_hit_seen":true,"mines":[4,7,9,10,14,16,17],"revealed":[[1,1],[5,1],[18,1],[20,0]],"exploded":[4],"lives":1,"last_effect":"sweeper_reveal","effect_points":10,"effect_field":1,"revealed_count":1,"random_cursor":10,"current_player_index":0,"darts_in_turn":0,"turn_score":0,"round_number":2,"status":"running","winner_ids":[],"result_type":""}
+    }
+  ]
+}
