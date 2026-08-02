@@ -87,6 +87,11 @@ Umgesetzt und lokal verifiziert:
   beginnen, im Projector T20 auslösen und im Control synchron Score 60 sehen.
   Testwürfe sind im Produktionsbetrieb verborgen und serverseitig gesperrt;
   der Testhost muss sie ausdrücklich freischalten,
+- ein zweiter isolierter WebKit-Systemlauf öffnet jede der 24 Moduskarten per
+  Point-and-click, gleicht die jeweilige Anleitung beziehungsweise grafische
+  Steuerlegende auf Control und Projector ab, startet den echten Rust-Spielkern
+  und bricht anschließend kontrolliert ab. Alle Modi kehren zur Spielauswahl
+  zurück; die 24 Abbrüche verändern weder Spiele, Siege noch Sessionpunkte,
 - öffentliche Live-Snapshots enthalten ausschließlich den benötigten Spiel-,
   Session- und Setupzustand. Interne Initialzustände, Replay-Aktionen und Historien
   bleiben im Runtime-/Storage-Layer,
@@ -354,6 +359,7 @@ Gemeinsame Produkt-UI gegen Runtime v2 mit WebKit:
 
 ```bash
 npm --prefix apps/tauri run test:rust-ui
+npm --prefix apps/tauri run test:rust-modes
 ```
 
 macOS-App:

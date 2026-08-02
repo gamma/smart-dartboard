@@ -167,6 +167,7 @@ jobs:
           npm --prefix apps/tauri run test:chromium
           npm --prefix apps/tauri run test:webkit
           npm --prefix apps/tauri run test:rust-ui
+          npm --prefix apps/tauri run test:rust-modes
 
       - name: Build unsigned macOS app bundle
         run: npm --prefix apps/tauri run build:macos:app

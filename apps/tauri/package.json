@@ -19,7 +19,8 @@
     "ios:dev": "tauri ios dev",
     "test:chromium": "playwright test tests --browser=chromium --workers=1",
     "test:webkit": "playwright test tests --browser=webkit --workers=1",
-    "test:rust-ui": "node scripts/test-rust-ui.mjs"
+    "test:rust-ui": "node scripts/test-rust-ui.mjs",
+    "test:rust-modes": "node scripts/test-rust-mode-catalog.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.62.1",

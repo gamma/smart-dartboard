@@ -69,6 +69,8 @@ expect(ci.includes(`xcode-version: "${matrix.toolchains.apple_build_baseline.xco
   'CI Xcode selection drift');
 expect(ci.includes('playwright install chromium webkit'),'CI browser installation drift');
 expect(ci.includes('run test:chromium') && ci.includes('run test:webkit'),'CI browser coverage drift');
+expect(packageJson.scripts['test:rust-modes']==='node scripts/test-rust-mode-catalog.mjs'
+  && ci.includes('run test:rust-modes'),'CI Rust mode catalog drift');
 expect(ci.includes('run build:macos:app') && ci.includes('Smart-Dartboard-macOS-unsigned.zip'),
   'CI macOS app bundle drift');
 expect(ci.includes('run ios:build:device')

@@ -6,7 +6,10 @@ Der Rust-Server ist der parallele Migrationspfad für Linux und Docker. Er
 liefert inzwischen dieselben Control- und Projector-Weboberflächen wie der
 Python-Host und bindet sie über den versionierten `HostedRuntimeClient` an die
 Rust-Runtime. Der Kernfluss von Spieleranlage über Session- und Modusauswahl bis
-zum synchronen Testtreffer ist in WebKit belegt. Persistierte
+zum synchronen Testtreffer ist in WebKit belegt. Ein isolierter Katalogtest
+öffnet zusätzlich alle 24 Moduskarten, prüft die Anleitungen auf beiden
+Bildschirmen und startet sowie verwirft jedes echte Rust-Spiel ohne Wertung.
+Persistierte
 Setup-Präferenzen, Historie, Replay, Statistiken, Training, Export und die
 plattformweite Effect-Outbox sind angeschlossen. Er ersetzt den produktiven
 Python-Pfad trotzdem noch nicht: ein erster Spielmodus für zwei gegnerische
