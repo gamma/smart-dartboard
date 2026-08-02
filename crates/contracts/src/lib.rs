@@ -84,6 +84,139 @@ pub enum DartSource {
     ManualCorrection,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct CalibrationPoint {
+    pub x: f64,
+    pub y: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CalibrationSettings {
+    pub corners: [CalibrationPoint; 4],
+    pub scale: f64,
+    pub offset_x: f64,
+    pub offset_y: f64,
+}
+
+impl Default for CalibrationSettings {
+    fn default() -> Self {
+        Self {
+            corners: [
+                CalibrationPoint { x: 0.247, y: 0.05 },
+                CalibrationPoint { x: 0.753, y: 0.05 },
+                CalibrationPoint { x: 0.753, y: 0.95 },
+                CalibrationPoint { x: 0.247, y: 0.95 },
+            ],
+            scale: 1.0,
+            offset_x: 0.0,
+            offset_y: 0.0,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectorGeometry {
+    pub width: u32,
+    pub height: u32,
+}
+
+impl Default for ProjectorGeometry {
+    fn default() -> Self {
+        Self {
+            width: 1_600,
+            height: 900,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SoundOutput {
+    Controller,
+    #[default]
+    Projector,
+    Both,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SoundStatus {
+    #[default]
+    Disabled,
+    Starting,
+    Ready,
+    Blocked,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SoundSettings {
+    pub enabled: bool,
+    pub output: SoundOutput,
+    pub status: SoundStatus,
+}
+
+impl Default for SoundSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            output: SoundOutput::Projector,
+            status: SoundStatus::Disabled,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ArtTheme {
+    #[default]
+    Cartoon,
+    Neon,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum UiLanguage {
+    #[default]
+    De,
+    En,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DisplayOverride {
+    Players,
+    Calibration,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RuntimeSettings {
+    pub calibration: CalibrationSettings,
+    pub projector_geometry: ProjectorGeometry,
+    pub sound: SoundSettings,
+    pub art_theme: ArtTheme,
+    pub ui_language: UiLanguage,
+    pub correction_lock: bool,
+    pub sound_test_id: Option<String>,
+    pub display_override: Option<DisplayOverride>,
+}
+
+impl Default for RuntimeSettings {
+    fn default() -> Self {
+        Self {
+            calibration: CalibrationSettings::default(),
+            projector_geometry: ProjectorGeometry::default(),
+            sound: SoundSettings::default(),
+            art_theme: ArtTheme::Cartoon,
+            ui_language: UiLanguage::De,
+            correction_lock: false,
+            sound_test_id: None,
+            display_override: None,
+        }
+    }
+}
+
 impl Ring {
     #[must_use]
     pub const fn multiplier(self) -> u8 {
@@ -173,6 +306,35 @@ pub enum RuntimeCommand {
     },
     EndSession,
     CloseSession,
+    UpdateCalibration {
+        calibration: CalibrationSettings,
+    },
+    ResetCalibration,
+    ReportProjectorGeometry {
+        geometry: ProjectorGeometry,
+    },
+    UpdateSoundSettings {
+        enabled: bool,
+        output: SoundOutput,
+    },
+    ReportSoundStatus {
+        status: SoundStatus,
+    },
+    UpdateArtTheme {
+        theme: ArtTheme,
+    },
+    UpdateUiLanguage {
+        language: UiLanguage,
+    },
+    SetCorrectionLock {
+        active: bool,
+    },
+    SoundTest {
+        effect_id: String,
+    },
+    SetDisplayOverride {
+        screen: Option<DisplayOverride>,
+    },
     IngestDart {
         event: DartEvent,
         #[serde(default)]

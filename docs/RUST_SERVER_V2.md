@@ -109,7 +109,8 @@ Browser-POSTs und WebSockets akzeptieren nur dieselbe Origin. Clients ohne
 Protokollversionen, falsche Runtime-IDs und veraltete Revisionen liefern stabile
 Fehlercodes und passende HTTP-Statuscodes.
 
-Der veröffentlichte Snapshot enthält nur Spiel- und Sessionzustand. Interne
+Der veröffentlichte Snapshot enthält nur den benötigten Spiel-, Session- und
+Setupzustand. Interne
 Replay-Grundzustände, Action-Timeline und Historie verlassen die Runtime nicht
 über den Live-State. Ein Klick auf die Scheibe wird nur dann als
 `projector_test` angenommen, wenn der Host ausdrücklich mit
@@ -204,6 +205,13 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
   erkennen und bei einer Revisionslücke oder neuer Runtime-ID per Vollsnapshot
   wieder einsteigen; der bestehende Python-Host bleibt als sauberer Fallback
   erhalten,
+- Kalibrierung, Projektorgeometrie, Soundziel und -status, Artwork-Theme,
+  Sprache und Korrektursperre als gemeinsamen Runtime-Zustand atomar
+  persistieren und live an beide Oberflächen verteilen. Die Kalibrieransicht
+  ist ein synchroner Display-Override und verändert den darunter weiter
+  gültigen Session-/Spielscreen nicht. Eine Korrektursperre pausiert Board- und
+  Testwürfe, lässt die manuelle Eingabe aber zu und wird nach einem Neustart
+  sicher gelöst,
 - Projector-Companions per kurzlebigem Einmalcode koppeln, Grants ausschließlich
   als Hash persistieren, authentisierte Snapshots und Folgerevisionen streamen
   sowie aktive Verbindungen beim Widerruf schließen.
@@ -211,9 +219,6 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
 - Teammodell sowie Heatmap-, Modusstatistik-, Export- und Trainingsabfragen,
-- persistierte und zwischen Control und Projector synchronisierte Kalibrierung,
-  Sound-, Theme- und Spracheinstellungen; der heutige Rust-Webadapter hält
-  diese Werte noch browserlokal,
 - vollständige Anpassung der Historien-/Replay-Ansichten an die v2-Antworten,
 - Umschalten der nativen Tauri-Fenster von der M0-Diagnoseoberfläche auf die
   gemeinsame Produkt-UI; die eingeschränkten `runtime_v2_*`-Commands und

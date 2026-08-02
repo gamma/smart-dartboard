@@ -5,8 +5,9 @@
 //! product's state when persistence fails between a dart and its broadcast.
 
 use sdb_contracts::{
-    CommandEnvelope, ContractError, DartEvent, DartSource, ErrorCode, PROTOCOL_VERSION, PlayerRef,
-    RuntimeCommand, StarterSelection,
+    ArtTheme, CalibrationSettings, CommandEnvelope, ContractError, DartEvent, DartSource,
+    DisplayOverride, ErrorCode, PROTOCOL_VERSION, PlayerRef, ProjectorGeometry, RuntimeCommand,
+    RuntimeSettings, SoundOutput, SoundStatus, StarterSelection, UiLanguage,
 };
 use sdb_game_core::{
     CountUpGame, CountUpState, GameError, GameStatus, OutRule, RegisteredGame, RegisteredGameState,
@@ -17,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use thiserror::Error;
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum RuntimeAction {
     CreatePlayer {
@@ -47,6 +48,35 @@ pub enum RuntimeAction {
     AbortGame,
     EndSession,
     CloseSession,
+    UpdateCalibration {
+        calibration: CalibrationSettings,
+    },
+    ResetCalibration,
+    ReportProjectorGeometry {
+        geometry: ProjectorGeometry,
+    },
+    UpdateSoundSettings {
+        enabled: bool,
+        output: SoundOutput,
+    },
+    ReportSoundStatus {
+        status: SoundStatus,
+    },
+    UpdateArtTheme {
+        theme: ArtTheme,
+    },
+    UpdateUiLanguage {
+        language: UiLanguage,
+    },
+    SetCorrectionLock {
+        active: bool,
+    },
+    SoundTest {
+        effect_id: String,
+    },
+    SetDisplayOverride {
+        screen: Option<DisplayOverride>,
+    },
     StartCountUp {
         players: Vec<(String, String)>,
         rounds: u16,
@@ -83,20 +113,23 @@ pub enum RuntimeAction {
     Undo,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RuntimeSnapshot {
     pub revision: u64,
     pub game: Option<RuntimeGame>,
     #[serde(default)]
     pub session: SessionCore,
+    #[serde(default)]
+    pub settings: RuntimeSettings,
 }
 
 /// Read-only state safe to publish to controller and projector clients.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RuntimePublicSnapshot {
     pub revision: u64,
     pub game: Option<RuntimeGameState>,
     pub session: SessionState,
+    pub settings: RuntimeSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -201,7 +234,7 @@ pub enum RuntimeGameState {
     Registered(RegisteredGameState),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct CommandResult {
     pub command_id: String,
     pub revision: u64,
@@ -209,6 +242,8 @@ pub struct CommandResult {
     pub state: Option<RuntimeGameState>,
     #[serde(default)]
     pub session: SessionState,
+    #[serde(default)]
+    pub settings: RuntimeSettings,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -271,6 +306,8 @@ pub enum RuntimeError {
     Session(#[from] SessionError),
     #[error("invalid game options: {0}")]
     InvalidGameOptions(String),
+    #[error("dart input is paused during operator correction")]
+    CorrectionLocked,
 }
 
 pub struct Runtime<R> {
@@ -287,7 +324,7 @@ impl<R: Repository> Runtime<R> {
     /// Returns [`RuntimeError::Persistence`] when the repository cannot be read
     /// and [`RuntimeError::InvalidPersistedData`] for an invalid snapshot.
     pub fn restore(instance_id: impl Into<String>, repository: R) -> Result<Self, RuntimeError> {
-        let snapshot = repository
+        let mut snapshot = repository
             .load_snapshot()
             .map_err(RuntimeError::Persistence)?
             .map(|json| {
@@ -299,7 +336,14 @@ impl<R: Repository> Runtime<R> {
                 revision: 0,
                 game: None,
                 session: SessionCore::default(),
+                settings: RuntimeSettings::default(),
             });
+        snapshot.settings.correction_lock = false;
+        snapshot.settings.sound.status = if snapshot.settings.sound.enabled {
+            SoundStatus::Starting
+        } else {
+            SoundStatus::Disabled
+        };
         Ok(Self {
             instance_id: instance_id.into(),
             snapshot,
@@ -323,6 +367,7 @@ impl<R: Repository> Runtime<R> {
             revision: self.snapshot.revision,
             game: self.snapshot.game.as_ref().map(RuntimeGame::state),
             session: self.snapshot.session.state().clone(),
+            settings: self.snapshot.settings.clone(),
         }
     }
 
@@ -415,6 +460,7 @@ impl<R: Repository> Runtime<R> {
             duplicate: false,
             state: next.game.as_ref().map(RuntimeGame::state),
             session: next.session.state().clone(),
+            settings: next.settings.clone(),
         };
         let snapshot_json = serde_json::to_string(&next)
             .map_err(|error| RuntimeError::InvalidPersistedData(error.to_string()))?;
@@ -454,6 +500,7 @@ impl<R: Repository> Runtime<R> {
     }
 }
 
+#[allow(clippy::too_many_lines)] // One exhaustive match keeps the public protocol mapping visible.
 fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractError> {
     match command {
         RuntimeCommand::CreatePlayer { player } => Ok(RuntimeAction::CreatePlayer { player }),
@@ -483,6 +530,51 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
         RuntimeCommand::StartRematch { game_id } => Ok(RuntimeAction::StartRematch { game_id }),
         RuntimeCommand::EndSession => Ok(RuntimeAction::EndSession),
         RuntimeCommand::CloseSession => Ok(RuntimeAction::CloseSession),
+        RuntimeCommand::UpdateCalibration { calibration } => {
+            validate_calibration(&calibration)?;
+            Ok(RuntimeAction::UpdateCalibration { calibration })
+        }
+        RuntimeCommand::ResetCalibration => Ok(RuntimeAction::ResetCalibration),
+        RuntimeCommand::ReportProjectorGeometry { geometry } => {
+            if !(320..=16_384).contains(&geometry.width)
+                || !(240..=16_384).contains(&geometry.height)
+            {
+                return Err(invalid_command(
+                    "projector geometry is outside the supported range",
+                ));
+            }
+            Ok(RuntimeAction::ReportProjectorGeometry { geometry })
+        }
+        RuntimeCommand::UpdateSoundSettings { enabled, output } => {
+            Ok(RuntimeAction::UpdateSoundSettings { enabled, output })
+        }
+        RuntimeCommand::ReportSoundStatus { status } => {
+            if !matches!(
+                status,
+                SoundStatus::Ready | SoundStatus::Blocked | SoundStatus::Unavailable
+            ) {
+                return Err(invalid_command("invalid reported sound status"));
+            }
+            Ok(RuntimeAction::ReportSoundStatus { status })
+        }
+        RuntimeCommand::UpdateArtTheme { theme } => Ok(RuntimeAction::UpdateArtTheme { theme }),
+        RuntimeCommand::UpdateUiLanguage { language } => {
+            Ok(RuntimeAction::UpdateUiLanguage { language })
+        }
+        RuntimeCommand::SetCorrectionLock { active } => {
+            Ok(RuntimeAction::SetCorrectionLock { active })
+        }
+        RuntimeCommand::SoundTest { effect_id } => {
+            if effect_id.is_empty() || effect_id.len() > 128 {
+                return Err(invalid_command(
+                    "sound test effect_id must contain 1 to 128 bytes",
+                ));
+            }
+            Ok(RuntimeAction::SoundTest { effect_id })
+        }
+        RuntimeCommand::SetDisplayOverride { screen } => {
+            Ok(RuntimeAction::SetDisplayOverride { screen })
+        }
         RuntimeCommand::IngestDart { event, source } => Ok(RuntimeAction::Dart { event, source }),
         RuntimeCommand::CorrectDart {
             action_id,
@@ -553,6 +645,32 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
     }
 }
 
+fn validate_calibration(calibration: &CalibrationSettings) -> Result<(), ContractError> {
+    let scalar_values = [
+        calibration.scale,
+        calibration.offset_x,
+        calibration.offset_y,
+    ];
+    if scalar_values.iter().any(|value| !value.is_finite())
+        || !(0.5..=2.0).contains(&calibration.scale)
+        || !(-1.0..=1.0).contains(&calibration.offset_x)
+        || !(-1.0..=1.0).contains(&calibration.offset_y)
+        || calibration
+            .corners
+            .iter()
+            .any(|point| !point.x.is_finite() || !point.y.is_finite())
+        || calibration
+            .corners
+            .iter()
+            .any(|point| !(0.0..=1.0).contains(&point.x) || !(0.0..=1.0).contains(&point.y))
+    {
+        return Err(invalid_command(
+            "calibration is outside the supported range",
+        ));
+    }
+    Ok(())
+}
+
 fn option_u64(options: &serde_json::Value, name: &str, default: u64) -> Result<u64, ContractError> {
     options.get(name).map_or(Ok(default), |value| {
         value
@@ -578,6 +696,7 @@ fn runtime_contract_error(error: &RuntimeError) -> ContractError {
         RuntimeError::WrongRuntimeInstance => ErrorCode::WrongRuntimeInstance,
         RuntimeError::StaleRevision { .. } => ErrorCode::StaleRevision,
         RuntimeError::Persistence(_) => ErrorCode::PersistenceFailed,
+        RuntimeError::CorrectionLocked => ErrorCode::Forbidden,
         RuntimeError::NoGame
         | RuntimeError::Game(_)
         | RuntimeError::InvalidPersistedData(_)
@@ -601,6 +720,7 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
         } => {
             snapshot.session.start_session(session_id, players)?;
             snapshot.game = None;
+            snapshot.settings.display_override = None;
         }
         RuntimeAction::PrepareGame { game_type, options } => {
             snapshot.session.prepare_game(game_type, options)?;
@@ -640,10 +760,72 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
             snapshot.session.close_session();
             snapshot.game = None;
         }
+        RuntimeAction::UpdateCalibration { calibration } => {
+            snapshot.settings.calibration = calibration;
+        }
+        RuntimeAction::ResetCalibration => {
+            let width = f64::from(snapshot.settings.projector_geometry.width);
+            let height = f64::from(snapshot.settings.projector_geometry.height);
+            let side = width.min(height) * 0.9;
+            let half_x = side / width / 2.0;
+            let half_y = side / height / 2.0;
+            snapshot.settings.calibration = CalibrationSettings {
+                corners: [
+                    sdb_contracts::CalibrationPoint {
+                        x: 0.5 - half_x,
+                        y: 0.5 - half_y,
+                    },
+                    sdb_contracts::CalibrationPoint {
+                        x: 0.5 + half_x,
+                        y: 0.5 - half_y,
+                    },
+                    sdb_contracts::CalibrationPoint {
+                        x: 0.5 + half_x,
+                        y: 0.5 + half_y,
+                    },
+                    sdb_contracts::CalibrationPoint {
+                        x: 0.5 - half_x,
+                        y: 0.5 + half_y,
+                    },
+                ],
+                scale: 1.0,
+                offset_x: 0.0,
+                offset_y: 0.0,
+            };
+        }
+        RuntimeAction::ReportProjectorGeometry { geometry } => {
+            snapshot.settings.projector_geometry = geometry;
+        }
+        RuntimeAction::UpdateSoundSettings { enabled, output } => {
+            snapshot.settings.sound.enabled = enabled;
+            snapshot.settings.sound.output = output;
+            snapshot.settings.sound.status = if enabled {
+                SoundStatus::Starting
+            } else {
+                SoundStatus::Disabled
+            };
+        }
+        RuntimeAction::ReportSoundStatus { status } => {
+            snapshot.settings.sound.status = status;
+        }
+        RuntimeAction::UpdateArtTheme { theme } => snapshot.settings.art_theme = theme,
+        RuntimeAction::UpdateUiLanguage { language } => snapshot.settings.ui_language = language,
+        RuntimeAction::SetCorrectionLock { active } => {
+            snapshot.settings.correction_lock = active;
+        }
+        RuntimeAction::SoundTest { effect_id } => {
+            snapshot.settings.sound_test_id = Some(effect_id);
+        }
+        RuntimeAction::SetDisplayOverride { screen } => {
+            snapshot.settings.display_override = screen;
+        }
         direct_action @ (RuntimeAction::StartCountUp { .. }
         | RuntimeAction::StartX01 { .. }
         | RuntimeAction::StartRegistered { .. }) => start_direct_game(snapshot, direct_action)?,
-        RuntimeAction::Dart { event, .. } => {
+        RuntimeAction::Dart { event, source } => {
+            if snapshot.settings.correction_lock && source != DartSource::ManualCorrection {
+                return Err(RuntimeError::CorrectionLocked);
+            }
             snapshot
                 .game
                 .as_mut()
@@ -1595,5 +1777,143 @@ mod tests {
         assert_eq!(game.state().players[0].color, "#ff00aa");
         assert_eq!(game.state().players[1].avatar, "comet");
         assert_eq!(game.state().players[1].color, "#28e7ff");
+    }
+
+    #[test]
+    fn shared_settings_are_validated_persisted_and_published() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        let invalid = runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "invalid-geometry".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(0),
+                command: RuntimeCommand::ReportProjectorGeometry {
+                    geometry: ProjectorGeometry {
+                        width: 100,
+                        height: 100,
+                    },
+                },
+            })
+            .expect_err("invalid geometry");
+        assert_eq!(invalid.code, ErrorCode::InvalidCommand);
+        assert_eq!(runtime.snapshot().revision, 0);
+        runtime
+            .dispatch_envelope(CommandEnvelope {
+                protocol_version: PROTOCOL_VERSION,
+                command_id: "geometry".into(),
+                runtime_instance_id: "runtime".into(),
+                expected_revision: Some(0),
+                command: RuntimeCommand::ReportProjectorGeometry {
+                    geometry: ProjectorGeometry {
+                        width: 2_000,
+                        height: 1_000,
+                    },
+                },
+            })
+            .expect("geometry");
+        runtime
+            .dispatch("runtime", "reset", None, RuntimeAction::ResetCalibration)
+            .expect("reset calibration");
+        let corners = runtime.snapshot().settings.calibration.corners;
+        assert!((corners[0].x - 0.275).abs() < f64::EPSILON);
+        assert!((corners[0].y - 0.05).abs() < f64::EPSILON);
+        assert!((corners[2].x - 0.725).abs() < f64::EPSILON);
+        assert!((corners[2].y - 0.95).abs() < f64::EPSILON);
+
+        runtime
+            .dispatch(
+                "runtime",
+                "theme",
+                None,
+                RuntimeAction::UpdateArtTheme {
+                    theme: ArtTheme::Neon,
+                },
+            )
+            .expect("theme");
+        runtime
+            .dispatch(
+                "runtime",
+                "sound",
+                None,
+                RuntimeAction::UpdateSoundSettings {
+                    enabled: true,
+                    output: SoundOutput::Both,
+                },
+            )
+            .expect("sound");
+
+        let repository = runtime.into_repository();
+        let restored = Runtime::restore("restored", repository).expect("restore");
+        assert_eq!(restored.snapshot().settings.art_theme, ArtTheme::Neon);
+        assert_eq!(restored.snapshot().settings.sound.output, SoundOutput::Both);
+        assert_eq!(
+            restored.snapshot().settings.sound.status,
+            SoundStatus::Starting
+        );
+        let public = restored.public_snapshot();
+        assert_eq!(public.settings, restored.snapshot().settings);
+    }
+
+    #[test]
+    fn correction_lock_pauses_physical_but_not_manual_darts() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        runtime
+            .dispatch(
+                "runtime",
+                "start",
+                None,
+                RuntimeAction::StartCountUp {
+                    players: vec![("ada".into(), "Ada".into())],
+                    rounds: 5,
+                },
+            )
+            .expect("start game");
+        runtime
+            .dispatch(
+                "runtime",
+                "lock",
+                None,
+                RuntimeAction::SetCorrectionLock { active: true },
+            )
+            .expect("correction lock");
+        let dart = DartEvent::Hit {
+            seq: 1,
+            field: 20,
+            ring: Ring::Triple,
+            multiplier: 3,
+            label: "T20".into(),
+            score: 60,
+        };
+        assert_eq!(
+            runtime
+                .dispatch(
+                    "runtime",
+                    "blocked-board-dart",
+                    None,
+                    RuntimeAction::Dart {
+                        event: dart.clone(),
+                        source: DartSource::Board,
+                    },
+                )
+                .expect_err("board must pause"),
+            RuntimeError::CorrectionLocked
+        );
+        runtime
+            .dispatch(
+                "runtime",
+                "manual-dart",
+                None,
+                RuntimeAction::Dart {
+                    event: dart,
+                    source: DartSource::ManualCorrection,
+                },
+            )
+            .expect("manual correction remains available");
+        let repository = runtime.into_repository();
+        let restored = Runtime::restore("restored", repository).expect("restore");
+        assert!(!restored.snapshot().settings.correction_lock);
     }
 }

@@ -288,6 +288,8 @@ jobs:
           assert health['board'] == 'unavailable', health
           assert health['companion'] == 'disabled', health
           PY
+          curl --fail --silent --show-error http://127.0.0.1:18081/control >/dev/null
+          curl --fail --silent --show-error http://127.0.0.1:18081/projector >/dev/null
           test "$(docker inspect "$container_name" --format '{{.Config.User}}')" = dartboard
           test "$(docker inspect "$container_name" --format '{{.HostConfig.Privileged}}')" = false
           python - <<'PY'
@@ -311,6 +313,7 @@ jobs:
               }),
               ('start', {'type': 'start_prepared_game', 'game_id': 'ci-game'}),
               ('playing', {'type': 'mark_game_playing'}),
+              ('theme', {'type': 'update_art_theme', 'theme': 'neon'}),
           ]
           revision = 0
           for command_id, command in commands:
@@ -328,7 +331,7 @@ jobs:
               )
               result = json.load(urllib.request.urlopen(request))
               revision = result['revision']
-          assert revision == 4, result
+          assert revision == 5, result
 
           def board_post(path, payload, authenticated=True):
               headers = {'content-type': 'application/json'}
@@ -358,7 +361,7 @@ jobs:
           duplicate = board_post('/api/v2/board/packets', packet)
           assert duplicate['disposition'] == 'duplicate', duplicate
           revision = result['result']['revision']
-          assert revision == 5, result
+          assert revision == 6, result
           open('/tmp/rust-instance-before', 'w').write(bootstrap['runtime_instance_id'])
           PY
           docker restart "$container_name" >/dev/null
@@ -374,8 +377,9 @@ jobs:
           import urllib.request
           recovered = json.load(open('/tmp/rust-recovered.json'))
           previous_instance = open('/tmp/rust-instance-before').read()
-          assert recovered['revision'] == 5, recovered
+          assert recovered['revision'] == 6, recovered
           assert recovered['payload']['game']['game_type'] == 'x01', recovered
+          assert recovered['payload']['settings']['art_theme'] == 'neon', recovered
           assert recovered['runtime_instance_id'] != previous_instance, recovered
           detail = json.load(urllib.request.urlopen(
               'http://127.0.0.1:18081/api/v2/history/games/ci-game'

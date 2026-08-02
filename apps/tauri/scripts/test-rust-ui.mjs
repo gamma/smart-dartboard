@@ -45,6 +45,34 @@ try{
     page.on('pageerror',error=>browserErrors.push(error.message));
   }
   await Promise.all([control.goto(`${origin}/control`),projector.goto(`${origin}/projector`)]);
+  await control.getByRole('button',{name:'Einstellungen'}).click();
+  await control.locator('[data-action="art-theme"][data-theme="neon"]').click();
+  await projector.waitForFunction(()=>appState.experience?.art_theme==='neon');
+  await control.locator('[data-action="calibrate"]').click();
+  await projector.waitForSelector('.calibration-projector');
+  await control.locator('[data-action="reset-calibration"]').click();
+  await projector.waitForFunction(()=>{
+    const settings=appState.experience;
+    const [topLeft,,bottomRight]=settings?.calibration?.corners || [];
+    return settings?.projector_geometry?.width===1366
+      && settings?.projector_geometry?.height===900
+      && Math.abs(topLeft?.y-.05)<1e-9
+      && Math.abs(bottomRight?.y-.95)<1e-9;
+  });
+  await control.locator('[data-action="close-calibration"]').click();
+  await projector.waitForSelector('.attract-projector');
+  await control.locator('[data-action="sound-enable"]').click();
+  await projector.waitForFunction(()=>appState.experience?.sound?.enabled===true
+    && appState.experience?.sound?.status!=='starting');
+  const soundRevision=await projector.evaluate(()=>appState.experience.revision);
+  await control.waitForFunction(revision=>appState.experience?.revision>=revision,soundRevision);
+  await control.locator('[data-action="sound-test"]').click();
+  await projector.waitForFunction(()=>Boolean(appState.experience?.sound?.last_test_id));
+  await Promise.all([control.reload(),projector.reload()]);
+  await Promise.all([
+    control.waitForFunction(()=>appState.experience?.art_theme==='neon'),
+    projector.waitForFunction(()=>appState.experience?.art_theme==='neon'),
+  ]);
   await control.getByRole('button',{name:'Session starten'}).click();
   await control.locator('input[name="name"]').fill('Ada');
   await control.getByRole('button',{name:'Spieler anlegen'}).click();
@@ -61,7 +89,7 @@ try{
   await projector.locator('#seg-triple-20').click({force:true});
   await control.waitForFunction(()=>document.querySelector('.score-row strong')?.textContent==='60');
   if(browserErrors.length) throw new Error(`Browser errors:\n${browserErrors.join('\n')}`);
-  console.log('Rust Runtime UI: 24 modes, synchronized Control/Projector and T20 test hit passed in WebKit');
+  console.log('Rust Runtime UI: persistent setup, 24 modes, synchronized Control/Projector and T20 test hit passed in WebKit');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');

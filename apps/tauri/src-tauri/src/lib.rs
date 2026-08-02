@@ -11,7 +11,9 @@ use sdb_companion::{
 use sdb_companion_transport::{
     SecretStore, TlsIdentity, certificate_sha256, load_identity, load_or_create_identity,
 };
-use sdb_contracts::{CommandEnvelope, DartEvent, DartSource, Envelope, MessageKind, Ring};
+use sdb_contracts::{
+    CommandEnvelope, DartEvent, DartSource, Envelope, MessageKind, Ring, RuntimeCommand,
+};
 use sdb_game_core::registered_game_metadata;
 use sdb_runtime::{CommandResult, Runtime, RuntimeAction, RuntimeGameState, RuntimePublicSnapshot};
 use sdb_storage::SqliteRepository;
@@ -2297,6 +2299,35 @@ fn runtime_v2_dispatch(
 }
 
 #[tauri::command]
+fn runtime_v2_report(
+    app: tauri::AppHandle,
+    state: State<'_, SharedNativeState>,
+    envelope: CommandEnvelope,
+) -> Result<CommandResult, String> {
+    if !runtime_v2_projector_report_allowed(&envelope.command) {
+        return Err("projector may only report geometry or sound status".into());
+    }
+    let (result, public) = {
+        let mut state = state.lock().map_err(|error| error.to_string())?;
+        state.require_controller()?;
+        let result = state
+            .runtime
+            .dispatch_envelope(envelope)
+            .map_err(|error| error.message)?;
+        (result, state.public())
+    };
+    publish_public_state(&app, &public);
+    Ok(result)
+}
+
+fn runtime_v2_projector_report_allowed(command: &RuntimeCommand) -> bool {
+    matches!(
+        command,
+        RuntimeCommand::ReportProjectorGeometry { .. } | RuntimeCommand::ReportSoundStatus { .. }
+    )
+}
+
+#[tauri::command]
 fn companion_pairing_open(state: State<'_, SharedNativeState>) -> Result<PairingBootstrap, String> {
     let mut state = state.lock().map_err(|error| error.to_string())?;
     state.require_controller()?;
@@ -2957,6 +2988,7 @@ pub fn run() {
             runtime_v2_snapshot,
             runtime_v2_query,
             runtime_v2_dispatch,
+            runtime_v2_report,
             companion_pairing_open,
             companion_devices,
             companion_revoke,
@@ -3009,6 +3041,31 @@ mod tests {
         assert!(!is_valid_mdns_hostname("https://arcade.local"));
         assert!(!is_valid_mdns_hostname("-arcade.local"));
         assert!(!is_valid_mdns_hostname("arcade..local"));
+    }
+
+    #[test]
+    fn projector_report_bridge_cannot_mutate_game_or_setup_authority() {
+        assert!(runtime_v2_projector_report_allowed(
+            &RuntimeCommand::ReportProjectorGeometry {
+                geometry: sdb_contracts::ProjectorGeometry {
+                    width: 1_366,
+                    height: 900,
+                },
+            }
+        ));
+        assert!(runtime_v2_projector_report_allowed(
+            &RuntimeCommand::ReportSoundStatus {
+                status: sdb_contracts::SoundStatus::Ready,
+            }
+        ));
+        assert!(!runtime_v2_projector_report_allowed(
+            &RuntimeCommand::ResetCalibration
+        ));
+        assert!(!runtime_v2_projector_report_allowed(
+            &RuntimeCommand::SoundTest {
+                effect_id: "forbidden".into(),
+            }
+        ));
     }
 
     #[cfg(any(target_os = "ios", target_os = "macos"))]

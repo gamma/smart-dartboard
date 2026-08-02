@@ -173,13 +173,19 @@
       if(!this.runtimeInstanceId || this.revision===null){
         throw new RuntimeClientError('RuntimeClient must bootstrap before dispatch');
       }
-      const result=await this.invoke('runtime_v2_dispatch',{envelope:{
+      let result;
+      const envelope={
         protocol_version:PROTOCOL_VERSION,
         command_id:stableId,
         runtime_instance_id:this.runtimeInstanceId,
         expected_revision:expectedRevision,
         command,
-      }});
+      };
+      if(command.type==='report_projector_geometry' || command.type==='report_sound_status'){
+        result=await this.invoke('runtime_v2_report',{envelope});
+      }else{
+        result=await this.invoke('runtime_v2_dispatch',{envelope});
+      }
       if(result.revision>this.revision) this.revision=result.revision;
       return result;
     }

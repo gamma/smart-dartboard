@@ -9,6 +9,7 @@
     "allow-runtime-query",
     "allow-runtime-v2-bootstrap",
     "allow-runtime-v2-snapshot",
-    "allow-runtime-v2-query"
+    "allow-runtime-v2-query",
+    "allow-runtime-v2-report"
   ]
 }

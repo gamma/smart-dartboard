@@ -1413,7 +1413,17 @@ fn project_domain(
         | RuntimeAction::StartCountUp { .. }
         | RuntimeAction::StartX01 { .. }
         | RuntimeAction::StartRegistered { .. }
-        | RuntimeAction::GameAction { .. } => {}
+        | RuntimeAction::GameAction { .. }
+        | RuntimeAction::UpdateCalibration { .. }
+        | RuntimeAction::ResetCalibration
+        | RuntimeAction::ReportProjectorGeometry { .. }
+        | RuntimeAction::UpdateSoundSettings { .. }
+        | RuntimeAction::ReportSoundStatus { .. }
+        | RuntimeAction::UpdateArtTheme { .. }
+        | RuntimeAction::UpdateUiLanguage { .. }
+        | RuntimeAction::SetCorrectionLock { .. }
+        | RuntimeAction::SoundTest { .. }
+        | RuntimeAction::SetDisplayOverride { .. } => {}
     }
 
     let before = previous.session.state();

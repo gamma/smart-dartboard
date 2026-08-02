@@ -1711,6 +1711,8 @@ async function reportProjectorGeometry(){
   const geometry=`${innerWidth}x${innerHeight}`;
   if(geometry===appState.reportedGeometry) return;
   appState.reportedGeometry=geometry;
+  const current=appState.experience?.projector_geometry;
+  if(current?.width===innerWidth && current?.height===innerHeight) return;
   try{
     await action('/api/projector/geometry',{width:innerWidth,height:innerHeight});
   }catch(error){
@@ -2165,4 +2167,8 @@ window.addEventListener('storage',event=>{
   document.documentElement.lang=appState.selectedLanguage;
   render();
 });
-window.addEventListener('load',()=>{ loadBootstrap(); connectWs(); reportProjectorGeometry(); });
+window.addEventListener('load',async()=>{
+  await loadBootstrap();
+  connectWs();
+  await reportProjectorGeometry();
+});

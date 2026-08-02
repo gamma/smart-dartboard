@@ -22,15 +22,6 @@
     if(global.crypto?.randomUUID) return global.crypto.randomUUID();
     return `web-${Date.now()}-${Math.random().toString(16).slice(2)}`;
   }
-  function readConfig(){
-    try{
-      const stored=JSON.parse(global.localStorage.getItem('sdb-runtime-v2-config') || 'null');
-      return {...clone(DEFAULT_CONFIG),...(stored || {})};
-    }catch(_){ return clone(DEFAULT_CONFIG); }
-  }
-  function saveConfig(config){
-    try{ global.localStorage.setItem('sdb-runtime-v2-config',JSON.stringify(config)); }catch(_){}
-  }
   function eventRecord(record){
     return {...record.event,action_id:record.action_id,player_id:record.player_id,
       round_number:record.round_number,dart_in_turn:record.dart_in_turn,
@@ -54,10 +45,10 @@
       this.modes=[];
       this.profiles=[];
       this.statistics=[];
-      this.config=readConfig();
       this.localScreen=null;
       this.listener=null;
       this.unsubscribe=null;
+      this.lastSoundTestId=null;
     }
 
     async bootstrap(){
@@ -68,6 +59,7 @@
         this.core.query('/api/v2/statistics/players'),
       ]);
       this.envelope=envelope;
+      this.lastSoundTestId=envelope.payload?.settings?.sound_test_id || null;
       this.modes=modes;
       this.profiles=profiles;
       this.statistics=statistics;
@@ -125,6 +117,7 @@
     experience(){
       const snapshot=this.envelope?.payload || {revision:0,session:{}};
       const session=snapshot.session || {};
+      const settings={...clone(DEFAULT_CONFIG),...(snapshot.settings || {})};
       const game=this.normalizeGame();
       const prepared=session.prepared_game;
       const selectedMode=prepared?.game_type || game?.game_type || null;
@@ -136,7 +129,7 @@
         return playerStats(player,standing);
       });
       return {
-        screen:this.localScreen || session.screen || 'attract',
+        screen:settings.display_override || this.localScreen || session.screen || 'attract',
         session:session.session_id?{
           id:session.session_id,status:session.session_status,players:session.players || [],
         }:null,
@@ -154,7 +147,12 @@
         players:this.profiles,
         statistics:this.statistics,
         session_statistics:standings,
-        ...this.config,
+        calibration:settings.calibration,
+        projector_geometry:settings.projector_geometry,
+        sound:{...settings.sound,last_test_id:settings.sound_test_id || null},
+        art_theme:settings.art_theme,
+        ui_language:settings.ui_language,
+        correction_lock:{active:Boolean(settings.correction_lock)},
         hardware:{enabled:false,status:'disabled',test_events:Boolean(this.health.test_events)},
         rematch:{armed:false,expires_in_ms:0},
         runtime_instance_id:this.envelope?.runtime_instance_id,
@@ -172,6 +170,7 @@
 
     async refresh({publish=true,event}={}){
       this.envelope=await this.core.request_snapshot();
+      this.lastSoundTestId=this.envelope.payload?.settings?.sound_test_id || null;
       if(publish) this.publish(event);
       return this.experience();
     }
@@ -182,15 +181,22 @@
       return this.refresh({event});
     }
 
+    async settingsCommand(command,event){
+      await this.core.dispatch(command);
+      return this.refresh({event});
+    }
+
     async dispatch(path,payload={}){
       if(path==='/api/navigation/players'){
-        this.localScreen='players'; this.publish({type:'navigation',screen:'players'});
-        return this.experience();
+        this.localScreen=null;
+        return this.settingsCommand({type:'set_display_override',screen:'players'},
+          {type:'navigation',screen:'players'});
       }
       if(path==='/api/navigation'){
-        this.localScreen=payload.screen || 'attract';
-        this.publish({type:'navigation',screen:this.localScreen});
-        return this.experience();
+        this.localScreen=null;
+        const screen=payload.screen==='calibration'?'calibration':null;
+        return this.settingsCommand({type:'set_display_override',screen},
+          {type:'navigation',screen:payload.screen || 'attract'});
       }
       if(path==='/api/players'){
         const player={id:uuid(),name:String(payload.name || '').trim(),
@@ -252,20 +258,30 @@
       if(path==='/api/throw/delete') return this.command({type:'delete_dart',
         action_id:Number(payload.action_id)},{type:'throw_deleted'});
       if(path==='/api/correction/lock'){
-        this.config.correction_lock={active:Boolean(payload.enabled)};
-        saveConfig(this.config); this.publish({type:'correction_lock'}); return this.experience();
+        return this.settingsCommand({type:'set_correction_lock',active:Boolean(payload.enabled)},
+          {type:'correction_lock'});
       }
-      if(path==='/api/calibration') this.config.calibration=clone(payload);
-      else if(path==='/api/calibration/reset') this.config.calibration=clone(DEFAULT_CALIBRATION);
-      else if(path==='/api/projector/geometry') this.config.projector_geometry=clone(payload);
-      else if(path==='/api/sound/settings') this.config.sound={...payload,
-        status:payload.enabled?'ready':'disabled'};
-      else if(path==='/api/sound/status') this.config.sound={...this.config.sound,status:payload.status};
-      else if(path==='/api/art-theme') this.config.art_theme=payload.theme;
-      else if(path==='/api/ui/language') this.config.ui_language=payload.language;
-      else if(path==='/api/sound/test') return this.experience();
-      else throw new Error(`Unsupported Rust UI action: ${path}`);
-      saveConfig(this.config); this.publish({type:'settings'}); return this.experience();
+      if(path==='/api/calibration') return this.settingsCommand(
+        {type:'update_calibration',calibration:clone(payload)},{type:'calibration_saved'});
+      if(path==='/api/calibration/reset') return this.settingsCommand(
+        {type:'reset_calibration'},{type:'calibration_reset'});
+      if(path==='/api/projector/geometry') return this.settingsCommand(
+        {type:'report_projector_geometry',geometry:clone(payload)},{type:'projector_geometry'});
+      if(path==='/api/sound/settings') return this.settingsCommand(
+        {type:'update_sound_settings',enabled:Boolean(payload.enabled),
+          output:payload.output || 'projector'},{type:'sound_settings'});
+      if(path==='/api/sound/status') return this.settingsCommand(
+        {type:'report_sound_status',status:payload.status},{type:'sound_status'});
+      if(path==='/api/art-theme') return this.settingsCommand(
+        {type:'update_art_theme',theme:payload.theme},{type:'art_theme'});
+      if(path==='/api/ui/language') return this.settingsCommand(
+        {type:'update_ui_language',language:payload.language},{type:'ui_language'});
+      if(path==='/api/sound/test'){
+        const effectId=uuid();
+        return this.settingsCommand({type:'sound_test',effect_id:effectId},
+          {type:'sound_test',seq:effectId});
+      }
+      throw new Error(`Unsupported Rust UI action: ${path}`);
     }
 
     async query(path){
@@ -296,8 +312,13 @@
         onClose:()=>listener.onClose?.(),
         onError:error=>listener.onClose?.(error),
         onMessage:envelope=>{
+          const soundTestId=envelope.payload?.settings?.sound_test_id || null;
+          const soundEvent=soundTestId && soundTestId!==this.lastSoundTestId
+            ? {type:'sound_test',seq:soundTestId}
+            : undefined;
+          this.lastSoundTestId=soundTestId;
           this.envelope=envelope;
-          this.publish(envelope.payload?.game?.state?.last_event || undefined);
+          this.publish(soundEvent || envelope.payload?.game?.state?.last_event || undefined);
         },
       });
       return ()=>this.close();

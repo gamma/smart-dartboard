@@ -64,9 +64,20 @@ Umgesetzt und lokal verifiziert:
   beginnen, im Projector T20 auslösen und im Control synchron Score 60 sehen.
   Testwürfe sind im Produktionsbetrieb verborgen und serverseitig gesperrt;
   der Testhost muss sie ausdrücklich freischalten,
-- öffentliche Live-Snapshots enthalten ausschließlich den benötigten Spiel-
-  und Sessionzustand. Interne Initialzustände, Replay-Aktionen und Historien
+- öffentliche Live-Snapshots enthalten ausschließlich den benötigten Spiel-,
+  Session- und Setupzustand. Interne Initialzustände, Replay-Aktionen und Historien
   bleiben im Runtime-/Storage-Layer,
+- Kalibrierung, Projector-Geometrie, Soundziel/-status, Artwork-Theme, Sprache
+  und Korrektursperre gehören zum gemeinsamen, revisionsgesicherten Snapshot
+  statt zu Browser-`localStorage`. Änderungen sind damit über Reload, Restart,
+  Control und Projector konsistent. Die Kalibrieransicht wird als temporärer
+  Display-Override synchronisiert, ohne den darunter laufenden Session-Screen
+  zu überschreiben. Nach einem Crash wird eine Korrektursperre bewusst gelöst
+  und ein aktivierter Soundausgang wieder in `starting` überführt,
+- das native Projector-Fenster erhält für den späteren Einsatz der Produkt-UI
+  genau eine begrenzte Reporting-Bridge: Es darf seine Geometrie und seinen
+  Soundstatus melden, aber weder Kalibrierung noch Spiel oder sonstiges Setup
+  verändern. Diese Autoritätsgrenze ist per Rust-Test belegt,
 - deterministischer Session-Core mit gemeinsamer Python-/Rust-Fixture für
   Screenfluss, Starterrotation, Rematch, Abbruch, Draw sowie Einzel- und
   Koop-Wertung mit drei Punkten pro gewonnenem Spiel.
@@ -216,8 +227,6 @@ Noch nicht als produktionsreif nachgewiesen:
 - Heatmap, Modusstatistiken, Export und Trainingsempfehlungen im Rust-Pfad;
   alle 24 heutigen Produktmodi sind portiert. Das adaptive Boss Fight V2 bleibt
   eine getrennte, ausdrücklich zurückgestellte Produktänderung,
-- persistierte, hostweit synchronisierte Kalibrierung, Sound-, Theme- und
-  Spracheinstellungen im neuen UI-Pfad; sie sind dort derzeit browserlokal,
 - vollständige Historien-/Replay-Adapterparität der Produkt-UI,
 - Einsatz der gemeinsamen Produkt-UI in den nativen Tauri-Fenstern. Die
   Runtime-v2-Bridge ist kompiliert und berechtigt, Control und Projector zeigen
