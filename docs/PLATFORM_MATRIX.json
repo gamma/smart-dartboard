@@ -65,7 +65,7 @@
         "x86_64-simulator": "configured_not_verified"
       },
       "build": "device_archive_and_simulator_bundle_verified",
-      "installation": "simulator_install_launch_lifecycle_verified",
+      "installation": "simulator_install_launch_lifecycle_and_external_display_verified",
       "hardware": "not_qualified",
       "requirements": ["CoreBluetooth permission", "AirPlay or HDMI, or a paired Companion projector"]
     },

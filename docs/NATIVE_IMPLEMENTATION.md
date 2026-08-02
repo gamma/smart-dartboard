@@ -387,12 +387,14 @@ Das Simulator-Script entfernt vorab nur das generierte Simulator-Archiv und
 das bereits exportierte `.app`-Bundle. Das ist nötig, weil Tauri 2.11.4 beim
 wiederholten Simulator-Build ein vorhandenes Exportziel nicht selbst ersetzt.
 Der zweite Befehl erzeugt dafür einen temporären, garantiert frischen
-iPad-Simulator, installiert das Bundle, belegt den normalen Erststart bei
-Revision 0 und schickt die App durch Hintergrund und Vordergrund. Die
-redigierten Diagnoselogs müssen zeigen, dass `app_suspended` und `app_resumed`
-dieselbe Runtime-Revision behalten. Der Test fährt das eigens angelegte Gerät
-anschließend herunter und löscht es wieder; vorhandene persönliche
-Simulatoren und deren App-Daten bleiben unberührt.
+iPad-Simulator, installiert das Bundle und belegt den normalen Erststart bei
+Revision 0. Anschließend schaltet er dessen getrennten `TVOut` ein und wieder
+aus und schickt die App durch Hintergrund und Vordergrund. Die redigierten
+Diagnoselogs müssen `external_display_changed` mit `0 → 1 → 0` sowie
+`app_suspended` und `app_resumed` bei unveränderter Runtime-Revision zeigen.
+Der Test fährt das eigens angelegte Gerät anschließend herunter und löscht es
+wieder; vorhandene persönliche Simulatoren und deren App-Daten bleiben
+unberührt.
 
 Der M0-Zwei-Display-Test kann in einem Debug-Build mit dem Simulator-Argument
 `--m0-test-hit-after-start` reproduziert werden. Revision 1 ist dabei der

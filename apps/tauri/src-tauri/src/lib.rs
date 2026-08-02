@@ -3196,6 +3196,17 @@ pub extern "C" fn sdb_external_display_changed(display_count: u32) {
         if let Some(state) = app.try_state::<SharedNativeState>()
             && let Ok(state) = state.lock()
         {
+            let _ = state.diagnostics.record(
+                DiagnosticLevel::Info,
+                "display",
+                "external_display_changed",
+                DiagnosticScope {
+                    runtime_instance_id: Some(state.runtime.instance_id()),
+                    revision: Some(state.runtime.snapshot().revision),
+                    ..DiagnosticScope::default()
+                },
+                serde_json::json!({"external_display_count": display_count}),
+            );
             ios_display::publish_bootstrap(&state);
         }
     }

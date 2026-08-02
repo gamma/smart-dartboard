@@ -55,6 +55,13 @@ Der iPad-Air-Simulator mit iOS 26.5 und seinem separaten `TVOut` wurde verwendet
 - Nach Reconnect startet eine neue Projector-WKWebView mit dem letzten Snapshot.
 - Der vollständige unsigned `aarch64-sim`-App-Build ist erfolgreich.
 
+Dieser Display-Lifecycle ist nicht mehr nur manuell belegt: Der CI-fähige
+iOS-Test erzeugt ein ausschließlich für den Lauf bestimmtes iPad, startet ohne
+Ausgang, schaltet `TVOut` per `simctl` ein und wieder aus und prüft die
+redigierten nativen Diagnoseereignisse `0 → 1 → 0`. Die Runtime-Revision muss
+dabei unverändert bleiben; anschließend prüft derselbe Lauf Suspend/Resume und
+löscht den temporären Simulator wieder.
+
 Der Debug-Schalter `--m0-test-hit-after-start` löst dafür einmalig denselben
 Rust-Dispatchpfad wie der UI-Button aus. Nur dieser Schalter legt dafür ein
 kurzlebiges CountUp-Testspiel an; normale Erststarts bleiben auf `attract` ohne
