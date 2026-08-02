@@ -1177,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(17));
+        assert_eq!(modes.as_array().map(Vec::len), Some(18));
         assert!(
             modes
                 .as_array()
@@ -1257,6 +1257,30 @@ mod tests {
                     && mode["min_players"] == 2
                     && mode["options"][1]["default"] == "exact"
                     && mode["artwork"] == "/static/assets/modes/robin_hood.webp"
+            })
+        }));
+        assert_block_drop_metadata(&modes);
+    }
+
+    fn assert_block_drop_metadata(modes: &Value) {
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "block_drop"
+                    && mode["ruleset_version"] == 2
+                    && mode["artwork"] == "/static/assets/modes/block_drop.webp"
+                    && mode["options"].as_array().is_some_and(|options| {
+                        options
+                            .iter()
+                            .map(|option| option["key"].as_str())
+                            .collect::<Vec<_>>()
+                            == [Some("difficulty"), Some("pace"), Some("drop_flow")]
+                    })
+                    && mode["control_legend"].as_array().is_some_and(|legend| {
+                        legend.len() == 5
+                            && legend.iter().any(|item| {
+                                item["icon"] == "drop" && item["secondary_color"] == "#e76f51"
+                            })
+                    })
             })
         }));
     }

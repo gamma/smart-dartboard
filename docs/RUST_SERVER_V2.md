@@ -126,17 +126,18 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 
 - CountUp, X01, Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King
   of the Board, Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon,
-  Lightning Round, Mini Golf, Simon Says und Treasure Hunt starten; Cricket,
-  8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board, Target
-  Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round, Mini
-  Golf, Simon Says und Treasure Hunt nutzen
+  Lightning Round, Mini Golf, Simon Says, Treasure Hunt und Block Drop starten;
+  Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board,
+  Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round,
+  Mini Golf, Simon Says, Treasure Hunt und Block Drop nutzen
   dieselbe generische, statische Modus-Registry statt neuer Runtime- oder
   Serverzweige,
 - Sessionprofile einschließlich Avatar und Spielerfarbe bleiben beim Start
   eines Registry-Spiels erhalten; ältere Snapshots ohne diese Felder werden
   rückwärtskompatibel geladen,
 - Modusmetadaten einschließlich validierter Optionen, Anleitungen,
-  Artwork-/Sound-Referenzen und Regelsatz-Version über `/api/v2/modes` liefern,
+  Artwork-/Sound-Referenzen, grafischer Steuerlegende und Regelsatz-Version
+  über `/api/v2/modes` liefern,
 - den deterministischen Registry-Zufall aus der stabilen Spiel-ID ableiten und
   Seed sowie Cursor mit jedem Snapshot persistieren, sodass Replay und
   Recovery keine neuen Zielsequenzen erzeugen,

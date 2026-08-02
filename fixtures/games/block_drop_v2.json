@@ -1,0 +1,129 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 2,
+  "random_seed": 17,
+  "players": [
+    {"id": "ada", "name": "Ada", "color": "#ff00aa", "avatar": "fox"},
+    {"id": "bob", "name": "Bob", "color": "#00ffaa", "avatar": "comet"}
+  ],
+  "options": {"difficulty": "easy", "pace": "classic", "drop_flow": "continue"},
+  "steps": [
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 1, "field": 20, "ring": "single_outer", "multiplier": 1, "label": "20", "score": 20}},
+      "expected": {
+        "scores": [0, 0],
+        "board_rows": ["00000", "00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+        "piece": {"kind": "T", "rotation": 3, "x": 1, "y": 0},
+        "lines": 0, "piece_index": 1, "gravity_round": 1,
+        "last_effect": "block_rotate_left", "effect_points": 0, "cleared_lines": 0,
+        "random_cursor": 1, "current_player_index": 0, "darts_in_turn": 1,
+        "turn_score": 0, "round_number": 1, "status": "running",
+        "winner_ids": [], "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 2, "field": 4, "ring": "single_outer", "multiplier": 1, "label": "4", "score": 4}},
+      "expected": {
+        "scores": [0, 0],
+        "board_rows": ["00000", "00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+        "piece": {"kind": "T", "rotation": 3, "x": 2, "y": 0},
+        "lines": 0, "piece_index": 1, "gravity_round": 1,
+        "last_effect": "block_move_right", "effect_points": 0, "cleared_lines": 0,
+        "random_cursor": 1, "current_player_index": 0, "darts_in_turn": 2,
+        "turn_score": 0, "round_number": 1, "status": "running",
+        "winner_ids": [], "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "miss", "seq": 3, "label": "MISS", "score": 0}},
+      "expected": {
+        "scores": [0, 0],
+        "board_rows": ["00000", "00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+        "piece": {"kind": "T", "rotation": 3, "x": 2, "y": 0},
+        "lines": 0, "piece_index": 1, "gravity_round": 1,
+        "last_effect": "block_miss", "effect_points": 0, "cleared_lines": 0,
+        "random_cursor": 1, "current_player_index": 0, "darts_in_turn": 3,
+        "turn_score": 0, "round_number": 1, "status": "hold",
+        "winner_ids": [], "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {
+        "scores": [0, 0],
+        "board_rows": ["00000", "00000", "00000", "00000", "00000", "00000", "00000", "00000"],
+        "piece": {"kind": "T", "rotation": 3, "x": 2, "y": 0},
+        "lines": 0, "piece_index": 1, "gravity_round": 1,
+        "last_effect": "", "effect_points": 0, "cleared_lines": 0,
+        "random_cursor": 1, "current_player_index": 1, "darts_in_turn": 0,
+        "turn_score": 0, "round_number": 1, "status": "running",
+        "winner_ids": [], "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 4, "field": 20, "ring": "triple", "multiplier": 3, "label": "T20", "score": 60}},
+      "expected": {
+        "scores": [10, 10],
+        "board_rows": ["00000", "00000", "00000", "00000", "00000", "00100", "00110", "00100"],
+        "piece": {"kind": "S", "rotation": 0, "x": 1, "y": 0},
+        "lines": 0, "piece_index": 2, "gravity_round": 1,
+        "last_effect": "block_drop", "effect_points": 10, "cleared_lines": 0,
+        "random_cursor": 2, "current_player_index": 1, "darts_in_turn": 1,
+        "turn_score": 10, "round_number": 1, "status": "running",
+        "winner_ids": [], "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 5, "field": 25, "ring": "single_bull", "multiplier": 1, "label": "SBull", "score": 25}},
+      "expected": {
+        "scores": [20, 20],
+        "board_rows": ["00000", "00000", "00000", "00110", "01100", "00100", "00110", "00100"],
+        "piece": {"kind": "L", "rotation": 0, "x": 1, "y": 0},
+        "lines": 0, "piece_index": 3, "gravity_round": 1,
+        "last_effect": "block_drop", "effect_points": 10, "cleared_lines": 0,
+        "random_cursor": 3, "current_player_index": 1, "darts_in_turn": 2,
+        "turn_score": 20, "round_number": 1, "status": "running",
+        "winner_ids": [], "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "correct", "action_id": 5, "event": {"type": "hit", "seq": 99, "field": 12, "ring": "single_outer", "multiplier": 1, "label": "12", "score": 12}},
+      "expected": {
+        "scores": [10, 10],
+        "board_rows": ["00000", "00000", "00000", "00000", "00000", "00000", "00010", "00111"],
+        "piece": {"kind": "S", "rotation": 0, "x": 1, "y": 0},
+        "lines": 0, "piece_index": 2, "gravity_round": 1,
+        "last_effect": "block_drop", "effect_points": 10, "cleared_lines": 0,
+        "random_cursor": 2, "current_player_index": 1, "darts_in_turn": 2,
+        "turn_score": 10, "round_number": 1, "status": "running",
+        "winner_ids": [], "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "dart", "event": {"type": "hit", "seq": 6, "field": 25, "ring": "double_bull", "multiplier": 2, "label": "DBull", "score": 50}},
+      "expected": {
+        "scores": [45, 45],
+        "board_rows": ["00000", "00000", "00000", "00000", "00000", "00110", "01110", "00111"],
+        "piece": {"kind": "L", "rotation": 0, "x": 1, "y": 0},
+        "lines": 0, "piece_index": 3, "gravity_round": 1,
+        "last_effect": "block_power_drop", "effect_points": 35, "cleared_lines": 0,
+        "random_cursor": 3, "current_player_index": 1, "darts_in_turn": 3,
+        "turn_score": 45, "round_number": 1, "status": "hold",
+        "winner_ids": [], "result_type": ""
+      }
+    },
+    {
+      "command": {"type": "continue"},
+      "expected": {
+        "scores": [45, 45],
+        "board_rows": ["00000", "00000", "00000", "00000", "00000", "00110", "01110", "00111"],
+        "piece": {"kind": "L", "rotation": 0, "x": 1, "y": 1},
+        "lines": 0, "piece_index": 3, "gravity_round": 2,
+        "last_effect": "block_sink", "effect_points": 0, "cleared_lines": 0,
+        "random_cursor": 3, "current_player_index": 0, "darts_in_turn": 0,
+        "turn_score": 0, "round_number": 2, "status": "running",
+        "winner_ids": [], "result_type": ""
+      }
+    }
+  ]
+}

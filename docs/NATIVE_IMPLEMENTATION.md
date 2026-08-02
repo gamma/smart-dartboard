@@ -20,11 +20,10 @@ Umgesetzt und lokal verifiziert:
   Projector-Overlay. `GET /api/v2/modes` liefert derzeit CountUp, X01, Cricket,
   8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board, Target
   Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round, Mini
-  Golf, Simon Says und Treasure Hunt. Cricket, 8-Ball, Avoid the Bomb, Color
-  Clash, Heart Chase, King of the Board, Target Rush, Ghost Chase, Risk It,
-  Robin Hood, Candy Cannon, Lightning Round, Mini Golf, Simon Says sowie
-  Treasure Hunt laufen über denselben generischen
-  Registry-Pfad
+  Golf, Simon Says, Treasure Hunt und Block Drop. Cricket, 8-Ball, Avoid the
+  Bomb, Color Clash, Heart Chase, King of the Board, Target Rush, Ghost Chase,
+  Risk It, Robin Hood, Candy Cannon, Lightning Round, Mini Golf, Simon Says,
+  Treasure Hunt sowie Block Drop laufen über denselben generischen Registry-Pfad
   und sind durch gemeinsame Python-/Rust-Golden-Fixtures belegt;
   Cricket zusätzlich durch den vollständigen SQLite-Recovery-Pfad,
 - Avatar und frei gewählte Spielerfarbe werden aus der Session in native
@@ -73,8 +72,8 @@ Umgesetzt und lokal verifiziert:
 - Öffentliche Commands zum Korrigieren und Löschen über stabile Action-IDs für
   CountUp, X01 und alle Registry-Modi, derzeit Cricket, 8-Ball, Avoid the Bomb,
   Color Clash, Heart Chase, King of the Board, Target Rush, Ghost Chase, Risk
-  It, Robin Hood, Candy Cannon, Lightning Round, Mini Golf, Simon Says und
-  Treasure Hunt. Der
+  It, Robin Hood, Candy Cannon, Lightning Round, Mini Golf, Simon Says,
+  Treasure Hunt und Block Drop. Der
   gemeinsame State
   liefert die
   editierbaren

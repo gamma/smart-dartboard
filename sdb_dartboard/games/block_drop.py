@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import random
 from typing import Any, Dict, List, Tuple
 
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
@@ -103,6 +102,7 @@ class BlockDropMode:
         ],
         control_legend=CONTROL_LEGEND,
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -113,9 +113,11 @@ class BlockDropMode:
         state.mode_state = {
             "board": [[0 for _ in range(WIDTH)] for _ in range(HEIGHT)],
             "lines": 0,
-            "seed": random.randint(0, 2**31 - 1),  # nosec B311
             "piece_index": 0,
             "gravity_round": 1,
+            "last_effect": "",
+            "effect_points": 0,
+            "cleared_lines": 0,
         }
         self._spawn(state)
 
@@ -153,8 +155,8 @@ class BlockDropMode:
 
     def _spawn(self, state: Any) -> bool:
         index = int(state.mode_state.get("piece_index", 0))
-        rng = random.Random(f"{state.mode_state['seed']}:{index}")  # nosec B311
-        kind = rng.choice(sorted(SHAPES))
+        kinds = sorted(SHAPES)
+        kind = kinds[state.random_index(len(kinds))]
         width = max(x for x, _ in SHAPES[kind][0]) + 1
         piece = {"kind": kind, "rotation": 0, "x": (WIDTH - width) // 2, "y": 0}
         state.mode_state["piece"] = piece
@@ -207,6 +209,8 @@ class BlockDropMode:
         return cleared, can_continue
 
     def _finish(self, state: Any, won: bool, message: str, points: int) -> ThrowOutcome:
+        state.mode_state["last_effect"] = "block_win" if won else "block_out"
+        state.mode_state["effect_points"] = int(points)
         return ThrowOutcome(
             points,
             message,
@@ -225,6 +229,21 @@ class BlockDropMode:
         state.winner_ids = [player.id for player in state.players] if won else []
         state.result_type = "team_win" if won else "challenge_loss"
         state.message = message
+        state.mode_state["last_effect"] = "block_win" if won else "block_out"
+
+    @staticmethod
+    def _set_effect(
+        state: Any,
+        effect: str,
+        *,
+        points: int = 0,
+        cleared: int = 0,
+    ) -> None:
+        state.mode_state.update({
+            "last_effect": effect,
+            "effect_points": int(points),
+            "cleared_lines": int(cleared),
+        })
 
     def _line_goal(self, state: Any) -> int:
         return 10 if state.options.get("pace", "classic") == "action" else 5
@@ -254,6 +273,7 @@ class BlockDropMode:
 
     def on_turn_start(self, state: Any, player: Any) -> None:
         del player
+        self._set_effect(state, "")
         if state.options.get("pace", "classic") == "action":
             return
         gravity_round = int(state.mode_state.get("gravity_round", 1))
@@ -261,10 +281,17 @@ class BlockDropMode:
             return
         state.mode_state["gravity_round"] = state.round_number
         if self._soft_drop(state):
+            self._set_effect(state, "block_sink")
             state.message = f"Runde {state.round_number}: Stein fällt eine Zeile"
             return
 
         cleared, points, can_continue = self._lock_piece(state)
+        self._set_effect(
+            state,
+            "block_line" if cleared else "block_lock",
+            points=points,
+            cleared=cleared,
+        )
         lines = int(state.mode_state["lines"])
         if lines >= self._line_goal(state):
             self._finish_state(
@@ -279,46 +306,62 @@ class BlockDropMode:
             state.message = f"Rundendrop setzt den Stein · +{points}{detail}"
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        self._set_effect(state, "")
         force_lock = False
         power_bonus = 0
         drop_rings = self._drop_rings(state)
         if event.get("type") != "hit":
             action = "MISS · keine Aktion"
+            self._set_effect(state, "block_miss")
         elif int(event.get("field", 0)) == 25:
             self._hard_drop(state)
             force_lock = True
             if event.get("ring") == "double_bull":
                 power_bonus = 25
                 action = "DOUBLE BULL · POWER DROP!"
+                self._set_effect(state, "block_power_drop")
             else:
                 action = "SINGLE BULL · DROP!"
+                self._set_effect(state, "block_drop")
         elif event.get("ring") in drop_rings:
             self._hard_drop(state)
             force_lock = True
             ring_label = "TRIPLE" if event.get("ring") == "triple" else "DOUBLE"
             action = f"{ring_label} · DROP!"
+            self._set_effect(state, "block_drop")
         else:
             field = int(event.get("field", 0))
             if field in CONTROL_ZONES["left"]:
                 self._move(state, -1)
                 action = "LINKS"
+                self._set_effect(state, "block_move_left")
             elif field in CONTROL_ZONES["right"]:
                 self._move(state, 1)
                 action = "RECHTS"
+                self._set_effect(state, "block_move_right")
             elif field in CONTROL_ZONES["rotate_left"]:
                 self._rotate(state, -1)
                 action = "LINKS DREHEN"
+                self._set_effect(state, "block_rotate_left")
             else:
                 self._rotate(state, 1)
                 action = "RECHTS DREHEN"
+                self._set_effect(state, "block_rotate_right")
 
         if not force_lock:
             if state.options.get("pace", "classic") != "action":
                 return ThrowOutcome(0, action)
             if self._soft_drop(state):
+                self._set_effect(state, "block_sink")
                 return ThrowOutcome(0, f"{action} · SINK ↓")
 
             cleared, points, can_continue = self._lock_piece(state)
+            self._set_effect(
+                state,
+                "block_line" if cleared else "block_lock",
+                points=points,
+                cleared=cleared,
+            )
             lines = int(state.mode_state["lines"])
             if lines >= self._line_goal(state):
                 return self._finish(state, True, self._win_message(state), points)
@@ -331,6 +374,14 @@ class BlockDropMode:
             state,
             power_bonus=power_bonus,
         )
+        drop_effect = (
+            "block_power_drop"
+            if power_bonus
+            else "block_line"
+            if cleared
+            else "block_drop"
+        )
+        self._set_effect(state, drop_effect, points=points, cleared=cleared)
         lines = int(state.mode_state["lines"])
         if lines >= self._line_goal(state):
             return self._finish(state, True, self._win_message(state), points)
