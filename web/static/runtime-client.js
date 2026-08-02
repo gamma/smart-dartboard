@@ -226,6 +226,72 @@
     }
   }
 
+  class ExternalProjectorRuntimeClient {
+    constructor(bridge=global.__SDB_EXTERNAL_PROJECTOR__){
+      if(!bridge?.bootstrap || !bridge?.query || !bridge?.dispatch || !bridge?.subscribe){
+        throw new RuntimeClientError('External projector bridge is unavailable');
+      }
+      this.bridge=bridge;
+      this.unsubscribe=null;
+      this.runtimeInstanceId=null;
+      this.revision=null;
+    }
+
+    acceptEnvelope(envelope){
+      if(envelope?.protocol_version!==PROTOCOL_VERSION || envelope?.kind!=='state'){
+        throw new RuntimeClientError('Incompatible external projector state');
+      }
+      this.runtimeInstanceId=envelope.runtime_instance_id;
+      this.revision=envelope.revision;
+      return envelope;
+    }
+
+    async bootstrap(){ return this.acceptEnvelope(await this.bridge.bootstrap()); }
+    async request_snapshot(){ return this.acceptEnvelope(await this.bridge.bootstrap()); }
+    query(path){ return this.bridge.query(path); }
+    async dispatch(command,{commandId:stableId=commandId(),expectedRevision=this.revision}={}){
+      if(!this.runtimeInstanceId || this.revision===null){
+        throw new RuntimeClientError('RuntimeClient must bootstrap before dispatch');
+      }
+      const result=await this.bridge.dispatch({
+        protocol_version:PROTOCOL_VERSION,
+        command_id:stableId,
+        runtime_instance_id:this.runtimeInstanceId,
+        expected_revision:expectedRevision,
+        command,
+      });
+      if(result.revision>this.revision) this.revision=result.revision;
+      return result;
+    }
+
+    subscribe(listener){
+      listenerCall(listener,'onOpen');
+      this.unsubscribe=this.bridge.subscribe(async payload=>{
+        try{
+          const envelope=payload.envelope;
+          const runtimeChanged=this.runtimeInstanceId
+            && envelope.runtime_instance_id!==this.runtimeInstanceId;
+          const gap=this.revision!==null && envelope.revision>this.revision+1;
+          if(envelope.revision<=this.revision && !runtimeChanged) return;
+          const accepted=runtimeChanged || gap
+            ? await this.request_snapshot()
+            : this.acceptEnvelope(envelope);
+          listenerCall(listener,'onMessage',accepted);
+        }catch(error){ listenerCall(listener,'onError',error); }
+      });
+      return ()=>this.close();
+    }
+
+    subscribeHost(listener){
+      return this.bridge.subscribe(payload=>listener(payload.queries?.['/api/v2/host'] || {}));
+    }
+
+    close(){
+      this.unsubscribe?.();
+      this.unsubscribe=null;
+    }
+  }
+
   class TestRuntimeClient {
     constructor({envelope,dispatch,queries={}}){
       this.envelope=envelope;
@@ -298,6 +364,9 @@
   }
 
   function createCore(){
+    if(global.__SDB_EXTERNAL_PROJECTOR__){
+      return new ExternalProjectorRuntimeClient(global.__SDB_EXTERNAL_PROJECTOR__);
+    }
     if(global.__TAURI_INTERNALS__ || global.__TAURI__){
       return new TauriRuntimeClient(global.__TAURI__);
     }
@@ -309,6 +378,7 @@
     RuntimeClientError,
     HostedRuntimeClient,
     TauriRuntimeClient,
+    ExternalProjectorRuntimeClient,
     TestRuntimeClient,
     LegacyHostedRuntimeClient,
     createCore,

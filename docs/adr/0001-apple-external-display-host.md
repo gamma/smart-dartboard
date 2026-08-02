@@ -1,8 +1,8 @@
 # ADR 0001: Nativer Apple-DisplayHost für Tauri
 
-Stand: 2026-08-01
+Stand: 2026-08-02
 
-Status: **Für M0 akzeptiert**
+Status: **Implementiert; Hardwarequalifizierung ausstehend**
 
 ## Kontext
 
@@ -27,9 +27,13 @@ M0 verwendet für iOS/iPadOS bis einschließlich Version 26 einen dünnen native
   verwalten angeschlossene AirPlay-/HDMI-Ausgaben.
 - Jedes externe Display erhält ein eigenes `UIWindow` mit nichtinteraktiver
   `WKWebView` und der Rolle `projector`.
-- Die Rust-Runtime übergibt ausschließlich serialisierte Public-State-
-  Snapshots. Der Adapter enthält keine Regeln und keine eigene Runtime.
-- Der Rückkanal meldet nur die Zahl aktiver Displays an Rust und die Control UI.
+- Die Rust-Runtime liefert Runtime-v2-Public-Snapshots und read-only Queries.
+  Die WKWebView lädt `projector.html` und alle Artworks über den eingebetteten
+  Tauri-Asset-Resolver; der Adapter enthält keine Regeln und keine zweite
+  Runtime.
+- Der Rückkanal meldet die Zahl aktiver Displays sowie Projector-Geometrie und
+  Soundstatus. Debug-Builds erlauben zusätzlich ausschließlich kanonische
+  `projector_test`-Würfe; Release-Builds lehnen diesen Command ab.
 - Disconnect beendet weder Runtime noch Spiel; Reconnect erhält den letzten
   Snapshot.
 
@@ -39,12 +43,16 @@ gilt.
 
 ## Nachweis
 
-Der iPad-Pro-Simulator mit iOS 26.5 und seinem separaten `TVOut` wurde verwendet:
+Der iPad-Air-Simulator mit iOS 26.5 und seinem separaten `TVOut` wurde verwendet:
 
-- Control und Projector zeigen gleichzeitig Counter 1 und Revision 1.
+- Control und `TVOut` zeigen gleichzeitig die gemeinsame Control- und
+  Projector-Produkt-UI aus demselben Bundle.
+- Der Projector meldet seinen realen WebView-Viewport `720 × 448` über die
+  eingeschränkte C-ABI zurück; Runtime-Journal und Snapshot enthalten den
+  `report_projector_geometry`-Command.
 - Control erkennt Connect und Disconnect sofort.
-- Nach Disconnect bleibt Revision 1 auf dem Controller erhalten.
-- Nach Reconnect startet eine neue Projector-WKWebView mit Revision 1.
+- Nach Disconnect bleibt die autoritative Revision auf dem Controller erhalten.
+- Nach Reconnect startet eine neue Projector-WKWebView mit dem letzten Snapshot.
 - Der vollständige unsigned `aarch64-sim`-App-Build ist erfolgreich.
 
 Der Debug-Schalter `--m0-test-hit-after-start` löst dafür einmalig denselben

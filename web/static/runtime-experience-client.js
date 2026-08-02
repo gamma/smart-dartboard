@@ -65,7 +65,8 @@
       this.modes=modes;
       this.profiles=profiles;
       this.statistics=statistics;
-      if(this.core instanceof api.TauriRuntimeClient){
+      if(this.core instanceof api.TauriRuntimeClient
+        || this.core instanceof api.ExternalProjectorRuntimeClient){
         this.host=await this.core.query('/api/v2/host');
       }
       return this.experience();
@@ -335,7 +336,8 @@
           this.publish(soundEvent || envelope.payload?.game?.state?.last_event || undefined);
         },
       });
-      if(this.core instanceof api.TauriRuntimeClient){
+      if(this.core instanceof api.TauriRuntimeClient
+        || this.core instanceof api.ExternalProjectorRuntimeClient){
         this.unsubscribeHost=this.core.subscribeHost((host,error)=>{
           if(error){ listener.onClose?.(error); return; }
           this.host=host || {};

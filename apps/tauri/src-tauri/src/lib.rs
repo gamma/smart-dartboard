@@ -487,10 +487,28 @@ const fn companion_port() -> Option<u16> {
 #[cfg(target_os = "ios")]
 #[allow(unsafe_code)]
 mod ios_display {
-    use super::PublicState;
-    use std::ffi::{CString, c_char, c_void};
+    use super::{
+        APP_HANDLE, CommandEnvelope, CommandResult, NativeState, SharedNativeState,
+        publish_public_state, registered_game_metadata, runtime_v2_envelope,
+        runtime_v2_projector_report_allowed, runtime_v2_projector_test_event_allowed,
+    };
+    use serde_json::{Value, json};
+    use std::{
+        ffi::{CStr, CString, c_char, c_void},
+        sync::OnceLock,
+    };
+    use tauri::Manager;
 
     type ProjectorUpdate = unsafe extern "C" fn(*const c_char);
+    static MODE_QUERY: OnceLock<Value> = OnceLock::new();
+
+    #[repr(C)]
+    pub struct ProjectorAsset {
+        pub data: *mut u8,
+        pub length: usize,
+        pub mime: *mut c_char,
+    }
+
     fn lookup(symbol: &std::ffi::CStr) -> Option<*mut c_void> {
         let address = unsafe { libc::dlsym(libc::RTLD_DEFAULT, symbol.as_ptr()) };
         if address.is_null() {
@@ -505,8 +523,23 @@ mod ios_display {
             .map(|address| unsafe { std::mem::transmute::<*mut c_void, ProjectorUpdate>(address) })
     }
 
-    pub fn publish(state: &PublicState) {
-        let Ok(json) = serde_json::to_string(state) else {
+    fn payload(state: &NativeState) -> Value {
+        let modes = MODE_QUERY
+            .get_or_init(|| json!(registered_game_metadata()))
+            .clone();
+        json!({
+            "envelope": runtime_v2_envelope(state),
+            "queries": {
+                "/api/v2/modes": modes,
+                "/api/v2/players": [],
+                "/api/v2/statistics/players": [],
+                "/api/v2/host": state.public(),
+            }
+        })
+    }
+
+    pub fn publish(state: &NativeState) {
+        let Ok(json) = serde_json::to_string(&payload(state)) else {
             return;
         };
         let Ok(json) = CString::new(json) else {
@@ -514,6 +547,114 @@ mod ios_display {
         };
         if let Some(update) = projector_update() {
             unsafe { update(json.as_ptr()) };
+        }
+    }
+
+    fn resolve_asset(path: &str) -> Option<tauri::Asset> {
+        if path.len() > 512 || path.contains("..") || path.contains('\\') {
+            return None;
+        }
+        let path = path.trim_start_matches('/');
+        let path = if path.is_empty() {
+            "projector.html"
+        } else {
+            path
+        };
+        APP_HANDLE.get()?.asset_resolver().get(path.to_owned())
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn sdb_projector_asset(
+        path: *const c_char,
+        output: *mut ProjectorAsset,
+    ) -> bool {
+        if path.is_null() || output.is_null() {
+            return false;
+        }
+        let Ok(path) = (unsafe { CStr::from_ptr(path) }).to_str() else {
+            return false;
+        };
+        let Some(asset) = resolve_asset(path) else {
+            return false;
+        };
+        let Ok(mime) = CString::new(asset.mime_type) else {
+            return false;
+        };
+        let bytes = asset.bytes.into_boxed_slice();
+        let length = bytes.len();
+        let data = Box::into_raw(bytes).cast::<u8>();
+        unsafe {
+            output.write(ProjectorAsset {
+                data,
+                length,
+                mime: mime.into_raw(),
+            });
+        }
+        true
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn sdb_projector_asset_free(asset: ProjectorAsset) {
+        if !asset.data.is_null() {
+            let slice = std::ptr::slice_from_raw_parts_mut(asset.data, asset.length);
+            drop(unsafe { Box::from_raw(slice) });
+        }
+        if !asset.mime.is_null() {
+            drop(unsafe { CString::from_raw(asset.mime) });
+        }
+    }
+
+    fn dispatch_command(envelope: CommandEnvelope) -> Result<(CommandResult, Value), String> {
+        let app = APP_HANDLE
+            .get()
+            .ok_or_else(|| "native app is not ready".to_owned())?;
+        let state = app
+            .try_state::<SharedNativeState>()
+            .ok_or_else(|| "native runtime is not ready".to_owned())?;
+        let (result, public, payload) = {
+            let mut state = state.lock().map_err(|error| error.to_string())?;
+            let allowed = runtime_v2_projector_report_allowed(&envelope.command)
+                || (cfg!(debug_assertions)
+                    && runtime_v2_projector_test_event_allowed(&envelope.command));
+            if !allowed {
+                return Err("external projector command is not allowed".into());
+            }
+            state.require_controller()?;
+            let result = state
+                .runtime
+                .dispatch_envelope(envelope)
+                .map_err(|error| error.message)?;
+            (result, state.public(), payload(&state))
+        };
+        publish_public_state(app, &public);
+        Ok((result, payload))
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn sdb_projector_command(command: *const c_char) -> *mut c_char {
+        let response = (|| -> Result<Value, String> {
+            if command.is_null() {
+                return Err("missing external projector command".into());
+            }
+            let command = (unsafe { CStr::from_ptr(command) })
+                .to_str()
+                .map_err(|_| "external projector command is not UTF-8".to_owned())?;
+            if command.len() > 64 * 1_024 {
+                return Err("external projector command is too large".into());
+            }
+            let envelope: CommandEnvelope =
+                serde_json::from_str(command).map_err(|error| error.to_string())?;
+            let (result, payload) = dispatch_command(envelope)?;
+            Ok(json!({"ok": true, "result": result, "payload": payload}))
+        })()
+        .unwrap_or_else(|error| json!({"ok": false, "error": error}));
+        CString::new(response.to_string()).map_or(std::ptr::null_mut(), CString::into_raw)
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn sdb_projector_string_free(value: *mut c_char) {
+        if !value.is_null() {
+            drop(unsafe { CString::from_raw(value) });
         }
     }
 }
@@ -2189,12 +2330,12 @@ mod apple_board_host {
 }
 
 #[cfg(target_os = "ios")]
-fn publish_to_external_projector(state: &PublicState) {
+fn publish_to_external_projector(state: &NativeState) {
     ios_display::publish(state);
 }
 
 #[cfg(not(target_os = "ios"))]
-fn publish_to_external_projector(_state: &PublicState) {}
+fn publish_to_external_projector(_state: &NativeState) {}
 
 #[cfg(target_os = "ios")]
 #[derive(Clone, Serialize)]
@@ -2812,11 +2953,11 @@ fn increment_runtime(
 }
 
 fn publish_public_state(app: &tauri::AppHandle, public: &PublicState) {
-    publish_to_external_projector(public);
     let mut runtime_message = None;
     if let Some(state) = app.try_state::<SharedNativeState>()
         && let Ok(state) = state.lock()
     {
+        publish_to_external_projector(&state);
         let _ = state.companion_states.send(public.clone());
         runtime_message = Some(runtime_v2_envelope(&state));
     }
@@ -2959,7 +3100,7 @@ pub fn run() {
             {
                 if let Some(state) = app.try_state::<SharedNativeState>() {
                     if let Ok(state) = state.lock() {
-                        publish_to_external_projector(&state.public());
+                        publish_to_external_projector(&state);
                     }
                 }
             }

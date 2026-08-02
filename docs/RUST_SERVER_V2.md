@@ -220,9 +220,9 @@ Noch offen und daher ausdrücklich kein Produktionsersatz:
 
 - Teammodell sowie Heatmap-, Modusstatistik-, Export- und Trainingsabfragen,
 - vollständige Anpassung der Historien-/Replay-Ansichten an die v2-Antworten,
-- Umschalten des separaten iOS-/iPadOS-External-Display-Hosts und des
-  Companion-Projectors von der Diagnoseansicht auf die gemeinsame Projector-
-  Produkt-UI; natives Control und der macOS-Projector verwenden sie bereits,
+- Umschalten des Companion-Projectors von der Diagnoseansicht auf die
+  gemeinsame Projector-Produkt-UI; natives Control, der macOS-Projector und der
+  separate iOS-/iPadOS-AirPlay-/HDMI-DisplayHost verwenden sie bereits,
 - ein plattformweiter Effect-Outbox-Vertrag; alle 24 heutigen Produktmodi sind
   portiert, während das adaptive Boss Fight V2 eine zurückgestellte
   Produktänderung bleibt,

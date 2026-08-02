@@ -54,7 +54,9 @@ Umgesetzt und lokal verifiziert:
   read-only Host-Eventkanal live in die Produkt-UI,
 - macOS-Tauri-App mit Control- und Projector-Fenster,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,
-- nativer Apple-DisplayHost mit eigener Projector-WKWebView auf `TVOut`,
+- nativer Apple-DisplayHost mit eigener Projector-WKWebView auf `TVOut`; sie
+  lädt die gemeinsame `projector.html` samt Artworks aus dem eingebetteten
+  Tauri-Asset-Resolver und verwendet denselben Runtime-v2-Adapter,
 - Live-State-Verteilung sowie Disconnect/Reconnect ohne Zustandsverlust,
 - Apple-M0 verwendet für den Testtreffer keinen Demo-Zähler mehr: Ein
   kanonisches `T20`-Event läuft durch den gemeinsamen CountUp-Core und die
@@ -78,8 +80,8 @@ Umgesetzt und lokal verifiziert:
   Display-Override synchronisiert, ohne den darunter laufenden Session-Screen
   zu überschreiben. Nach einem Crash wird eine Korrektursperre bewusst gelöst
   und ein aktivierter Soundausgang wieder in `starting` überführt,
-- das native Projector-Fenster erhält für den späteren Einsatz der Produkt-UI
-  genau eine begrenzte Reporting-Bridge: Es darf seine Geometrie und seinen
+- das native Projector-Fenster und der iOS-External-Display-Host erhalten genau
+  eine begrenzte Reporting-Bridge: Sie dürfen ihre Geometrie und ihren
   Soundstatus melden, aber weder Kalibrierung noch Spiel oder sonstiges Setup
   verändern. Debug-Builds besitzen zusätzlich einen dedizierten, auf
   `projector_test` beschränkten Testwurf-Command; Release-Builds lehnen ihn auch
@@ -235,10 +237,10 @@ Noch nicht als produktionsreif nachgewiesen:
   alle 24 heutigen Produktmodi sind portiert. Das adaptive Boss Fight V2 bleibt
   eine getrennte, ausdrücklich zurückgestellte Produktänderung,
 - vollständige Historien-/Replay-Adapterparität der Produkt-UI,
-- Einsatz der gemeinsamen Projector-Produkt-UI im separaten iOS-/iPadOS-
-  External-Display-Host und im Companion-Projector. Control sowie der
-  macOS-Projector verwenden sie bereits; AirPlay/HDMI und Companion zeigen
-  derzeit noch die bewusst kleine Diagnoseansicht,
+- Einsatz der gemeinsamen Projector-Produkt-UI im Companion-Projector. Control,
+  macOS-Projector und der separate iOS-/iPadOS-AirPlay-/HDMI-DisplayHost
+  verwenden sie bereits; der Companion zeigt derzeit noch die bewusst kleine
+  Diagnoseansicht,
 - vollständige Docker-Parität zur Python-Anwendung; der Session-/Spielkernfluss
   und die statischen Oberflächen sind bereits im Container belegt,
 - reale Linux-BlueZ-/Board-Abnahme des neuen Sidecars.
@@ -298,7 +300,9 @@ angezeigte Runtime-ID muss wechseln.
 Die technische Entscheidung und ihre Versionsgrenzen stehen in
 [ADR 0001](adr/0001-apple-external-display-host.md). Die Control UI zeigt den
 aktuellen Status `nicht verbunden` oder die Zahl der aktiven AirPlay-/HDMI-
-Displays. Das Projector-Fenster besitzt keinen schreibenden Runtime-Zugriff.
+Displays. Die Projector-WebViews besitzen keinen allgemeinen schreibenden
+Runtime-Zugriff; nur Geometrie, Soundstatus und Debug-Testwürfe passieren die
+explizit geprüfte Bridge.
 
 ## Apple-BoardTransport
 
