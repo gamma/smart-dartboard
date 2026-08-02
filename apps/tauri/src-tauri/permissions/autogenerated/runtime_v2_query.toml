@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-runtime-v2-query"
+description = "Enables the runtime_v2_query command without any pre-configured scope."
+commands.allow = ["runtime_v2_query"]
+
+[[permission]]
+identifier = "deny-runtime-v2-query"
+description = "Denies the runtime_v2_query command without any pre-configured scope."
+commands.deny = ["runtime_v2_query"]

@@ -3,11 +3,13 @@
 Stand: 2026-08-02
 
 Der Rust-Server ist der parallele Migrationspfad für Linux und Docker. Er
-ersetzt die produktive Python-API noch nicht. Die bestehende UI wird weiterhin
-vom Python-Container bedient, bis RuntimeClient, Setup-Präferenzen, Statistik-
-und BLE-Pfade paritätisch angeschlossen sind. Der Vorschau-Server liefert
-deshalb absichtlich noch keine scheinbar funktionsfähigen Control-/Projector-
-Seiten aus.
+liefert inzwischen dieselben Control- und Projector-Weboberflächen wie der
+Python-Host und bindet sie über den versionierten `HostedRuntimeClient` an die
+Rust-Runtime. Der Kernfluss von Spieleranlage über Session- und Modusauswahl bis
+zum synchronen Testtreffer ist in WebKit belegt. Er ersetzt den produktiven
+Python-Pfad trotzdem noch nicht: persistierte Setup-Präferenzen, alle
+Statistikansichten, Training, Export und reale BLE-Hardware sind noch nicht
+paritätisch angeschlossen.
 
 ## Start
 
@@ -22,6 +24,13 @@ Als Vorschaucontainer auf Port 8001:
 ```bash
 docker compose -f compose.rust.yml up --build
 curl http://127.0.0.1:8001/api/v2/health
+```
+
+Danach stehen die beiden Oberflächen bereit:
+
+```text
+http://127.0.0.1:8001/control
+http://127.0.0.1:8001/projector
 ```
 
 Der Container läuft ohne Root, ohne `privileged` und ohne Linux-Capabilities.
@@ -72,6 +81,8 @@ begrenztem Proxy-Netz.
 
 | Methode | Pfad | Zweck |
 | --- | --- | --- |
+| `GET` | `/control` | gemeinsame Touch-Steuerung mit automatischer Runtime-v2-Erkennung |
+| `GET` | `/projector` | gemeinsame Projektoransicht mit Runtime-v2-Livestate |
 | `GET` | `/api/v2/health` | Runtime-, Datenbank-, Board-, Protokoll- und Schemastatus |
 | `GET` | `/api/v2/runtime/bootstrap` | vollständiger versionierter Snapshot |
 | `GET` | `/api/v2/runtime/snapshot` | erneuter Snapshot nach Lücke oder Reconnect |
@@ -97,6 +108,13 @@ Browser-POSTs und WebSockets akzeptieren nur dieselbe Origin. Clients ohne
 `Origin`, etwa lokale Diagnosewerkzeuge, bleiben möglich. Unvereinbare
 Protokollversionen, falsche Runtime-IDs und veraltete Revisionen liefern stabile
 Fehlercodes und passende HTTP-Statuscodes.
+
+Der veröffentlichte Snapshot enthält nur Spiel- und Sessionzustand. Interne
+Replay-Grundzustände, Action-Timeline und Historie verlassen die Runtime nicht
+über den Live-State. Ein Klick auf die Scheibe wird nur dann als
+`projector_test` angenommen, wenn der Host ausdrücklich mit
+`SDB_ALLOW_TEST_EVENTS=1` gestartet wurde. Im normalen Container ist die
+Funktion verborgen und serverseitig mit HTTP 403 gesperrt.
 
 Spielerprofile werden vor einer Session mit dem Runtime-Command
 `create_player` atomar angelegt. `cancel_prepared_game` führt aus der Anleitung
@@ -181,7 +199,11 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
   Undo behält das Auditereignis, entfernt aber dessen Wertung,
 - nach Prozessneustart ausschließlich den letzten Commit wiederherstellen,
 - neue `runtime_instance_id` bei jedem Prozessstart,
-- vollständige Snapshots per WebSocket publizieren.
+- vollständige Snapshots per WebSocket publizieren,
+- die gemeinsame Control-/Projector-UI ausliefern, Runtime v2 automatisch
+  erkennen und bei einer Revisionslücke oder neuer Runtime-ID per Vollsnapshot
+  wieder einsteigen; der bestehende Python-Host bleibt als sauberer Fallback
+  erhalten,
 - Projector-Companions per kurzlebigem Einmalcode koppeln, Grants ausschließlich
   als Hash persistieren, authentisierte Snapshots und Folgerevisionen streamen
   sowie aktive Verbindungen beim Widerruf schließen.
@@ -189,13 +211,21 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
 - Teammodell sowie Heatmap-, Modusstatistik-, Export- und Trainingsabfragen,
+- persistierte und zwischen Control und Projector synchronisierte Kalibrierung,
+  Sound-, Theme- und Spracheinstellungen; der heutige Rust-Webadapter hält
+  diese Werte noch browserlokal,
+- vollständige Anpassung der Historien-/Replay-Ansichten an die v2-Antworten,
+- Umschalten der nativen Tauri-Fenster von der M0-Diagnoseoberfläche auf die
+  gemeinsame Produkt-UI; die eingeschränkten `runtime_v2_*`-Commands und
+  Live-Events sind bereits vorhanden,
 - ein plattformweiter Effect-Outbox-Vertrag; alle 24 heutigen Produktmodi sind
   portiert, während das adaptive Boss Fight V2 eine zurückgestellte
   Produktänderung bleibt,
 - reale BlueZ-/Boardqualifizierung mit schneller Trefferfolge, Reconnect,
   Adapterausfall und Langzeittest,
 - Migration vorhandener Python-Datenbanken,
-- Umstellung der bestehenden UI auf API v2.
+- echte Bedien- und Hardwareabnahme des neuen UI-Pfads jenseits des
+  automatisierten WebKit-Kernflusses.
 
 Wenn `SDB_ENABLE_BLE=1` gesetzt ist, meldet Health bis zum erfolgreichen
 Gateway-Handshake `degraded` und Board `unavailable`. Erst nach Discovery,

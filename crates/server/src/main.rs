@@ -17,7 +17,7 @@ use sdb_contracts::{
     RuntimeCommand,
 };
 use sdb_game_core::{GameMetadata, registered_game_metadata};
-use sdb_runtime::{CommandResult, Runtime, RuntimeSnapshot};
+use sdb_runtime::{CommandResult, Runtime, RuntimePublicSnapshot};
 use sdb_storage::SqliteRepository;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -28,16 +28,20 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 use tokio::sync::broadcast;
-use tower_http::set_header::SetResponseHeaderLayer;
+use tower_http::{
+    services::{ServeDir, ServeFile},
+    set_header::SetResponseHeaderLayer,
+};
 use uuid::Uuid;
 
 type SharedRuntime = Arc<Mutex<Runtime<SqliteRepository>>>;
-type StateMessage = Envelope<RuntimeSnapshot>;
+type StateMessage = Envelope<RuntimePublicSnapshot>;
 
 #[derive(Clone)]
 struct AppState {
     runtime: SharedRuntime,
     states: broadcast::Sender<StateMessage>,
+    allow_test_events: bool,
     board: Arc<Mutex<BoardState>>,
     board_token: Option<Arc<str>>,
     companions: Arc<Mutex<PairingAuthority>>,
@@ -67,6 +71,7 @@ struct Health {
     protocol_version: u16,
     schema_version: u32,
     revision: u64,
+    test_events: bool,
 }
 
 #[derive(Serialize)]
@@ -149,8 +154,9 @@ async fn main() {
         .parse()
         .expect("SDB_BIND must be an IP address");
     let companion_config = companion_config(bind_ip);
-    let state = AppState::new(runtime, ble_enabled, board_token, companion_config)
+    let mut state = AppState::new(runtime, ble_enabled, board_token, companion_config)
         .expect("restore companion device grants");
+    state.allow_test_events = env_flag("SDB_ALLOW_TEST_EVENTS", false);
     let app = router(state);
     let address = SocketAddr::new(bind_ip, port);
     let listener = tokio::net::TcpListener::bind(address)
@@ -176,6 +182,7 @@ impl AppState {
         Ok(Self {
             runtime: Arc::new(Mutex::new(runtime)),
             states,
+            allow_test_events: false,
             board: Arc::new(Mutex::new(BoardState {
                 status: if board_enabled {
                     BoardStatus::unavailable()
@@ -203,14 +210,25 @@ impl AppState {
             message_id,
             runtime.snapshot().revision,
             MessageKind::State,
-            runtime.snapshot().clone(),
+            runtime.public_snapshot(),
         ))
     }
 }
 
 fn router(state: AppState) -> Router {
+    let web_dir = env::var("SDB_WEB_DIR").map_or_else(
+        |_| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../web"),
+        PathBuf::from,
+    );
     Router::new()
         .route("/", get(service_info))
+        .route("/api/health", get(health))
+        .route_service("/control", ServeFile::new(web_dir.join("control.html")))
+        .route_service(
+            "/projector",
+            ServeFile::new(web_dir.join("projector.html")),
+        )
+        .nest_service("/static", ServeDir::new(web_dir.join("static")))
         .route("/api/v2/health", get(health))
         .route("/api/v2/runtime/bootstrap", get(bootstrap))
         .route("/api/v2/runtime/snapshot", get(snapshot))
@@ -298,6 +316,7 @@ async fn health(State(state): State<AppState>) -> Result<Json<Health>, ApiError>
         protocol_version: PROTOCOL_VERSION,
         schema_version,
         revision: runtime.snapshot().revision,
+        test_events: state.allow_test_events,
     }))
 }
 
@@ -640,6 +659,16 @@ async fn command(
     Json(envelope): Json<CommandEnvelope>,
 ) -> Result<Json<CommandResult>, ApiError> {
     validate_same_origin(&headers)?;
+    if matches!(
+        &envelope.command,
+        RuntimeCommand::IngestDart {
+            source: DartSource::ProjectorTest,
+            ..
+        }
+    ) && !state.allow_test_events
+    {
+        return Err(forbidden("projector test events are disabled").into());
+    }
     let command_id = envelope.command_id.clone();
     let result = {
         let mut runtime = state
@@ -765,7 +794,7 @@ fn companion_snapshot(state: &AppState) -> Result<CompanionFrame, ContractError>
         runtime_instance_id: runtime.instance_id().to_owned(),
         revision: runtime.snapshot().revision,
         kind: CompanionFrameKind::Snapshot,
-        payload: serde_json::to_value(runtime.snapshot())
+        payload: serde_json::to_value(runtime.public_snapshot())
             .map_err(|_| internal_error("companion snapshot serialization failed"))?,
     })
 }
@@ -1136,6 +1165,7 @@ mod tests {
         assert_eq!(value["protocol_version"], PROTOCOL_VERSION);
         assert_eq!(value["schema_version"], 6);
         assert_eq!(value["companion"], "disabled");
+        assert_eq!(value["test_events"], false);
 
         let bootstrap = test_app()
             .oneshot(
@@ -1158,6 +1188,29 @@ mod tests {
                 .await
                 .expect("response");
             assert_eq!(response.status(), StatusCode::OK, "{path}");
+        }
+    }
+
+    #[tokio::test]
+    async fn server_delivers_the_shared_control_and_projector_ui() {
+        for path in [
+            "/control",
+            "/projector",
+            "/static/runtime-client.js",
+            "/static/runtime-experience-client.js",
+        ] {
+            let response = test_app()
+                .oneshot(Request::get(path).body(Body::empty()).expect("request"))
+                .await
+                .expect("response");
+            assert_eq!(response.status(), StatusCode::OK, "{path}");
+            assert!(
+                !to_bytes(response.into_body(), usize::MAX)
+                    .await
+                    .expect("body")
+                    .is_empty(),
+                "{path} must not be empty"
+            );
         }
     }
 
@@ -2002,11 +2055,8 @@ mod tests {
         let state: Value =
             serde_json::from_slice(&to_bytes(state.into_body(), usize::MAX).await.expect("body"))
                 .expect("state");
-        assert_eq!(
-            state["payload"]["session"]["state"]["screen"],
-            "game_select"
-        );
-        assert!(state["payload"]["session"]["state"]["prepared_game"].is_null());
+        assert_eq!(state["payload"]["session"]["screen"], "game_select");
+        assert!(state["payload"]["session"]["prepared_game"].is_null());
     }
 
     #[tokio::test]
@@ -2153,6 +2203,31 @@ mod tests {
                 Request::post("/api/v2/runtime/commands")
                     .header(header::HOST, "dartboard.local:8000")
                     .header(header::ORIGIN, "https://attacker.example")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(envelope.to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    }
+
+    #[tokio::test]
+    async fn projector_test_darts_are_closed_unless_explicitly_enabled() {
+        let envelope = serde_json::json!({
+            "protocol_version":PROTOCOL_VERSION,
+            "command_id":"projector-test-disabled",
+            "runtime_instance_id":"test-runtime",
+            "expected_revision":0,
+            "command":{
+                "type":"ingest_dart",
+                "source":"projector_test",
+                "event":{"type":"miss","seq":1,"label":"MISS","score":0}
+            }
+        });
+        let response = test_app()
+            .oneshot(
+                Request::post("/api/v2/runtime/commands")
                     .header(header::CONTENT_TYPE, "application/json")
                     .body(Body::from(envelope.to_string()))
                     .expect("request"),

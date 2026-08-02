@@ -11,8 +11,9 @@ use sdb_companion::{
 use sdb_companion_transport::{
     SecretStore, TlsIdentity, certificate_sha256, load_identity, load_or_create_identity,
 };
-use sdb_contracts::{DartEvent, DartSource, Ring};
-use sdb_runtime::{Runtime, RuntimeAction, RuntimeGameState};
+use sdb_contracts::{CommandEnvelope, DartEvent, DartSource, Envelope, MessageKind, Ring};
+use sdb_game_core::registered_game_metadata;
+use sdb_runtime::{CommandResult, Runtime, RuntimeAction, RuntimeGameState, RuntimePublicSnapshot};
 use sdb_storage::SqliteRepository;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -2225,6 +2226,76 @@ fn runtime_query(state: State<'_, SharedNativeState>) -> Result<PublicState, Str
     runtime_bootstrap(state)
 }
 
+fn runtime_v2_envelope(state: &NativeState) -> Envelope<RuntimePublicSnapshot> {
+    Envelope::new(
+        state.runtime.instance_id(),
+        Uuid::new_v4().to_string(),
+        state.runtime.snapshot().revision,
+        MessageKind::State,
+        state.runtime.public_snapshot(),
+    )
+}
+
+#[tauri::command]
+fn runtime_v2_bootstrap(
+    state: State<'_, SharedNativeState>,
+) -> Result<Envelope<RuntimePublicSnapshot>, String> {
+    state
+        .lock()
+        .map(|state| runtime_v2_envelope(&state))
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn runtime_v2_snapshot(
+    state: State<'_, SharedNativeState>,
+) -> Result<Envelope<RuntimePublicSnapshot>, String> {
+    runtime_v2_bootstrap(state)
+}
+
+#[tauri::command]
+fn runtime_v2_query(
+    state: State<'_, SharedNativeState>,
+    path: String,
+) -> Result<serde_json::Value, String> {
+    if path == "/api/v2/modes" {
+        return serde_json::to_value(registered_game_metadata()).map_err(|error| error.to_string());
+    }
+    let state = state.lock().map_err(|error| error.to_string())?;
+    let repository = state.runtime.repository();
+    let value = match path.as_str() {
+        "/api/v2/players" => {
+            serde_json::to_value(repository.players().map_err(|error| error.to_string())?)
+        }
+        "/api/v2/statistics/players" => serde_json::to_value(
+            repository
+                .player_statistics()
+                .map_err(|error| error.to_string())?,
+        ),
+        _ => return Err("unsupported native runtime query".into()),
+    };
+    value.map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+fn runtime_v2_dispatch(
+    app: tauri::AppHandle,
+    state: State<'_, SharedNativeState>,
+    envelope: CommandEnvelope,
+) -> Result<CommandResult, String> {
+    let (result, public) = {
+        let mut state = state.lock().map_err(|error| error.to_string())?;
+        state.require_controller()?;
+        let result = state
+            .runtime
+            .dispatch_envelope(envelope)
+            .map_err(|error| error.message)?;
+        (result, state.public())
+    };
+    publish_public_state(&app, &public);
+    Ok(result)
+}
+
 #[tauri::command]
 fn companion_pairing_open(state: State<'_, SharedNativeState>) -> Result<PairingBootstrap, String> {
     let mut state = state.lock().map_err(|error| error.to_string())?;
@@ -2676,12 +2747,17 @@ fn increment_runtime(
 
 fn publish_public_state(app: &tauri::AppHandle, public: &PublicState) {
     publish_to_external_projector(public);
+    let mut runtime_message = None;
     if let Some(state) = app.try_state::<SharedNativeState>()
         && let Ok(state) = state.lock()
     {
         let _ = state.companion_states.send(public.clone());
+        runtime_message = Some(runtime_v2_envelope(&state));
     }
     let _ = app.emit("runtime-state", public);
+    if let Some(message) = runtime_message {
+        let _ = app.emit("runtime-v2-state", message);
+    }
 }
 
 fn now_ms() -> u64 {
@@ -2877,6 +2953,10 @@ pub fn run() {
             runtime_bootstrap,
             runtime_query,
             runtime_dispatch,
+            runtime_v2_bootstrap,
+            runtime_v2_snapshot,
+            runtime_v2_query,
+            runtime_v2_dispatch,
             companion_pairing_open,
             companion_devices,
             companion_revoke,

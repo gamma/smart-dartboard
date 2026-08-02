@@ -18,7 +18,7 @@ sdb-storage = { path = "../storage" }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
-tower-http = { version = "0.6", features = ["set-header"] }
+tower-http = { version = "0.6", features = ["fs", "set-header"] }
 uuid = { version = "1.18", features = ["v4"] }
 
 [dev-dependencies]

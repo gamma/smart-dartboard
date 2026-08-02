@@ -6,6 +6,9 @@
   "permissions": [
     "core:default",
     "allow-runtime-bootstrap",
-    "allow-runtime-query"
+    "allow-runtime-query",
+    "allow-runtime-v2-bootstrap",
+    "allow-runtime-v2-snapshot",
+    "allow-runtime-v2-query"
   ]
 }

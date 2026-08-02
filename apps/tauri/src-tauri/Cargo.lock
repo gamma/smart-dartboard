@@ -2992,6 +2992,7 @@ dependencies = [
  "sdb-companion",
  "sdb-companion-transport",
  "sdb-contracts",
+ "sdb-game-core",
  "sdb-runtime",
  "sdb-storage",
  "serde",

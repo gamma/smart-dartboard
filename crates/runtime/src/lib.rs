@@ -91,6 +91,14 @@ pub struct RuntimeSnapshot {
     pub session: SessionCore,
 }
 
+/// Read-only state safe to publish to controller and projector clients.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RuntimePublicSnapshot {
+    pub revision: u64,
+    pub game: Option<RuntimeGameState>,
+    pub session: SessionState,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "game_type", content = "game", rename_all = "snake_case")]
 pub enum RuntimeGame {
@@ -307,6 +315,15 @@ impl<R: Repository> Runtime<R> {
     #[must_use]
     pub const fn snapshot(&self) -> &RuntimeSnapshot {
         &self.snapshot
+    }
+
+    #[must_use]
+    pub fn public_snapshot(&self) -> RuntimePublicSnapshot {
+        RuntimePublicSnapshot {
+            revision: self.snapshot.revision,
+            game: self.snapshot.game.as_ref().map(RuntimeGame::state),
+            session: self.snapshot.session.state().clone(),
+        }
     }
 
     #[must_use]
@@ -1166,6 +1183,31 @@ mod tests {
         };
         assert_eq!(state.start_score, 301);
         assert_eq!(state.out_rule, OutRule::Double);
+    }
+
+    #[test]
+    fn public_snapshot_omits_the_internal_replay_timeline() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        runtime
+            .dispatch(
+                "runtime",
+                "start",
+                Some(0),
+                RuntimeAction::StartCountUp {
+                    players: vec![("ada".into(), "Ada".into())],
+                    rounds: 5,
+                },
+            )
+            .expect("start");
+
+        let public = serde_json::to_value(runtime.public_snapshot()).expect("public snapshot");
+        assert_eq!(public["revision"], 1);
+        assert_eq!(public["game"]["game_type"], "count_up");
+        assert_eq!(public["game"]["state"]["players"][0]["id"], "ada");
+        assert!(public["game"].get("history").is_none());
+        assert!(public["game"].get("actions").is_none());
+        assert!(public["game"].get("initial_state").is_none());
     }
 
     #[test]

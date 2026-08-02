@@ -15,9 +15,11 @@ RUN apt-get update \
 
 WORKDIR /app
 COPY --from=builder /source/target/release/sdb-server /usr/local/bin/sdb-server
+COPY --chown=dartboard:dartboard web /app/web
 
 ENV SDB_DATA_DIR=/data \
     SDB_ENABLE_BLE=0 \
+    SDB_WEB_DIR=/app/web \
     SDB_PORT=8000
 
 USER dartboard

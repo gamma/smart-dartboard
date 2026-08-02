@@ -42,7 +42,12 @@ Umgesetzt und lokal verifiziert:
 - vorzeichenbehaftete Arcade-Scores in Registry-State, Dart-Replay und
   SQLite-Historie. Dadurch bleiben Modusregeln mit echten Minuspunkten über
   Snapshot, Korrektur, Recovery und API unverändert erhalten,
-- Web-UI hinter `HostedRuntimeClient` und `TauriRuntimeClient`,
+- semantischer `HostedRuntimeClient` für REST/WebSocket sowie eingeschränkter
+  `TauriRuntimeClient` für native Commands und Events. Der Headless-Rust-Host
+  liefert die bestehende Control-/Projector-Produkt-UI aus; der Experience-
+  Adapter übersetzt deren Aktionen ohne modusspezifische Transportzweige in
+  Runtime-v2-Commands und fällt bei einem Python-Host sauber auf dessen API
+  zurück. Die nativen Tauri-Fenster verwenden vorerst noch die M0-Oberfläche,
 - macOS-Tauri-App mit Control- und Projector-Fenster,
 - iOS-/iPadOS-Tauri-App für `aarch64-apple-ios-sim`,
 - nativer Apple-DisplayHost mit eigener Projector-WKWebView auf `TVOut`,
@@ -54,6 +59,14 @@ Umgesetzt und lokal verifiziert:
 - Rust-Headless-Server mit expliziter API v2, SQLite-Recovery, idempotenten
   Command-Envelopes, Snapshot-WebSocket und nicht privilegiertem
   Vorschaucontainer. Details: [RUST_SERVER_V2.md](RUST_SERVER_V2.md).
+- derselbe UI-Kernfluss wurde mit WebKit gegen den echten Rust-Host geprüft:
+  Spieler `Ada` anlegen, Session starten, alle 24 Moduskarten laden, CountUp
+  beginnen, im Projector T20 auslösen und im Control synchron Score 60 sehen.
+  Testwürfe sind im Produktionsbetrieb verborgen und serverseitig gesperrt;
+  der Testhost muss sie ausdrücklich freischalten,
+- öffentliche Live-Snapshots enthalten ausschließlich den benötigten Spiel-
+  und Sessionzustand. Interne Initialzustände, Replay-Aktionen und Historien
+  bleiben im Runtime-/Storage-Layer,
 - deterministischer Session-Core mit gemeinsamer Python-/Rust-Fixture für
   Screenfluss, Starterrotation, Rematch, Abbruch, Draw sowie Einzel- und
   Koop-Wertung mit drei Punkten pro gewonnenem Spiel.
@@ -203,7 +216,14 @@ Noch nicht als produktionsreif nachgewiesen:
 - Heatmap, Modusstatistiken, Export und Trainingsempfehlungen im Rust-Pfad;
   alle 24 heutigen Produktmodi sind portiert. Das adaptive Boss Fight V2 bleibt
   eine getrennte, ausdrücklich zurückgestellte Produktänderung,
-- vollständige Docker-Parität zur Python-Anwendung,
+- persistierte, hostweit synchronisierte Kalibrierung, Sound-, Theme- und
+  Spracheinstellungen im neuen UI-Pfad; sie sind dort derzeit browserlokal,
+- vollständige Historien-/Replay-Adapterparität der Produkt-UI,
+- Einsatz der gemeinsamen Produkt-UI in den nativen Tauri-Fenstern. Die
+  Runtime-v2-Bridge ist kompiliert und berechtigt, Control und Projector zeigen
+  dort aber noch die bewusst kleine M0-Diagnoseoberfläche,
+- vollständige Docker-Parität zur Python-Anwendung; der Session-/Spielkernfluss
+  und die statischen Oberflächen sind bereits im Container belegt,
 - reale Linux-BlueZ-/Board-Abnahme des neuen Sidecars.
 
 ## Lokale Befehle
@@ -220,6 +240,12 @@ Companion-UI mit WebKit:
 
 ```bash
 npm --prefix apps/tauri run test:webkit
+```
+
+Gemeinsame Produkt-UI gegen Runtime v2 mit WebKit:
+
+```bash
+npm --prefix apps/tauri run test:rust-ui
 ```
 
 macOS-M0:
