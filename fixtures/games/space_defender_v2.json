@@ -1,0 +1,48 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 2,
+  "random_seed": 42,
+  "players": [
+    {"id":"ada","name":"Ada","avatar":"fox","color":"#ff00aa"},
+    {"id":"bob","name":"Bob","avatar":"comet","color":"#00ffaa"}
+  ],
+  "options": {"waves":4},
+  "steps": [
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":1,"field":4,"ring":"double","multiplier":2,"label":"D4","score":8}},
+      "expected":{"scores":[10,10],"ships":[{"id":"ship-2","type":"scout","target":"D13","hp":1,"max_hp":1,"points":10},{"id":"ship-3","type":"scout","target":"T6","hp":1,"max_hp":1,"points":10}],"wave":1,"cleanup":false,"next_ship_id":4,"last_effect":"space_destroy","effect_points":10,"effect_damage":2,"destroyed":1,"random_cursor":3,"current_player_index":0,"darts_in_turn":1,"turn_score":10,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"miss","seq":2,"label":"MISS","score":0}},
+      "expected":{"scores":[10,10],"ships":[{"id":"ship-2","type":"scout","target":"D13","hp":1,"max_hp":1,"points":10},{"id":"ship-3","type":"scout","target":"T6","hp":1,"max_hp":1,"points":10}],"wave":1,"cleanup":false,"next_ship_id":4,"last_effect":"","effect_points":0,"effect_damage":0,"destroyed":0,"random_cursor":3,"current_player_index":0,"darts_in_turn":2,"turn_score":10,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"miss","seq":3,"label":"MISS","score":0}},
+      "expected":{"scores":[10,10],"ships":[{"id":"ship-2","type":"scout","target":"D13","hp":1,"max_hp":1,"points":10},{"id":"ship-3","type":"scout","target":"T6","hp":1,"max_hp":1,"points":10}],"wave":1,"cleanup":false,"next_ship_id":4,"last_effect":"","effect_points":0,"effect_damage":0,"destroyed":0,"random_cursor":3,"current_player_index":0,"darts_in_turn":3,"turn_score":10,"round_number":1,"status":"hold","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"continue"},
+      "expected":{"scores":[10,10],"ships":[{"id":"ship-2","type":"scout","target":"D13","hp":1,"max_hp":1,"points":10},{"id":"ship-3","type":"scout","target":"T6","hp":1,"max_hp":1,"points":10}],"wave":1,"cleanup":false,"next_ship_id":4,"last_effect":"","effect_points":0,"effect_damage":0,"destroyed":0,"random_cursor":3,"current_player_index":1,"darts_in_turn":0,"turn_score":0,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":4,"field":25,"ring":"double_bull","multiplier":2,"label":"DBull","score":50}},
+      "expected":{"scores":[30,30],"ships":[],"wave":1,"cleanup":false,"next_ship_id":4,"last_effect":"space_destroy","effect_points":20,"effect_damage":2,"destroyed":2,"random_cursor":3,"current_player_index":1,"darts_in_turn":1,"turn_score":20,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"miss","seq":5,"label":"MISS","score":0}},
+      "expected":{"scores":[30,30],"ships":[],"wave":1,"cleanup":false,"next_ship_id":4,"last_effect":"","effect_points":0,"effect_damage":0,"destroyed":0,"random_cursor":3,"current_player_index":1,"darts_in_turn":2,"turn_score":20,"round_number":1,"status":"running","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"miss","seq":6,"label":"MISS","score":0}},
+      "expected":{"scores":[30,30],"ships":[{"id":"ship-4","type":"fighter","target":"T9","hp":2,"max_hp":2,"points":25},{"id":"ship-5","type":"fighter","target":"S11","hp":2,"max_hp":2,"points":25},{"id":"ship-6","type":"scout","target":"S17","hp":1,"max_hp":1,"points":10}],"wave":2,"cleanup":false,"next_ship_id":7,"last_effect":"space_wave","effect_points":0,"effect_damage":0,"destroyed":0,"random_cursor":6,"current_player_index":1,"darts_in_turn":3,"turn_score":20,"round_number":1,"status":"hold","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"correct","action_id":5,"event":{"type":"miss","seq":99,"label":"MISS","score":0}},
+      "expected":{"scores":[10,10],"ships":[{"id":"ship-2","type":"scout","target":"D13","hp":1,"max_hp":1,"points":10},{"id":"ship-3","type":"scout","target":"T6","hp":1,"max_hp":1,"points":10},{"id":"ship-4","type":"fighter","target":"D7","hp":2,"max_hp":2,"points":25},{"id":"ship-5","type":"fighter","target":"T8","hp":2,"max_hp":2,"points":25},{"id":"ship-6","type":"scout","target":"S4","hp":1,"max_hp":1,"points":10}],"wave":2,"cleanup":false,"next_ship_id":7,"last_effect":"space_wave","effect_points":0,"effect_damage":0,"destroyed":0,"random_cursor":6,"current_player_index":1,"darts_in_turn":3,"turn_score":0,"round_number":1,"status":"hold","winner_ids":[],"result_type":""}
+    },
+    {
+      "command":{"type":"continue"},
+      "expected":{"scores":[10,10],"ships":[{"id":"ship-2","type":"scout","target":"D13","hp":1,"max_hp":1,"points":10},{"id":"ship-3","type":"scout","target":"T6","hp":1,"max_hp":1,"points":10},{"id":"ship-4","type":"fighter","target":"D7","hp":2,"max_hp":2,"points":25},{"id":"ship-5","type":"fighter","target":"T8","hp":2,"max_hp":2,"points":25},{"id":"ship-6","type":"scout","target":"S4","hp":1,"max_hp":1,"points":10}],"wave":2,"cleanup":false,"next_ship_id":7,"last_effect":"space_wave","effect_points":0,"effect_damage":0,"destroyed":0,"random_cursor":6,"current_player_index":0,"darts_in_turn":0,"turn_score":0,"round_number":2,"status":"running","winner_ids":[],"result_type":""}
+    }
+  ]
+}

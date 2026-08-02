@@ -354,6 +354,47 @@ class CartoonModeTests(unittest.TestCase):
             set(engine.state.winner_ids),
         )
 
+    def test_space_defender_uses_seeded_targets_and_shared_team_score(self):
+        players = [
+            {"id": "ada", "name": "Ada"},
+            {"id": "bob", "name": "Bob"},
+        ]
+        first = GameEngine()
+        second = GameEngine()
+        first.reset("space_defender", players, random_seed=42)
+        second.reset("space_defender", players, random_seed=42)
+        self.assertEqual(
+            first.state.mode_state["ships"], second.state.mode_state["ships"]
+        )
+        ship = first.state.mode_state["ships"][0]
+        target = ship["target"]
+        first.handle_event(
+            hit(
+                int(target["field"]),
+                str(target["ring"]),
+                int(target["multiplier"]),
+            )
+        )
+        self.assertEqual([10, 10], [player.score for player in first.state.players])
+        self.assertEqual("space_destroy", first.state.mode_state["last_effect"])
+        self.assertEqual(1, first.state.mode_state["destroyed"])
+
+    def test_space_defender_old_state_can_spawn_the_next_wave(self):
+        engine = GameEngine()
+        engine.reset("space_defender", ["Ada", "Bob"], random_seed=42)
+        for key in (
+            "next_ship_id",
+            "last_effect",
+            "effect_points",
+            "effect_damage",
+            "destroyed",
+        ):
+            engine.state.mode_state.pop(key)
+        engine.next_player()
+        engine.next_player()
+        self.assertEqual(2, engine.state.mode_state["wave"])
+        self.assertEqual(7, engine.state.mode_state["next_ship_id"])
+
     def test_space_defender_skipped_team_rounds_still_advance_and_finish(self):
         engine = GameEngine()
         engine.reset("space_defender", ["Ada", "Bob"], options={"waves": 4})

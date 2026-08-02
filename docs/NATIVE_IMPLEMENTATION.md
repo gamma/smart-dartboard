@@ -20,12 +20,13 @@ Umgesetzt und lokal verifiziert:
   Projector-Overlay. `GET /api/v2/modes` liefert derzeit CountUp, X01, Cricket,
   8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board, Target
   Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round, Mini
-  Golf, Simon Says, Treasure Hunt, Block Drop, Dragon Eggs und Cookie Monster.
+  Golf, Simon Says, Treasure Hunt, Block Drop, Dragon Eggs, Cookie Monster und
+  Space Defender.
   Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board,
   Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round,
-  Mini Golf, Simon Says, Treasure Hunt, Block Drop, Dragon Eggs sowie Cookie
-  Monster laufen über denselben generischen Registry-Pfad und sind durch
-  gemeinsame Python-/Rust-Golden-Fixtures belegt;
+  Mini Golf, Simon Says, Treasure Hunt, Block Drop, Dragon Eggs, Cookie Monster
+  sowie Space Defender laufen über denselben generischen Registry-Pfad
+  und sind durch gemeinsame Python-/Rust-Golden-Fixtures belegt;
   Cricket zusätzlich durch den vollständigen SQLite-Recovery-Pfad,
 - Avatar und frei gewählte Spielerfarbe werden aus der Session in native
   Registry-Spiele übernommen und bleiben im serialisierten Spielzustand
@@ -74,11 +75,9 @@ Umgesetzt und lokal verifiziert:
   CountUp, X01 und alle Registry-Modi, derzeit Cricket, 8-Ball, Avoid the Bomb,
   Color Clash, Heart Chase, King of the Board, Target Rush, Ghost Chase, Risk
   It, Robin Hood, Candy Cannon, Lightning Round, Mini Golf, Simon Says,
-  Treasure Hunt, Block Drop, Dragon Eggs und Cookie Monster. Der
-  gemeinsame State
-  liefert die
-  editierbaren
-  Darts der aktuellen und vorherigen Aufnahme. Replay,
+  Treasure Hunt, Block Drop, Dragon Eggs, Cookie Monster und Space Defender. Der
+  gemeinsame State liefert die editierbaren Darts der aktuellen und vorherigen
+  Aufnahme. Replay,
   Sessionpunkte, Gewinner, kanonische `throws` und append-only
   Korrekturevents werden atomar synchronisiert. Bereits mit den ersten
   CountUp-/Registry-Snapshotformaten gespeicherte Spiele bleiben lesbar und

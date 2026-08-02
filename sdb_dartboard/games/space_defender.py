@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
-from uuid import uuid4
 
-from .arcade import choose_targets, overlay_item, same_target, zone_id
+from .arcade import choose_targets_for_state, overlay_item, same_target, zone_id
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 SHIP_STATS = {
@@ -45,7 +44,16 @@ class SpaceDefenderMode:
         player.marks = {}
 
     def initialize_state(self, state: Any, options: Dict[str, Any]) -> None:
-        state.mode_state = {"ships": [], "wave": 1, "cleanup": False}
+        state.mode_state = {
+            "ships": [],
+            "wave": 1,
+            "cleanup": False,
+            "next_ship_id": 1,
+            "last_effect": "",
+            "effect_points": 0,
+            "effect_damage": 0,
+            "destroyed": 0,
+        }
         self._spawn_wave(state, 1)
 
     def _wave_types(self, state: Any, wave: int) -> List[str]:
@@ -62,11 +70,19 @@ class SpaceDefenderMode:
     def _spawn_wave(self, state: Any, wave: int) -> None:
         existing = [zone_id(ship["target"]) for ship in state.mode_state["ships"]]
         types = self._wave_types(state, wave)
-        targets = choose_targets(len(types), "normal", exclude=existing)
+        targets = choose_targets_for_state(
+            state, len(types), "normal", exclude=existing
+        )
         for ship_type, target in zip(types, targets):
             stats = SHIP_STATS[ship_type]
+            ship_id = int(
+                state.mode_state.get(
+                    "next_ship_id", len(state.mode_state["ships"]) + 1
+                )
+            )
+            state.mode_state["next_ship_id"] = ship_id + 1
             state.mode_state["ships"].append({
-                "id": str(uuid4()),
+                "id": f"ship-{ship_id}",
                 "type": ship_type,
                 "target": target,
                 "hp": stats["hp"],
@@ -76,12 +92,13 @@ class SpaceDefenderMode:
         state.mode_state["wave"] = wave
         state.message = f"Welle {wave} ist gelandet!"
 
-    def _damage_ship(self, player: Any, ship: Dict[str, Any], damage: int) -> int:
+    def _damage_ship(self, state: Any, ship: Dict[str, Any], damage: int) -> int:
         ship["hp"] = max(0, int(ship["hp"]) - damage)
         if ship["hp"] > 0:
             return 0
         points = int(ship["points"])
-        player.score += points
+        for teammate in state.players:
+            teammate.score += points
         return points
 
     def _team_result(
@@ -91,6 +108,10 @@ class SpaceDefenderMode:
         message: str,
         points: int = 0,
     ) -> ThrowOutcome:
+        state.mode_state.update({
+            "last_effect": "space_win" if won else "space_invasion",
+            "effect_points": points,
+        })
         winner_ids = [player.id for player in state.players] if won else []
         return ThrowOutcome(
             turn_value=points,
@@ -127,6 +148,12 @@ class SpaceDefenderMode:
             return None
 
         self._spawn_wave(state, wave + 1)
+        state.mode_state.update({
+            "last_effect": "space_wave",
+            "effect_points": 0,
+            "effect_damage": 0,
+            "destroyed": 0,
+        })
         if len(state.mode_state["ships"]) >= 10:
             return self._team_result(
                 state,
@@ -145,24 +172,54 @@ class SpaceDefenderMode:
         state.message = outcome.message
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        del player
         ships = state.mode_state.get("ships", [])
+        state.mode_state.update({
+            "last_effect": "",
+            "effect_points": 0,
+            "effect_damage": 0,
+            "destroyed": 0,
+        })
         destroyed_points = 0
+        damage = 0
+        damaged = False
+        destroyed = 0
         if event.get("type") == "hit" and int(event.get("field", 0)) == 25:
             damage = 2 if int(event.get("multiplier", 1)) == 2 else 1
             for ship in ships:
-                destroyed_points += self._damage_ship(player, ship, damage)
+                was_alive = int(ship["hp"]) > 0
+                points = self._damage_ship(state, ship, damage)
+                destroyed_points += points
+                destroyed += int(was_alive and int(ship["hp"]) == 0)
+            damaged = bool(ships)
             message = f"FLÄCHENLASER! {damage} Schaden an allen"
         elif event.get("type") == "hit":
             ship = next((item for item in ships if same_target(event, item["target"])), None)
             if ship:
                 damage = int(event.get("multiplier", 1))
-                destroyed_points = self._damage_ship(player, ship, damage)
+                destroyed_points = self._damage_ship(state, ship, damage)
+                destroyed = int(int(ship["hp"]) == 0)
+                damaged = True
                 message = f"{ship['type'].upper()} getroffen · {damage} Schaden"
             else:
                 message = "Laser geht vorbei"
         else:
             message = "Laser geht vorbei"
         state.mode_state["ships"] = [ship for ship in ships if int(ship["hp"]) > 0]
+        state.mode_state.update({
+            "last_effect": (
+                "space_destroy"
+                if destroyed
+                else "space_laser"
+                if damaged and int(event.get("field", 0)) == 25
+                else "space_hit"
+                if damaged
+                else ""
+            ),
+            "effect_points": destroyed_points,
+            "effect_damage": damage,
+            "destroyed": destroyed,
+        })
 
         end_of_team_round = (
             state.darts_in_turn == 2

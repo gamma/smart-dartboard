@@ -72,6 +72,9 @@ DRAGON_EGGS_FIXTURE = (
 COOKIE_MONSTER_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "cookie_monster_v2.json"
 )
+SPACE_DEFENDER_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "space_defender_v2.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -937,6 +940,61 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
             }
             actual["layout"].sort(key=lambda item: item[0])
             step["expected"]["layout"].sort(key=lambda item: item[0])
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_space_defender_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(SPACE_DEFENDER_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(2, fixture["ruleset_version"])
+        engine = GameEngine()
+        engine.reset(
+            "space_defender",
+            fixture["players"],
+            options=fixture["options"],
+            random_seed=fixture["random_seed"],
+        )
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(
+                    int(command["action_id"]), dict(command["event"])
+                )
+            else:
+                self.fail(f"Unsupported fixture command: {command['type']}")
+            state = engine.state
+            mode = state.mode_state
+            actual = {
+                "scores": [player.score for player in state.players],
+                "ships": [
+                    {
+                        "id": ship["id"],
+                        "type": ship["type"],
+                        "target": ship["target"]["label"],
+                        "hp": ship["hp"],
+                        "max_hp": ship["max_hp"],
+                        "points": ship["points"],
+                    }
+                    for ship in mode["ships"]
+                ],
+                "wave": mode["wave"],
+                "cleanup": mode["cleanup"],
+                "next_ship_id": mode["next_ship_id"],
+                "last_effect": mode["last_effect"],
+                "effect_points": mode["effect_points"],
+                "effect_damage": mode["effect_damage"],
+                "destroyed": mode["destroyed"],
+                "random_cursor": state.random_cursor,
+                "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn,
+                "turn_score": state.turn_score,
+                "round_number": state.round_number,
+                "status": state.status,
+                "winner_ids": state.winner_ids,
+                "result_type": state.result_type,
+            }
             self.assertEqual(actual, step["expected"])
 
     def test_python_session_flow_matches_shared_rust_fixture(self) -> None:

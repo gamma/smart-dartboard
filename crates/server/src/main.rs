@@ -1177,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(20));
+        assert_eq!(modes.as_array().map(Vec::len), Some(21));
         assert!(
             modes
                 .as_array()
@@ -1262,6 +1262,7 @@ mod tests {
         assert_block_drop_metadata(&modes);
         assert_cookie_monster_metadata(&modes);
         assert_dragon_eggs_metadata(&modes);
+        assert_space_defender_metadata(&modes);
     }
 
     fn assert_block_drop_metadata(modes: &Value) {
@@ -1313,6 +1314,22 @@ mod tests {
                     && mode["instructions"]
                         .as_array()
                         .is_some_and(|steps| steps.len() == 4)
+            })
+        }));
+    }
+
+    fn assert_space_defender_metadata(modes: &Value) {
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "space_defender"
+                    && mode["ruleset_version"] == 2
+                    && mode["artwork"] == "/static/assets/modes/space_defender.webp"
+                    && mode["options"][0]["default"] == 4
+                    && mode["min_players"] == 1
+                    && mode["max_players"] == 8
+                    && mode["instructions"]
+                        .as_array()
+                        .is_some_and(|steps| steps.len() == 3)
             })
         }));
     }

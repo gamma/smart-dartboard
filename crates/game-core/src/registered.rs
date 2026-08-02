@@ -20,6 +20,7 @@ mod mini_golf;
 mod risk_it;
 mod robin_hood;
 mod simon_says;
+mod space_defender;
 mod target_rush;
 mod treasure_hunt;
 
@@ -38,6 +39,7 @@ use mini_golf::MINI_GOLF_MODE;
 use risk_it::RISK_IT_MODE;
 use robin_hood::ROBIN_HOOD_MODE;
 use simon_says::SIMON_SAYS_MODE;
+use space_defender::SPACE_DEFENDER_MODE;
 use target_rush::TARGET_RUSH_MODE;
 use treasure_hunt::TREASURE_HUNT_MODE;
 
@@ -1214,7 +1216,7 @@ impl GameMode for CricketMode {
 }
 
 static CRICKET_MODE: CricketMode = CricketMode;
-static MODES: [&'static dyn GameMode; 18] = [
+static MODES: [&'static dyn GameMode; 19] = [
     &AVOID_BOMB_MODE,
     &BLOCK_DROP_MODE,
     &CRICKET_MODE,
@@ -1231,6 +1233,7 @@ static MODES: [&'static dyn GameMode; 18] = [
     &ROBIN_HOOD_MODE,
     &RISK_IT_MODE,
     &SIMON_SAYS_MODE,
+    &SPACE_DEFENDER_MODE,
     &TARGET_RUSH_MODE,
     &TREASURE_HUNT_MODE,
 ];
