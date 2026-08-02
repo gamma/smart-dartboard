@@ -402,6 +402,26 @@ jobs:
           assert duplicate['disposition'] == 'duplicate', duplicate
           revision = result['result']['revision']
           assert revision == 6, result
+          armed = board_post('/api/v2/board/packets', {
+              'connection_id': 'ci-link',
+              'raw_hex': '0200000000000000ffff',
+          })
+          assert armed['disposition'] == 'applied', armed
+          assert armed['result']['revision'] == 7, armed
+          assert armed['result']['session']['screen'] == 'game_result', armed
+          assert armed['result']['session']['rematch_armed_until_ms'], armed
+          released = board_post('/api/v2/board/packets', {
+              'connection_id': 'ci-link',
+              'raw_hex': '0300000000000000eeee',
+          })
+          assert released['disposition'] == 'button', released
+          rematch = board_post('/api/v2/board/packets', {
+              'connection_id': 'ci-link',
+              'raw_hex': '0400000000000000ffff',
+          })
+          assert rematch['disposition'] == 'applied', rematch
+          assert rematch['result']['revision'] == 8, rematch
+          assert rematch['result']['session']['screen'] == 'countdown', rematch
           open('/tmp/rust-instance-before', 'w').write(bootstrap['runtime_instance_id'])
           PY
           docker restart "$container_name" >/dev/null
@@ -417,7 +437,7 @@ jobs:
           import urllib.request
           recovered = json.load(open('/tmp/rust-recovered.json'))
           previous_instance = open('/tmp/rust-instance-before').read()
-          assert recovered['revision'] == 6, recovered
+          assert recovered['revision'] == 8, recovered
           assert recovered['payload']['game']['game_type'] == 'x01', recovered
           assert recovered['payload']['settings']['art_theme'] == 'neon', recovered
           assert recovered['runtime_instance_id'] != previous_instance, recovered

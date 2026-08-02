@@ -721,6 +721,13 @@ Connect, Subscribe und Reconnect automatisch. Die normale UI zeigt nur:
 Rohe Fehler bleiben in Diagnose und Logs. Ein laufendes Spiel nimmt keine
 weiteren Würfe an, solange die Verbindung unklar ist.
 
+Der physische Menü-/Spielerwechselknopf ist wie ein Wurf ein kanonisches,
+dedupliziertes Board-Ereignis. Er bestätigt eine abgeschlossene Aufnahme,
+beendet einen laufenden Teilzug oder aktiviert auf dem Ergebnisbild mit zwei
+Drücken innerhalb von fünf Sekunden eine Revanche. Der erste Druck und seine
+Frist müssen im autoritativen Session-Snapshot sichtbar sein; eine nur lokal in
+einer einzelnen WebView geführte Bestätigung ist unzulässig.
+
 Verbindliche Qualitätsziele für die erste Hardwarequalifizierung:
 
 - null verlorene oder doppelte Treffer in 1.000 realen Testwürfen,

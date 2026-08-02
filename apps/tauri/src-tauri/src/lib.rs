@@ -509,10 +509,31 @@ impl NativeState {
     #[cfg(any(target_os = "ios", target_os = "macos", test))]
     fn ingest_board_packet(&mut self, connection_id: &str, raw: &[u8]) -> Result<bool, String> {
         self.require_controller()?;
-        let BoardIngressOutcome::Dart { event, command_id } =
-            self.board_ingress.ingest(connection_id, raw)
-        else {
-            return Ok(false);
+        let (command_id, action) = match self.board_ingress.ingest(connection_id, raw) {
+            BoardIngressOutcome::Dart { event, command_id } => (
+                command_id,
+                RuntimeAction::Dart {
+                    event,
+                    source: DartSource::Board,
+                },
+            ),
+            BoardIngressOutcome::Button {
+                button,
+                action,
+                command_id,
+            } if button == "menu" && action == "press" => {
+                if self.runtime.snapshot().game.is_none() {
+                    return Ok(false);
+                }
+                (
+                    command_id,
+                    RuntimeAction::BoardButton {
+                        now_ms: now_ms(),
+                        game_id: Uuid::new_v4().to_string(),
+                    },
+                )
+            }
+            _ => return Ok(false),
         };
         let runtime_instance_id = self.runtime.instance_id().to_owned();
         self.runtime
@@ -520,10 +541,7 @@ impl NativeState {
                 &runtime_instance_id,
                 &command_id,
                 Some(self.runtime.snapshot().revision),
-                RuntimeAction::Dart {
-                    event,
-                    source: DartSource::Board,
-                },
+                action,
             )
             .map_err(|error| error.to_string())?;
         Ok(true)
@@ -4951,9 +4969,19 @@ mod tests {
                 .ingest_board_packet("test-link", &packet)
                 .expect("duplicate")
         );
+        let button = [2, 0, 0, 0, 0, 0, 0, 0, 0xff, 0xff];
+        assert!(
+            state
+                .ingest_board_packet("test-link", &button)
+                .expect("board button")
+        );
         let public = state.public();
-        assert_eq!(public.revision, 2);
+        assert_eq!(public.revision, 3);
         assert_eq!(public.counter, 40);
+        let RuntimeGameState::CountUp(game) = public.game.expect("countup") else {
+            panic!("countup expected");
+        };
+        assert_eq!(game.round_number, 2);
     }
 
     #[test]

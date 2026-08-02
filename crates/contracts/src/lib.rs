@@ -369,6 +369,10 @@ pub enum RuntimeCommand {
     StartRematch {
         game_id: String,
     },
+    BoardButton {
+        pressed_at_ms: u64,
+        game_id: String,
+    },
     EndSession,
     CloseSession,
     UpdateCalibration {

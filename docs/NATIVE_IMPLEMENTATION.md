@@ -163,6 +163,14 @@ Umgesetzt und lokal verifiziert:
   bereits geworfene Darts, führt modusspezifische Skip-Regeln aus und kann die
   letzte Aufnahme eines rundenbasierten Spiels regulär werten. SQLite führt ihn
   als eigenes digitales `next_player`-Ereignis.
+- der physische Menü-/Spielerwechselknopf läuft ebenfalls vom gemeinsamen
+  FFF1-Decoder durch die atomare Runtime. Bei einer gehaltenen Aufnahme
+  bestätigt er `ContinueTurn`, während eines laufenden Teilzugs führt er
+  `NextPlayer` aus. Auf dem Ergebnisbild aktiviert der erste Druck für fünf
+  Sekunden die sichtbare Revanche und der zweite startet denselben Modus mit
+  rotierter Reihenfolge. Knopfpakete besitzen dieselbe verbindungsgebundene
+  Deduplizierung und persistierte Command-ID wie Würfe; Linux/Bleak und
+  Apple/CoreBluetooth verwenden denselben Pfad.
 - API-v2-Details für Sessions und Spiele sowie ein vollständiges Replay-Envelope
   mit Initialzustand, Finalzustand, Frames, unwirksam gemachten Originalevents
   und Korrekturverkettung. Unbekannte IDs liefern stabil `not_found`/HTTP 404.

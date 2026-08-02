@@ -47,6 +47,10 @@ pub enum RuntimeAction {
     StartRematch {
         game_id: String,
     },
+    BoardButton {
+        now_ms: u64,
+        game_id: String,
+    },
     AbortGame,
     EndSession,
     CloseSession,
@@ -218,6 +222,14 @@ impl RuntimeGame {
             Self::CountUp(game) => game.state().status == GameStatus::Finished,
             Self::X01(game) => game.state().status == GameStatus::Finished,
             Self::Registered(game) => game.state().status == GameStatus::Finished,
+        }
+    }
+
+    fn is_hold(&self) -> bool {
+        match self {
+            Self::CountUp(game) => game.state().status == GameStatus::Hold,
+            Self::X01(game) => game.state().status == GameStatus::Hold,
+            Self::Registered(game) => game.state().status == GameStatus::Hold,
         }
     }
 
@@ -670,6 +682,13 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
         }),
         RuntimeCommand::NextGame => Ok(RuntimeAction::NextGame),
         RuntimeCommand::StartRematch { game_id } => Ok(RuntimeAction::StartRematch { game_id }),
+        RuntimeCommand::BoardButton {
+            pressed_at_ms,
+            game_id,
+        } => Ok(RuntimeAction::BoardButton {
+            now_ms: pressed_at_ms,
+            game_id,
+        }),
         RuntimeCommand::EndSession => Ok(RuntimeAction::EndSession),
         RuntimeCommand::CloseSession => Ok(RuntimeAction::CloseSession),
         RuntimeCommand::UpdateCalibration { calibration } => {
@@ -897,6 +916,17 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
         }
         RuntimeAction::StartRematch { game_id } => {
             start_prepared_game(snapshot, game_id, true)?;
+        }
+        RuntimeAction::BoardButton { now_ms, game_id } => {
+            if snapshot.session.state().screen == Screen::GameResult {
+                if snapshot.session.press_rematch_button(now_ms)? {
+                    start_prepared_game(snapshot, game_id, true)?;
+                }
+            } else if snapshot.game.as_ref().is_some_and(RuntimeGame::is_hold) {
+                apply_player_boundary(snapshot, false)?;
+            } else {
+                apply_player_boundary(snapshot, true)?;
+            }
         }
         RuntimeAction::AbortGame => {
             if snapshot.session.state().session_id.is_some() {
@@ -1427,6 +1457,158 @@ mod tests {
                 .iter()
                 .all(|player| player.team_id.as_deref() == Some("coop"))
         );
+    }
+
+    #[test]
+    fn board_button_arms_then_starts_a_rotated_rematch() {
+        let mut runtime =
+            Runtime::restore("runtime", MemoryRepository::default()).expect("runtime");
+        for (command_id, action) in [
+            (
+                "session",
+                RuntimeAction::StartSession {
+                    session_id: "session".into(),
+                    players: session_players(),
+                    teams: Vec::new(),
+                },
+            ),
+            (
+                "prepare",
+                RuntimeAction::PrepareGame {
+                    game_type: "x01".into(),
+                    options: serde_json::json!({"start_score": 40, "out_rule": "double"}),
+                },
+            ),
+            (
+                "start",
+                RuntimeAction::StartPreparedGame {
+                    game_id: "game-1".into(),
+                },
+            ),
+            ("playing", RuntimeAction::MarkGamePlaying),
+            (
+                "checkout",
+                RuntimeAction::Dart {
+                    event: DartEvent::Hit {
+                        seq: 1,
+                        field: 20,
+                        ring: Ring::Double,
+                        multiplier: 2,
+                        label: "D20".into(),
+                        score: 40,
+                    },
+                    source: DartSource::Board,
+                },
+            ),
+        ] {
+            runtime
+                .dispatch("runtime", command_id, None, action)
+                .expect(command_id);
+        }
+        assert_eq!(
+            runtime.snapshot().session.state().screen,
+            Screen::GameResult
+        );
+
+        runtime
+            .dispatch(
+                "runtime",
+                "button-1",
+                None,
+                RuntimeAction::BoardButton {
+                    now_ms: 1_000,
+                    game_id: "unused".into(),
+                },
+            )
+            .expect("arm rematch");
+        assert_eq!(
+            runtime.snapshot().session.state().rematch_armed_until_ms,
+            Some(6_000)
+        );
+        assert!(
+            runtime
+                .snapshot()
+                .game
+                .as_ref()
+                .is_some_and(RuntimeGame::is_finished)
+        );
+
+        runtime
+            .dispatch(
+                "runtime",
+                "button-2",
+                None,
+                RuntimeAction::BoardButton {
+                    now_ms: 4_000,
+                    game_id: "game-2".into(),
+                },
+            )
+            .expect("confirm rematch");
+        let session = runtime.snapshot().session.state();
+        assert_eq!(session.screen, Screen::Countdown);
+        assert_eq!(session.game_id.as_deref(), Some("game-2"));
+        assert_eq!(session.game_player_ids, ["bob", "ada"]);
+        assert!(session.rematch_armed_until_ms.is_none());
+        let RuntimeGame::X01(game) = runtime.snapshot().game.as_ref().expect("rematch game") else {
+            panic!("X01 rematch expected");
+        };
+        assert_eq!(game.state().players[0].id, "bob");
+        assert!(game.state().players.iter().all(|player| player.score == 40));
+    }
+
+    #[test]
+    fn board_button_confirms_a_completed_visit() {
+        let mut runtime =
+            Runtime::restore("runtime", MemoryRepository::default()).expect("runtime");
+        runtime
+            .dispatch(
+                "runtime",
+                "start",
+                None,
+                RuntimeAction::StartCountUp {
+                    players: players(),
+                    rounds: 2,
+                },
+            )
+            .expect("start");
+        for seq in 1..=3 {
+            runtime
+                .dispatch(
+                    "runtime",
+                    &format!("dart-{seq}"),
+                    None,
+                    RuntimeAction::Dart {
+                        event: DartEvent::Miss {
+                            seq,
+                            label: "MISS".into(),
+                            score: 0,
+                        },
+                        source: DartSource::Board,
+                    },
+                )
+                .expect("dart");
+        }
+        let RuntimeGame::CountUp(game) = runtime.snapshot().game.as_ref().expect("game") else {
+            panic!("countup expected");
+        };
+        assert_eq!(game.state().status, GameStatus::Hold);
+
+        runtime
+            .dispatch(
+                "runtime",
+                "button",
+                None,
+                RuntimeAction::BoardButton {
+                    now_ms: 1_000,
+                    game_id: "unused".into(),
+                },
+            )
+            .expect("continue visit");
+        let RuntimeGame::CountUp(game) = runtime.snapshot().game.as_ref().expect("game") else {
+            panic!("countup expected");
+        };
+        assert_eq!(game.state().status, GameStatus::Running);
+        assert_eq!(game.state().round_number, 2);
     }
 
     #[test]

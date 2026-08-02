@@ -258,6 +258,12 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
   wiedergeben; ein Skip bewahrt bereits geworfene Darts und führt
   modusspezifische Abschlussregeln aus. Ein Undo des Siegtreffers öffnet zugleich
   das Spiel wieder und nimmt die Sessionwertung atomar zurück,
+- den physischen Menü-/Spielerwechselknopf über denselben authentisierten,
+  deduplizierten Board-Ingress anwenden: gehaltene Aufnahme bestätigen,
+  laufenden Teilzug beenden oder auf dem Ergebnisbild per Doppeldruck innerhalb
+  von fünf Sekunden eine Revanche mit rotierter Spielerreihenfolge starten. Der
+  Bestätigungszustand gehört zum öffentlichen, rückwärtskompatiblen
+  Session-Snapshot und ist damit auf Control und Projector synchron,
 - CountUp-, X01- und Registry-Würfe über stabile Action-IDs korrigieren oder
   löschen. Der Core bewahrt die ursprüngliche Sequenznummer, spielt alle
   späteren Aktionen neu ab und veröffentlicht die letzten zwei editierbaren

@@ -97,6 +97,7 @@ pub enum BoardIngressOutcome {
     Button {
         button: String,
         action: String,
+        command_id: String,
     },
     Duplicate,
     Rejected {
@@ -174,9 +175,15 @@ impl BoardIngress {
                 },
                 command_id: format!("ble:{connection_id}:{}:{}", base.seq, base.raw),
             },
-            DecodedPacket::Button { button, action, .. } => {
-                BoardIngressOutcome::Button { button, action }
-            }
+            DecodedPacket::Button {
+                button,
+                action,
+                base,
+            } => BoardIngressOutcome::Button {
+                button,
+                action,
+                command_id: format!("ble:{connection_id}:{}:{}", base.seq, base.raw),
+            },
             _ => BoardIngressOutcome::Rejected {
                 reason: BoardRejectReason::UnknownPacket,
             },
@@ -264,9 +271,11 @@ mod tests {
     #[test]
     fn button_release_is_not_misreported_as_a_miss() {
         let mut ingress = BoardIngress::new();
+        let press = ingress.ingest("link-a", &packet("0100000000000000ffff"));
         assert!(matches!(
-            ingress.ingest("link-a", &packet("0100000000000000ffff")),
-            BoardIngressOutcome::Button { action, .. } if action == "press"
+            press,
+            BoardIngressOutcome::Button { action, command_id, .. }
+                if action == "press" && command_id == "ble:link-a:1:0100000000000000ffff"
         ));
         assert!(matches!(
             ingress.ingest("link-a", &packet("0200000000000000eeee")),

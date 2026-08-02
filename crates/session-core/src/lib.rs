@@ -9,6 +9,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
 
+pub const REMATCH_CONFIRM_MILLISECONDS: u64 = 5_000;
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Screen {
@@ -71,6 +73,8 @@ pub struct SessionState {
     pub selected_starter_id: Option<String>,
     pub starter_selection: StarterSelection,
     pub standings: Vec<SessionStanding>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rematch_armed_until_ms: Option<u64>,
 }
 
 impl Default for SessionState {
@@ -92,6 +96,7 @@ impl Default for SessionState {
             selected_starter_id: None,
             starter_selection: StarterSelection::Rotation,
             standings: Vec::new(),
+            rematch_armed_until_ms: None,
         }
     }
 }
@@ -219,6 +224,7 @@ impl SessionCore {
             default_starter_id: Some(starter.clone()),
             selected_starter_id: Some(starter),
             starter_selection: StarterSelection::Rotation,
+            rematch_armed_until_ms: None,
         };
         Ok(&self.state)
     }
@@ -457,6 +463,7 @@ impl SessionCore {
         self.state.active_game_counted = false;
         self.state.active_game_winner_ids.clear();
         self.state.active_game_winner_team_ids.clear();
+        self.state.rematch_armed_until_ms = None;
         self.state.screen = Screen::Countdown;
         let mut players = self
             .state
@@ -473,6 +480,35 @@ impl SessionCore {
             .collect::<Result<Vec<_>, _>>()?;
         apply_active_team_ids(&mut players, &self.state.active_game_teams);
         Ok(players)
+    }
+
+    /// Arms a board-button rematch or confirms it within the short arcade window.
+    ///
+    /// The first press only updates public session state. A second press before
+    /// the deadline returns `true`; the runtime then starts the retained mode
+    /// atomically with a fresh game ID.
+    ///
+    /// # Errors
+    ///
+    /// Requires a finished game with a retained prepared mode.
+    pub fn press_rematch_button(&mut self, now_ms: u64) -> Result<bool, SessionError> {
+        if self.state.screen != Screen::GameResult
+            || self.state.game_player_ids.is_empty()
+            || self.state.prepared_game.is_none()
+        {
+            return Err(SessionError::NoFinishedGame);
+        }
+        if self
+            .state
+            .rematch_armed_until_ms
+            .is_some_and(|deadline| now_ms < deadline)
+        {
+            self.state.rematch_armed_until_ms = None;
+            return Ok(true);
+        }
+        self.state.rematch_armed_until_ms =
+            Some(now_ms.saturating_add(REMATCH_CONFIRM_MILLISECONDS));
+        Ok(false)
     }
 
     /// Aborts a running game without changing standings or starter rotation.
@@ -515,6 +551,7 @@ impl SessionCore {
         self.state.active_game_counted = false;
         self.state.active_game_winner_ids.clear();
         self.state.active_game_winner_team_ids.clear();
+        self.state.rematch_armed_until_ms = None;
         self.state.screen = Screen::Playing;
         Ok(&self.state)
     }
@@ -565,6 +602,7 @@ impl SessionCore {
         self.state.active_game_winner_ids.clear();
         self.state.active_game_teams.clear();
         self.state.active_game_winner_team_ids.clear();
+        self.state.rematch_armed_until_ms = None;
         self.state.starter_selection = StarterSelection::Rotation;
     }
 }
@@ -733,6 +771,50 @@ mod tests {
             session.end_session().expect_err("must return first"),
             SessionError::InvalidEndScreen
         );
+    }
+
+    #[test]
+    fn board_rematch_requires_two_presses_inside_the_confirmation_window() {
+        let mut session = SessionCore::default();
+        session
+            .start_session("session", players())
+            .expect("session");
+        session
+            .prepare_game("countup", serde_json::json!({"rounds": 5}))
+            .expect("prepare");
+        session.start_game("game-1").expect("start");
+        session.complete_game(&["ada".into()]).expect("finish");
+
+        assert!(!session.press_rematch_button(1_000).expect("arm"));
+        assert_eq!(
+            session.state.rematch_armed_until_ms,
+            Some(1_000 + REMATCH_CONFIRM_MILLISECONDS)
+        );
+        assert!(
+            !session
+                .press_rematch_button(1_000 + REMATCH_CONFIRM_MILLISECONDS)
+                .expect("expired press rearms")
+        );
+        assert!(
+            session
+                .press_rematch_button(1_001 + REMATCH_CONFIRM_MILLISECONDS)
+                .expect("confirm")
+        );
+        let lineup = session.start_rematch("game-2").expect("rematch");
+        assert_eq!(lineup[0].id, "bob");
+        assert_eq!(session.state.screen, Screen::Countdown);
+        assert!(session.state.rematch_armed_until_ms.is_none());
+    }
+
+    #[test]
+    fn legacy_session_snapshots_default_to_an_unarmed_rematch() {
+        let mut value = serde_json::to_value(SessionState::default()).expect("serialize");
+        value
+            .as_object_mut()
+            .expect("session object")
+            .remove("rematch_armed_until_ms");
+        let restored: SessionState = serde_json::from_value(value).expect("legacy snapshot");
+        assert!(restored.rematch_armed_until_ms.is_none());
     }
 
     #[test]

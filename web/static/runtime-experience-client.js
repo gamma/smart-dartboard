@@ -136,6 +136,8 @@
         : boardPhase==='error'?'error'
         : boardEnabled?'searching':'disabled';
       const game=this.normalizeGame();
+      const rematchRemaining=Math.max(0,
+        Number(session.rematch_armed_until_ms || 0)-Date.now());
       const prepared=session.prepared_game;
       const selectedMode=prepared?.game_type || game?.game_type || null;
       const mode=this.modes.find(item=>item.slug===selectedMode);
@@ -176,7 +178,7 @@
         hardware:{enabled:boardEnabled,status:boardStatus,
           test_events:Boolean(this.host.test_events ?? this.health.test_events)},
         native_host:this.host,
-        rematch:{armed:false,expires_in_ms:0},
+        rematch:{armed:rematchRemaining>0,expires_in_ms:rematchRemaining},
         runtime_instance_id:this.envelope?.runtime_instance_id,
         revision:this.envelope?.revision ?? snapshot.revision ?? 0,
       };

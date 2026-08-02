@@ -6,6 +6,7 @@ use sdb_contracts::{
     ArtTheme, CalibrationSettings, DartEvent, DartSource, EffectDelivery, PlatformEffect,
     ProjectorGeometry, RuntimeSettings, SoundOutput, SoundStatus, UiLanguage,
 };
+use sdb_game_core::GameStatus;
 use sdb_runtime::{
     CommitOutcome, CommitRequest, Repository, RuntimeAction, RuntimeGame, RuntimeSnapshot,
 };
@@ -2847,6 +2848,27 @@ fn project_domain(
         RuntimeAction::StartPreparedGame { .. } | RuntimeAction::StartRematch { .. } => {
             insert_game(transaction, &next, request.snapshot_json)?;
         }
+        RuntimeAction::BoardButton { .. } => {
+            if previous.session.state().screen == Screen::GameResult {
+                if next.session.state().screen == Screen::Countdown {
+                    insert_game(transaction, &next, request.snapshot_json)?;
+                }
+            } else if previous.session.state().game_id.is_some()
+                && let Some(game) = previous.game.as_ref()
+            {
+                record_simple_game_event(
+                    transaction,
+                    &previous,
+                    if game_is_hold(game) {
+                        "continue_turn"
+                    } else {
+                        "next_player"
+                    },
+                    "board",
+                    request.snapshot_json,
+                )?;
+            }
+        }
         RuntimeAction::Dart { event, source } => {
             if next.session.state().game_id.is_some() {
                 record_dart(
@@ -2996,6 +3018,14 @@ fn project_domain(
             .map_err(|error| error.to_string())?;
     }
     Ok(())
+}
+
+fn game_is_hold(game: &RuntimeGame) -> bool {
+    match game {
+        RuntimeGame::CountUp(game) => game.state().status == GameStatus::Hold,
+        RuntimeGame::X01(game) => game.state().status == GameStatus::Hold,
+        RuntimeGame::Registered(game) => game.state().status == GameStatus::Hold,
+    }
 }
 
 fn insert_game(

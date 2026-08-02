@@ -165,6 +165,19 @@ try{
     });
   });
   await control.waitForSelector('.result-control');
+  await control.evaluate(async()=>{
+    const bootstrap=await (await fetch('/api/v2/runtime/bootstrap')).json();
+    const response=await fetch('/api/v2/runtime/commands',{
+      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({
+        protocol_version:1,command_id:`webkit-rematch-${Date.now()}`,
+        runtime_instance_id:bootstrap.runtime_instance_id,
+        expected_revision:bootstrap.revision,
+        command:{type:'board_button',pressed_at_ms:Date.now(),game_id:'unused-webkit-rematch'},
+      }),
+    });
+    if(!response.ok) throw new Error(`Board rematch arm failed: ${response.status}`);
+  });
+  await control.waitForSelector('.rematch-prompt.armed');
   await control.locator('[data-action="next-game"]').click();
   await control.waitForSelector('.mode-grid');
   await control.locator('[data-action="open-history"]').click();

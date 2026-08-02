@@ -4,6 +4,29 @@ const path = require('node:path');
 const runtimeClient = path.resolve(__dirname, '../../../web/static/runtime-client.js');
 const experienceClient = path.resolve(__dirname, '../../../web/static/runtime-experience-client.js');
 
+test('experience adapter exposes the authoritative board-rematch countdown', async ({ page }) => {
+  await page.goto('about:blank');
+  await page.addScriptTag({ path: runtimeClient });
+  await page.addScriptTag({ path: experienceClient });
+
+  const result=await page.evaluate(async()=>{
+    const now=Date.now();
+    const core=new window.SDBRuntimeClient.TestRuntimeClient({
+      envelope:{protocol_version:1,kind:'state',runtime_instance_id:'rematch-runtime',revision:7,
+        payload:{revision:7,session:{screen:'game_result',players:[],standings:[],
+          rematch_armed_until_ms:now+4000},settings:{},effects:[],game:null}},
+      queries:{'/api/v2/modes':[],'/api/v2/players':[],'/api/v2/statistics/players':[]},
+    });
+    const client=new window.SDBRuntimeClient.ExperienceRuntimeClient(core);
+    const experience=await client.bootstrap();
+    return experience.rematch;
+  });
+
+  expect(result.armed).toBe(true);
+  expect(result.expires_in_ms).toBeGreaterThan(3000);
+  expect(result.expires_in_ms).toBeLessThanOrEqual(4000);
+});
+
 test('experience adapter exposes complete v2 history and analytics contracts', async ({ page }) => {
   await page.goto('about:blank');
   await page.addScriptTag({ path: runtimeClient });

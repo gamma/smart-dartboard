@@ -476,6 +476,32 @@ async fn board_status(
     Ok(Json(status))
 }
 
+fn dispatch_board_input(
+    state: &AppState,
+    command_id: &str,
+    command: RuntimeCommand,
+) -> Result<Result<CommandResult, ContractError>, ApiError> {
+    let dispatch = {
+        let mut runtime = state
+            .runtime
+            .lock()
+            .map_err(|_| internal_error("runtime lock poisoned"))?;
+        let runtime_instance_id = runtime.instance_id().to_owned();
+        runtime.dispatch_envelope(CommandEnvelope {
+            protocol_version: PROTOCOL_VERSION,
+            command_id: command_id.to_owned(),
+            runtime_instance_id,
+            expected_revision: None,
+            command,
+        })
+    };
+    if dispatch.is_ok() {
+        let message = state.snapshot(format!("{command_id}:state"))?;
+        let _ = state.states.send(message);
+    }
+    Ok(dispatch)
+}
+
 async fn board_packet(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -499,31 +525,18 @@ async fn board_packet(
 
     let response = match outcome {
         BoardIngressOutcome::Dart { event, command_id } => {
-            let dispatch = {
-                let mut runtime = state
-                    .runtime
-                    .lock()
-                    .map_err(|_| internal_error("runtime lock poisoned"))?;
-                let runtime_instance_id = runtime.instance_id().to_owned();
-                runtime.dispatch_envelope(CommandEnvelope {
-                    protocol_version: PROTOCOL_VERSION,
-                    command_id: command_id.clone(),
-                    runtime_instance_id,
-                    expected_revision: None,
-                    command: RuntimeCommand::IngestDart {
-                        event,
-                        source: DartSource::Board,
-                    },
-                })
-            };
+            let dispatch = dispatch_board_input(
+                &state,
+                &command_id,
+                RuntimeCommand::IngestDart {
+                    event,
+                    source: DartSource::Board,
+                },
+            )?;
             match dispatch {
-                Ok(result) => {
-                    let message = state.snapshot(format!("{command_id}:state"))?;
-                    let _ = state.states.send(message);
-                    BoardPacketResponse::Applied {
-                        result: Box::new(result),
-                    }
-                }
+                Ok(result) => BoardPacketResponse::Applied {
+                    result: Box::new(result),
+                },
                 Err(error)
                     if matches!(
                         error.code,
@@ -535,7 +548,30 @@ async fn board_packet(
                 Err(error) => return Err(error.into()),
             }
         }
-        BoardIngressOutcome::Button { button, action } => {
+        BoardIngressOutcome::Button {
+            button,
+            action,
+            command_id,
+        } if button == "menu" && action == "press" => {
+            let dispatch = dispatch_board_input(
+                &state,
+                &command_id,
+                RuntimeCommand::BoardButton {
+                    pressed_at_ms: now_ms(),
+                    game_id: Uuid::new_v4().to_string(),
+                },
+            )?;
+            match dispatch {
+                Ok(result) => BoardPacketResponse::Applied {
+                    result: Box::new(result),
+                },
+                Err(error) if error.code == ErrorCode::InvalidCommand => {
+                    BoardPacketResponse::Button { button, action }
+                }
+                Err(error) => return Err(error.into()),
+            }
+        }
+        BoardIngressOutcome::Button { button, action, .. } => {
             BoardPacketResponse::Button { button, action }
         }
         BoardIngressOutcome::Duplicate => BoardPacketResponse::Duplicate,
@@ -2340,6 +2376,46 @@ mod tests {
 
         let (_, duplicate) = post_board(&app, "/api/v2/board/packets", packet).await;
         assert_eq!(duplicate["disposition"], "duplicate");
+
+        let (_, armed) = post_board(
+            &app,
+            "/api/v2/board/packets",
+            serde_json::json!({
+                "connection_id": "link-1",
+                "raw_hex": "0200000000000000ffff"
+            }),
+        )
+        .await;
+        assert_eq!(armed["disposition"], "applied");
+        assert_eq!(armed["result"]["revision"], 6);
+        assert_eq!(armed["result"]["session"]["screen"], "game_result");
+        assert!(armed["result"]["session"]["rematch_armed_until_ms"].is_number());
+
+        let (_, released) = post_board(
+            &app,
+            "/api/v2/board/packets",
+            serde_json::json!({
+                "connection_id": "link-1",
+                "raw_hex": "0300000000000000eeee"
+            }),
+        )
+        .await;
+        assert_eq!(released["disposition"], "button");
+        assert_eq!(released["action"], "release");
+
+        let (_, rematch) = post_board(
+            &app,
+            "/api/v2/board/packets",
+            serde_json::json!({
+                "connection_id": "link-1",
+                "raw_hex": "0400000000000000ffff"
+            }),
+        )
+        .await;
+        assert_eq!(rematch["disposition"], "applied");
+        assert_eq!(rematch["result"]["revision"], 7);
+        assert_eq!(rematch["result"]["session"]["screen"], "countdown");
+        assert!(rematch["result"]["session"]["rematch_armed_until_ms"].is_null());
 
         let (_, rejected) = post_board(
             &app,
