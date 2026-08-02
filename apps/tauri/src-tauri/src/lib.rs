@@ -210,6 +210,14 @@ fn is_valid_mdns_hostname(host_name: &str) -> bool {
     })
 }
 
+fn valid_effect_id(effect_id: &str) -> bool {
+    !effect_id.is_empty()
+        && effect_id.len() <= 256
+        && effect_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b':'))
+}
+
 fn manual_certificate_fingerprint(fingerprint: &str) -> Result<String, String> {
     if fingerprint.len() != 64
         || !fingerprint
@@ -504,6 +512,7 @@ mod ios_display {
         APP_HANDLE, CommandEnvelope, CommandResult, NativeState, SharedNativeState,
         publish_public_state, registered_game_metadata, runtime_v2_envelope,
         runtime_v2_projector_report_allowed, runtime_v2_projector_test_event_allowed,
+        valid_effect_id,
     };
     use serde_json::{Value, json};
     use std::{
@@ -536,23 +545,40 @@ mod ios_display {
             .map(|address| unsafe { std::mem::transmute::<*mut c_void, ProjectorUpdate>(address) })
     }
 
-    fn payload(state: &NativeState) -> Value {
+    fn payload(state: &NativeState, live: bool) -> Value {
         let modes = MODE_QUERY
             .get_or_init(|| json!(registered_game_metadata()))
             .clone();
+        let envelope = if live {
+            runtime_v2_envelope(state)
+        } else {
+            super::runtime_v2_bootstrap_envelope(state)
+        };
+        let mut host = state.public();
+        if !live {
+            host.runtime = state.runtime.bootstrap_snapshot();
+        }
         json!({
-            "envelope": runtime_v2_envelope(state),
+            "envelope": envelope,
             "queries": {
                 "/api/v2/modes": modes,
                 "/api/v2/players": [],
                 "/api/v2/statistics/players": [],
-                "/api/v2/host": state.public(),
+                "/api/v2/host": host,
             }
         })
     }
 
     pub fn publish(state: &NativeState) {
-        let Ok(json) = serde_json::to_string(&payload(state)) else {
+        publish_with_policy(state, super::external_display_count() > 0);
+    }
+
+    pub fn publish_bootstrap(state: &NativeState) {
+        publish_with_policy(state, false);
+    }
+
+    fn publish_with_policy(state: &NativeState, live: bool) {
+        let Ok(json) = serde_json::to_string(&payload(state, live)) else {
             return;
         };
         let Ok(json) = CString::new(json) else {
@@ -637,7 +663,7 @@ mod ios_display {
                 .runtime
                 .dispatch_envelope(envelope)
                 .map_err(|error| error.message)?;
-            (result, state.public(), payload(&state))
+            (result, state.public(), payload(&state, true))
         };
         publish_public_state(app, &public);
         Ok((result, payload))
@@ -659,6 +685,38 @@ mod ios_display {
                 serde_json::from_str(command).map_err(|error| error.to_string())?;
             let (result, payload) = dispatch_command(envelope)?;
             Ok(json!({"ok": true, "result": result, "payload": payload}))
+        })()
+        .unwrap_or_else(|error| json!({"ok": false, "error": error}));
+        CString::new(response.to_string()).map_or(std::ptr::null_mut(), CString::into_raw)
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn sdb_projector_effect_ack(effect_id: *const c_char) -> *mut c_char {
+        let response = (|| -> Result<Value, String> {
+            if effect_id.is_null() {
+                return Err("missing external projector effect ID".into());
+            }
+            let effect_id = (unsafe { CStr::from_ptr(effect_id) })
+                .to_str()
+                .map_err(|_| "external projector effect ID is not UTF-8".to_owned())?;
+            if !valid_effect_id(effect_id) {
+                return Err("external projector effect ID is invalid".into());
+            }
+            let app = APP_HANDLE
+                .get()
+                .ok_or_else(|| "native app is not ready".to_owned())?;
+            let state = app
+                .try_state::<SharedNativeState>()
+                .ok_or_else(|| "native runtime is not ready".to_owned())?;
+            let acknowledged = {
+                let mut state = state.lock().map_err(|error| error.to_string())?;
+                state.require_controller()?;
+                state
+                    .runtime
+                    .acknowledge_effect(effect_id, sdb_contracts::EffectTarget::Projector)
+                    .map_err(|error| error.to_string())?
+            };
+            Ok(json!({"ok": true, "result": acknowledged}))
         })()
         .unwrap_or_else(|error| json!({"ok": false, "error": error}));
         CString::new(response.to_string()).map_or(std::ptr::null_mut(), CString::into_raw)
@@ -950,10 +1008,11 @@ mod native_companion_transport {
         APP_HANDLE, COMPANION_PORT, CommandEnvelope, CommandResult, NativeState, PublicState,
         SharedNativeState, TlsIdentity, apple_bonjour, now_ms, publish_public_state,
         runtime_v2_projector_report_allowed,
+        valid_effect_id,
     };
     use axum::{
         Json, Router,
-        extract::{State, WebSocketUpgrade, ws::Message},
+        extract::{Path, State, WebSocketUpgrade, ws::Message},
         http::{HeaderMap, HeaderValue, StatusCode, header},
         response::{IntoResponse, Response},
         routing::{get, post},
@@ -1059,6 +1118,10 @@ mod native_companion_transport {
             .route("/api/v2/companion/runtime/bootstrap", get(bootstrap))
             .route("/api/v2/companion/runtime/events", get(websocket))
             .route("/api/v2/companion/runtime/reports", post(report))
+            .route(
+                "/api/v2/companion/runtime/effects/{effect_id}/ack",
+                post(acknowledge_effect),
+            )
             .layer(SetResponseHeaderLayer::if_not_present(
                 header::X_CONTENT_TYPE_OPTIONS,
                 HeaderValue::from_static("nosniff"),
@@ -1160,6 +1223,33 @@ mod native_companion_transport {
         Ok(Json(result))
     }
 
+    async fn acknowledge_effect(
+        State(service): State<ServiceState>,
+        headers: HeaderMap,
+        Path(effect_id): Path<String>,
+    ) -> Result<Json<bool>, TransportError> {
+        reject_browser_origin(&headers)?;
+        let token = bearer_token(&headers)?;
+        if !valid_effect_id(&effect_id) {
+            return Err(TransportError::bad_request("effect ID is invalid"));
+        }
+        let acknowledged = {
+            let mut state = service
+                .native
+                .lock()
+                .map_err(|_| TransportError::internal())?;
+            authenticate(&state, token)?;
+            state
+                .require_controller()
+                .map_err(|_| TransportError::forbidden("host unavailable"))?;
+            state
+                .runtime
+                .acknowledge_effect(&effect_id, sdb_contracts::EffectTarget::Projector)
+                .map_err(|_| TransportError::internal())?
+        };
+        Ok(Json(acknowledged))
+    }
+
     async fn stream(
         mut socket: axum::extract::ws::WebSocket,
         native: SharedNativeState,
@@ -1242,7 +1332,9 @@ mod native_companion_transport {
     }
 
     fn snapshot_frame(state: &NativeState) -> Result<CompanionFrame, TransportError> {
-        frame(&state.public(), CompanionFrameKind::Snapshot)
+        let mut public = state.public();
+        public.runtime = state.runtime.bootstrap_snapshot();
+        frame(&public, CompanionFrameKind::Snapshot)
     }
 
     fn state_frame(state: &PublicState) -> Result<CompanionFrame, TransportError> {
@@ -1378,6 +1470,24 @@ mod native_companion_transport {
         #[tokio::test]
         async fn router_pairs_bootstraps_and_rejects_browser_origins_and_revocation() {
             let state = test_state("native-host", &"ab".repeat(32));
+            {
+                let mut state = state.lock().expect("state");
+                let instance = state.runtime.instance_id().to_owned();
+                let revision = state.runtime.snapshot().revision;
+                state
+                    .runtime
+                    .dispatch(
+                        &instance,
+                        "sound-on",
+                        Some(revision),
+                        crate::RuntimeAction::UpdateSoundSettings {
+                            enabled: true,
+                            output: sdb_contracts::SoundOutput::Projector,
+                        },
+                    )
+                    .expect("sound settings");
+                state.ingest_test_hit().expect("effect-producing dart");
+            }
             let offer = state
                 .lock()
                 .expect("state")
@@ -1426,6 +1536,38 @@ mod native_companion_transport {
             )
             .expect("frame");
             assert_eq!(frame.kind, CompanionFrameKind::Snapshot);
+            let snapshot: sdb_runtime::RuntimePublicSnapshot =
+                serde_json::from_value(frame.payload["runtime"].clone()).expect("runtime snapshot");
+            let effect = snapshot.effects.first().expect("projector effect");
+            assert_eq!(effect.target, sdb_contracts::EffectTarget::Projector);
+
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::post(format!(
+                        "/api/v2/companion/runtime/effects/{}/ack",
+                        effect.effect_id
+                    ))
+                    .body(Body::from("{}"))
+                    .expect("unauthenticated effect ack"),
+                )
+                .await
+                .expect("unauthenticated ack response");
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+            let response = app
+                .clone()
+                .oneshot(
+                    Request::post(format!(
+                        "/api/v2/companion/runtime/effects/{}/ack",
+                        effect.effect_id
+                    ))
+                    .header(header::AUTHORIZATION, format!("Bearer {}", grant.token))
+                    .body(Body::from("{}"))
+                    .expect("authenticated effect ack"),
+                )
+                .await
+                .expect("authenticated ack response");
+            assert_eq!(response.status(), StatusCode::OK);
 
             let sound_report = CommandEnvelope {
                 protocol_version: sdb_contracts::PROTOCOL_VERSION,
@@ -1857,6 +1999,28 @@ mod native_companion_client {
         .await?;
         let result = serde_json::from_slice(&response)
             .map_err(|_| "invalid Companion report response".to_owned());
+        response.zeroize();
+        result
+    }
+
+    pub(super) async fn acknowledge_effect(
+        host: &DiscoveredCompanionHost,
+        grant: &ActiveGrant,
+        effect_id: &str,
+    ) -> Result<bool, String> {
+        if host.host_id != grant.host_id
+            || host.protocol_version != sdb_companion::COMPANION_PROTOCOL_VERSION
+            || !host.tls
+        {
+            return Err("discovered Controller identity changed".into());
+        }
+        if !super::valid_effect_id(effect_id) {
+            return Err("Companion effect ID is invalid".into());
+        }
+        let path = format!("/api/v2/companion/runtime/effects/{effect_id}/ack");
+        let mut response = post_authenticated_json(host, grant, &path, b"{}").await?;
+        let result = serde_json::from_slice(&response)
+            .map_err(|_| "invalid Companion effect acknowledgement".to_owned());
         response.zeroize();
         result
     }
@@ -2553,6 +2717,11 @@ pub extern "C" fn sdb_external_display_changed(display_count: u32) {
                 external_display_count: display_count,
             },
         );
+        if let Some(state) = app.try_state::<SharedNativeState>()
+            && let Ok(state) = state.lock()
+        {
+            ios_display::publish_bootstrap(&state);
+        }
     }
 }
 
@@ -2570,12 +2739,23 @@ fn runtime_query(state: State<'_, SharedNativeState>) -> Result<PublicState, Str
 }
 
 fn runtime_v2_envelope(state: &NativeState) -> Envelope<RuntimePublicSnapshot> {
+    runtime_v2_envelope_with_snapshot(state, state.runtime.public_snapshot())
+}
+
+fn runtime_v2_bootstrap_envelope(state: &NativeState) -> Envelope<RuntimePublicSnapshot> {
+    runtime_v2_envelope_with_snapshot(state, state.runtime.bootstrap_snapshot())
+}
+
+fn runtime_v2_envelope_with_snapshot(
+    state: &NativeState,
+    snapshot: RuntimePublicSnapshot,
+) -> Envelope<RuntimePublicSnapshot> {
     Envelope::new(
         state.runtime.instance_id(),
         Uuid::new_v4().to_string(),
         state.runtime.snapshot().revision,
         MessageKind::State,
-        state.runtime.public_snapshot(),
+        snapshot,
     )
 }
 
@@ -2585,7 +2765,7 @@ fn runtime_v2_bootstrap(
 ) -> Result<Envelope<RuntimePublicSnapshot>, String> {
     state
         .lock()
-        .map(|state| runtime_v2_envelope(&state))
+        .map(|state| runtime_v2_bootstrap_envelope(&state))
         .map_err(|error| error.to_string())
 }
 
@@ -2594,6 +2774,28 @@ fn runtime_v2_snapshot(
     state: State<'_, SharedNativeState>,
 ) -> Result<Envelope<RuntimePublicSnapshot>, String> {
     runtime_v2_bootstrap(state)
+}
+
+#[tauri::command]
+fn runtime_v2_ack_effect(
+    window: tauri::WebviewWindow,
+    state: State<'_, SharedNativeState>,
+    effect_id: String,
+) -> Result<bool, String> {
+    if !valid_effect_id(&effect_id) {
+        return Err("effect ID is invalid".into());
+    }
+    let target = match window.label() {
+        "control" => sdb_contracts::EffectTarget::Controller,
+        "projector" => sdb_contracts::EffectTarget::Projector,
+        _ => return Err("window may not acknowledge effects".into()),
+    };
+    let mut state = state.lock().map_err(|error| error.to_string())?;
+    state.require_controller()?;
+    state
+        .runtime
+        .acknowledge_effect(&effect_id, target)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -3120,11 +3322,45 @@ async fn companion_projector_v2_report(
 }
 
 #[tauri::command]
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+async fn companion_projector_v2_ack_effect(
+    state: State<'_, SharedNativeState>,
+    service: State<'_, NativeCompanionService>,
+    effect_id: String,
+) -> Result<bool, String> {
+    {
+        let state = state.lock().map_err(|error| error.to_string())?;
+        state.require_companion()?;
+    }
+    let grant = service
+        .active_grant
+        .lock()
+        .await
+        .clone()
+        .filter(native_companion_client::ActiveGrant::is_usable)
+        .ok_or_else(|| "Companion is not paired".to_owned())?;
+    let host = apple_bonjour::browser_snapshot()?
+        .into_iter()
+        .find(|host| host.host_id == grant.host_id)
+        .ok_or_else(|| "paired Controller is not available".to_owned())?;
+    native_companion_client::acknowledge_effect(&host, &grant, &effect_id).await
+}
+
+#[tauri::command]
 #[cfg(not(any(target_os = "ios", target_os = "macos")))]
 fn companion_projector_v2_report(
     _state: State<'_, SharedNativeState>,
     _envelope: CommandEnvelope,
 ) -> Result<CommandResult, String> {
+    Err("native Companion projector is not available on this platform".into())
+}
+
+#[tauri::command]
+#[cfg(not(any(target_os = "ios", target_os = "macos")))]
+fn companion_projector_v2_ack_effect(
+    _state: State<'_, SharedNativeState>,
+    _effect_id: String,
+) -> Result<bool, String> {
     Err("native Companion projector is not available on this platform".into())
 }
 
@@ -3502,6 +3738,7 @@ pub fn run() {
             runtime_dispatch,
             runtime_v2_bootstrap,
             runtime_v2_snapshot,
+            runtime_v2_ack_effect,
             runtime_v2_query,
             runtime_v2_dispatch,
             runtime_v2_report,
@@ -3518,6 +3755,7 @@ pub fn run() {
             companion_projector_v2_bootstrap,
             companion_projector_v2_query,
             companion_projector_v2_report,
+            companion_projector_v2_ack_effect,
             app_role_select,
             projector_output_select
         ])
@@ -3711,6 +3949,15 @@ mod tests {
             certificate_der: target.certificate_der.clone(),
             token: Zeroizing::new(grant.token),
         };
+        assert!(
+            !native_companion_client::acknowledge_effect(
+                &target.host,
+                &active_grant,
+                "missing:sound:projector",
+            )
+            .await
+            .expect("authenticated empty effect acknowledgement")
+        );
         let stream_host = target.host.clone();
         let stream_grant = active_grant.clone();
         let (frames, mut received) = tokio::sync::mpsc::unbounded_channel();

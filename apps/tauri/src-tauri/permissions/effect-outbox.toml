@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-runtime-v2-ack-effect"
+description = "Allows a product WebView to acknowledge only effects assigned to its own controller or projector role."
+commands.allow = ["runtime_v2_ack_effect"]

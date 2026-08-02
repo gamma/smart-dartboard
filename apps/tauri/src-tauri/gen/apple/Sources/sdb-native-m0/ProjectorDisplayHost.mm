@@ -16,6 +16,7 @@ typedef struct {
 extern "C" bool sdb_projector_asset(const char *path, SDBProjectorAsset *output);
 extern "C" void sdb_projector_asset_free(SDBProjectorAsset asset);
 extern "C" char *sdb_projector_command(const char *command_json);
+extern "C" char *sdb_projector_effect_ack(const char *effect_id);
 extern "C" void sdb_projector_string_free(char *value);
 
 @interface SDBProjectorDisplayHost : NSObject <WKNavigationDelegate,
@@ -144,6 +145,8 @@ extern "C" void sdb_projector_string_free(char *value);
           "subscribe(listener){listeners.push(listener);return()=>{listeners=listeners.filter(item=>item!==listener);};},"
           "dispatch(envelope){return new Promise((resolve,reject)=>{const id=nextId++;pending.set(id,{resolve,reject});"
           "window.webkit.messageHandlers.sdbProjectorCommand.postMessage({id:id,envelope:envelope});});},"
+          "acknowledgeEffect(effectId){return new Promise((resolve,reject)=>{const id=nextId++;pending.set(id,{resolve,reject});"
+          "window.webkit.messageHandlers.sdbProjectorCommand.postMessage({id:id,effectId:effectId});});},"
           "receive(payload){state=payload;visibility(payload);const queued=waiters;waiters=[];"
           "queued.forEach(resolve=>resolve(payload.envelope));listeners.forEach(listener=>listener(payload));},"
           "commandResult(id,response){if(response.payload)this.receive(response.payload);const request=pending.get(id);"
@@ -203,19 +206,27 @@ extern "C" void sdb_projector_string_free(char *value);
   NSDictionary *body = message.body;
   NSNumber *requestID = body[@"id"];
   NSDictionary *envelope = body[@"envelope"];
-  if (![requestID isKindOfClass:NSNumber.class] ||
-      ![envelope isKindOfClass:NSDictionary.class] ||
-      ![NSJSONSerialization isValidJSONObject:envelope]) {
+  NSString *effectID = body[@"effectId"];
+  BOOL hasEnvelope = [envelope isKindOfClass:NSDictionary.class] &&
+                     [NSJSONSerialization isValidJSONObject:envelope];
+  BOOL hasEffect = [effectID isKindOfClass:NSString.class] && effectID.length > 0 &&
+                   effectID.length <= 256;
+  if (![requestID isKindOfClass:NSNumber.class] || hasEnvelope == hasEffect) {
     return;
   }
   unsigned long long requestNumber = requestID.unsignedLongLongValue;
   if (requestNumber == 0) {
     return;
   }
-  NSData *commandData = [NSJSONSerialization dataWithJSONObject:envelope options:0 error:nil];
-  NSString *command = [[NSString alloc] initWithData:commandData
-                                            encoding:NSUTF8StringEncoding];
-  char *resultBytes = sdb_projector_command(command.UTF8String);
+  char *resultBytes = nullptr;
+  if (hasEnvelope) {
+    NSData *commandData = [NSJSONSerialization dataWithJSONObject:envelope options:0 error:nil];
+    NSString *command = [[NSString alloc] initWithData:commandData
+                                              encoding:NSUTF8StringEncoding];
+    resultBytes = sdb_projector_command(command.UTF8String);
+  } else {
+    resultBytes = sdb_projector_effect_ack(effectID.UTF8String);
+  }
   if (resultBytes == nullptr) {
     return;
   }

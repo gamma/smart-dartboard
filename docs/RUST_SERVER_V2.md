@@ -6,10 +6,11 @@ Der Rust-Server ist der parallele Migrationspfad für Linux und Docker. Er
 liefert inzwischen dieselben Control- und Projector-Weboberflächen wie der
 Python-Host und bindet sie über den versionierten `HostedRuntimeClient` an die
 Rust-Runtime. Der Kernfluss von Spieleranlage über Session- und Modusauswahl bis
-zum synchronen Testtreffer ist in WebKit belegt. Er ersetzt den produktiven
-Python-Pfad trotzdem noch nicht: persistierte Setup-Präferenzen, alle
-Statistikansichten, Training, Export und reale BLE-Hardware sind noch nicht
-paritätisch angeschlossen.
+zum synchronen Testtreffer ist in WebKit belegt. Persistierte
+Setup-Präferenzen, Historie, Replay, Statistiken, Training, Export und die
+plattformweite Effect-Outbox sind angeschlossen. Er ersetzt den produktiven
+Python-Pfad trotzdem noch nicht: Teammodell, Bestandsdatenmigration und reale
+BLE-Hardware sind noch nicht vollständig qualifiziert.
 
 ## Start
 
@@ -87,6 +88,7 @@ begrenztem Proxy-Netz.
 | `GET` | `/api/v2/runtime/bootstrap` | vollständiger versionierter Snapshot |
 | `GET` | `/api/v2/runtime/snapshot` | erneuter Snapshot nach Lücke oder Reconnect |
 | `POST` | `/api/v2/runtime/commands` | ein `CommandEnvelope` atomar anwenden |
+| `POST` | `/api/v2/runtime/effects/{target}/{effect_id}/ack` | einen zugestellten Control-/Projector-Effekt ohne neue Spielrevision bestätigen |
 | `GET` | `/api/v2/runtime/events` | WebSocket mit initialem und folgenden Snapshots |
 | `GET` | `/api/v2/modes` | versionierte Modusmetadaten, Optionen, Anleitungen und Assets |
 | `POST` | `/api/v2/companion/pairing/open` | TLS-gebundenes fünfminütiges Einmalcode-Fenster öffnen |
@@ -95,6 +97,7 @@ begrenztem Proxy-Netz.
 | `DELETE` | `/api/v2/companion/devices/{device_id}` | Projector-Grant persistent widerrufen |
 | `GET` | `/api/v2/companion/runtime/bootstrap` | authentisierter Projector-Vollsnapshot |
 | `GET` | `/api/v2/companion/runtime/events` | authentisierter Projector-WebSocket ab Vollsnapshot |
+| `POST` | `/api/v2/companion/runtime/effects/{effect_id}/ack` | authentisierte Bestätigung eines Projector-Effekts |
 | `POST` | `/api/v2/board/status` | interner, authentisierter Gateway-Status |
 | `POST` | `/api/v2/board/packets` | interner, authentisierter FFF1-Rohpaket-Ingress |
 | `GET` | `/api/v2/players` | persistente Spielerprofile |
@@ -114,7 +117,8 @@ Protokollversionen, falsche Runtime-IDs und veraltete Revisionen liefern stabile
 Fehlercodes und passende HTTP-Statuscodes.
 
 Der veröffentlichte Snapshot enthält nur den benötigten Spiel-, Session- und
-Setupzustand. Interne
+Setupzustand sowie noch nicht bestätigte deklarative Effekte für die jeweilige
+Produktoberfläche. Interne
 Replay-Grundzustände, Action-Timeline und Historie verlassen die Runtime nicht
 über den Live-State. Ein Klick auf die Scheibe wird nur dann als
 `projector_test` angenommen, wenn der Host ausdrücklich mit
@@ -219,6 +223,12 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 - Projector-Companions per kurzlebigem Einmalcode koppeln, Grants ausschließlich
   als Hash persistieren, authentisierte Snapshots und Folgerevisionen streamen
   sowie aktive Verbindungen beim Widerruf schließen.
+- Sound- und visuelle Treffer-Cues mit stabiler Effect-ID und Zielrolle
+  deklarieren, atomar in `effect_outbox` committen, nach Crash erneut zustellen
+  und pro Control-/Projector-Oberfläche dedupliziert bestätigen. Kurzlebige
+  visuelle Effekte werden bei Prozessneustart oder einer neueren Revision
+  verworfen; Sound bleibt innerhalb seiner erzeugenden Revision bis zum
+  Ausführungsversuch wiederaufnehmbar.
 - Historie, Replay, Spieler- und Modusstatistik, gefilterte Segment-Heatmap,
   lokale Trainingshinweise und einen portablen JSON-Export über denselben
   Storage-Vertrag im Headless-Server und im nativen IPC bereitstellen. Die
@@ -228,9 +238,8 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
 - Teammodell,
-- ein plattformweiter Effect-Outbox-Vertrag; alle 24 heutigen Produktmodi sind
-  portiert, während das adaptive Boss Fight V2 eine zurückgestellte
-  Produktänderung bleibt,
+- alle 24 heutigen Produktmodi sind portiert, während das adaptive Boss Fight
+  V2 eine zurückgestellte Produktänderung bleibt,
 - reale BlueZ-/Boardqualifizierung mit schneller Trefferfolge, Reconnect,
   Adapterausfall und Langzeittest,
 - Migration vorhandener Python-Datenbanken,
@@ -259,6 +268,9 @@ ausschließlich der SHA-256-Token-Hash; ein Klartext-Token gelangt nie in SQLite
 Schema 6 ergänzt kleine, plattformübergreifende Hostpräferenzen. Schlüssel sind
 streng begrenzt, Werte maximal 4 KiB groß; Spielzustand und Secrets gehören
 ausdrücklich nicht in diese Tabelle.
+Die bereits seit Schema 1 angelegte `effect_outbox` wird nun produktiv genutzt:
+Sie speichert Effect-ID, erzeugende Revision, den versionierten
+`PlatformEffect` und den Status `pending`, `delivered` oder `discarded`.
 
 Migrationen laufen fortlaufend und transaktional; eine Datenbank mit neuerer
 unbekannter Schema-Version wird ohne Downgrade oder Schreibversuch abgelehnt. Nach jeder

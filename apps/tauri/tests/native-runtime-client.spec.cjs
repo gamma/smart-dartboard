@@ -49,6 +49,53 @@ test('experience adapter exposes complete v2 history and analytics contracts', a
   expect(result.calls).toContain('/api/v2/statistics/modes?include_test=true');
 });
 
+test('experience adapter consumes each declarative effect once without replaying stale darts', async ({ page }) => {
+  await page.goto('about:blank');
+  await page.addScriptTag({ path: runtimeClient });
+  await page.addScriptTag({ path: experienceClient });
+
+  const result=await page.evaluate(async()=>{
+    const hit=seq=>({type:'hit',seq,field:20,ring:'triple',multiplier:3,label:'T20',score:60});
+    const envelope=(revision,event,effects=[])=>({
+      protocol_version:1,kind:'state',runtime_instance_id:'effect-runtime',revision,
+      payload:{revision,session:{screen:'playing',players:[],standings:[]},settings:{},effects,
+        game:{game_type:'count_up',state:{players:[],status:'running',last_event:event}}},
+    });
+    const acknowledgements=[];
+    const core=new window.SDBRuntimeClient.TestRuntimeClient({
+      envelope:envelope(1,hit(1)),queries:{
+        '/api/v2/modes':[],'/api/v2/players':[],'/api/v2/statistics/players':[],
+      },acknowledgeEffect:async id=>{ acknowledgements.push(id); return true; },
+    });
+    const client=new window.SDBRuntimeClient.ExperienceRuntimeClient(core);
+    await client.bootstrap();
+    const events=[];
+    client.subscribe({onMessage:payload=>{
+      if(payload.event){
+        events.push({type:payload.event.type,seq:payload.event.seq,effectId:payload.event.effect_id});
+        payload.event.acknowledge_effect?.();
+      }
+    }});
+    await new Promise(resolve=>queueMicrotask(resolve));
+    core.publish(envelope(2,hit(1)));
+    const effect={effect_id:'effect:3:sound:controller',revision:3,target:'controller',delivery:'durable',
+      kind:{type:'sound',cue:'hit',event:hit(2)}};
+    const visual={effect_id:'effect:3:visual:controller',revision:3,target:'controller',delivery:'discardable',
+      kind:{type:'visual',cue:'hit',event:hit(2)}};
+    core.publish(envelope(3,hit(2),[visual,effect]));
+    core.publish(envelope(3,hit(2),[visual,effect]));
+    await Promise.resolve();
+    return {events,acknowledgements};
+  });
+
+  expect(result.events).toEqual([{
+    type:'hit',seq:2,effectId:'effect:3:sound:controller',
+  }]);
+  expect(result.acknowledgements).toEqual([
+    'effect:3:visual:controller','effect:3:sound:controller',
+  ]);
+});
+
 test('native host events update independently from game revisions', async ({ page }) => {
   await page.goto('about:blank');
   await page.addScriptTag({ path: runtimeClient });
@@ -83,6 +130,7 @@ test('native host events update independently from game revisions', async ({ pag
       source: 'projector_test',
       event: { type: 'hit', seq: 1, field: 20, ring: 'triple', score: 60 },
     });
+    await client.acknowledgeEffect('dart-1:sound:controller');
     listeners['runtime-state']({
       payload: { board: { enabled: true, phase: 'ready' }, external_display_count: 1 },
     });
@@ -92,6 +140,7 @@ test('native host events update independently from game revisions', async ({ pag
       unlistenCount,
       stillListening: Boolean(listeners['runtime-state']),
       dispatchCommand: invocations[0].command,
+      ackCommand: invocations[1].command,
     };
   });
 
@@ -101,6 +150,7 @@ test('native host events update independently from game revisions', async ({ pag
   expect(result.unlistenCount).toBe(1);
   expect(result.stillListening).toBe(false);
   expect(result.dispatchCommand).toBe('runtime_v2_projector_test_event');
+  expect(result.ackCommand).toBe('runtime_v2_ack_effect');
 });
 
 test('external projector bridge bootstraps queries streams and reports', async ({ page }) => {
@@ -110,6 +160,7 @@ test('external projector bridge bootstraps queries streams and reports', async (
   const result = await page.evaluate(async () => {
     const subscribers = new Set();
     const dispatched = [];
+    const acknowledged = [];
     let payload = {
       envelope: {
         protocol_version: 1,
@@ -126,6 +177,10 @@ test('external projector bridge bootstraps queries streams and reports', async (
       dispatch: async envelope => {
         dispatched.push(envelope);
         return { revision: envelope.expected_revision + 1 };
+      },
+      acknowledgeEffect: async effectId => {
+        acknowledged.push(effectId);
+        return true;
       },
       subscribe: listener => {
         subscribers.add(listener);
@@ -147,6 +202,7 @@ test('external projector bridge bootstraps queries streams and reports', async (
       type: 'report_projector_geometry',
       geometry: { width: 720, height: 448 },
     });
+    await client.acknowledgeEffect('dart-4:sound:projector');
     client.close();
     return {
       initialRevision: initial.revision,
@@ -154,6 +210,7 @@ test('external projector bridge bootstraps queries streams and reports', async (
       revisions,
       command: dispatched[0].command,
       remainingSubscribers: subscribers.size,
+      acknowledged,
     };
   });
 
@@ -165,4 +222,5 @@ test('external projector bridge bootstraps queries streams and reports', async (
     geometry: { width: 720, height: 448 },
   });
   expect(result.remainingSubscribers).toBe(0);
+  expect(result.acknowledged).toEqual(['dart-4:sound:projector']);
 });

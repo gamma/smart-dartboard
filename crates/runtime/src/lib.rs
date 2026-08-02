@@ -6,8 +6,9 @@
 
 use sdb_contracts::{
     ArtTheme, CalibrationSettings, CommandEnvelope, ContractError, DartEvent, DartSource,
-    DisplayOverride, ErrorCode, PROTOCOL_VERSION, PlayerRef, ProjectorGeometry, RuntimeCommand,
-    RuntimeSettings, SoundOutput, SoundStatus, StarterSelection, UiLanguage,
+    DisplayOverride, EffectDelivery, EffectTarget, ErrorCode, PROTOCOL_VERSION, PlatformEffect,
+    PlatformEffectKind, PlayerRef, ProjectorGeometry, RuntimeCommand, RuntimeSettings, SoundOutput,
+    SoundStatus, StarterSelection, UiLanguage,
 };
 use sdb_game_core::{
     CountUpGame, CountUpState, GameError, GameStatus, OutRule, RegisteredGame, RegisteredGameState,
@@ -130,6 +131,8 @@ pub struct RuntimePublicSnapshot {
     pub game: Option<RuntimeGameState>,
     pub session: SessionState,
     pub settings: RuntimeSettings,
+    #[serde(default)]
+    pub effects: Vec<PlatformEffect>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -256,6 +259,7 @@ pub struct CommitRequest<'a> {
     pub previous_snapshot_json: &'a str,
     pub snapshot_json: &'a str,
     pub result_json: &'a str,
+    pub effects: &'a [PlatformEffect],
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -278,6 +282,20 @@ pub trait Repository {
     ///
     /// Returns a backend-specific diagnostic when reading fails.
     fn load_command_result(&self, command_id: &str) -> Result<Option<String>, String>;
+
+    /// Loads effects that have not yet been acknowledged by their platform target.
+    ///
+    /// # Errors
+    ///
+    /// Returns a backend-specific diagnostic when the outbox cannot be read.
+    fn load_pending_effects(&self, current_revision: u64) -> Result<Vec<PlatformEffect>, String>;
+
+    /// Marks one platform effect as delivered without creating a game revision.
+    ///
+    /// # Errors
+    ///
+    /// Returns a backend-specific diagnostic when the outbox cannot be updated.
+    fn acknowledge_effect(&mut self, effect_id: &str) -> Result<bool, String>;
 
     /// Atomically stores the next revision and its command result.
     ///
@@ -314,6 +332,7 @@ pub struct Runtime<R> {
     instance_id: String,
     snapshot: RuntimeSnapshot,
     repository: R,
+    pending_effects: Vec<PlatformEffect>,
 }
 
 impl<R: Repository> Runtime<R> {
@@ -344,10 +363,14 @@ impl<R: Repository> Runtime<R> {
         } else {
             SoundStatus::Disabled
         };
+        let pending_effects = repository
+            .load_pending_effects(snapshot.revision)
+            .map_err(RuntimeError::Persistence)?;
         Ok(Self {
             instance_id: instance_id.into(),
             snapshot,
             repository,
+            pending_effects,
         })
     }
 
@@ -368,7 +391,22 @@ impl<R: Repository> Runtime<R> {
             game: self.snapshot.game.as_ref().map(RuntimeGame::state),
             session: self.snapshot.session.state().clone(),
             settings: self.snapshot.settings.clone(),
+            effects: self.pending_effects.clone(),
         }
+    }
+
+    /// Returns a snapshot suitable for a newly attached or resynchronizing client.
+    ///
+    /// Discardable effects are live presentation hints and must not be replayed
+    /// after a page reload or transport reconnect. Recoverable and durable
+    /// effects remain visible until they are acknowledged or expire.
+    #[must_use]
+    pub fn bootstrap_snapshot(&self) -> RuntimePublicSnapshot {
+        let mut snapshot = self.public_snapshot();
+        snapshot
+            .effects
+            .retain(|effect| effect.delivery != EffectDelivery::Discardable);
+        snapshot
     }
 
     #[must_use]
@@ -379,6 +417,34 @@ impl<R: Repository> Runtime<R> {
     #[must_use]
     pub const fn repository_mut(&mut self) -> &mut R {
         &mut self.repository
+    }
+
+    /// Acknowledges one committed effect without changing the domain revision.
+    ///
+    /// # Errors
+    ///
+    /// Returns a persistence diagnostic if the outbox cannot be updated.
+    pub fn acknowledge_effect(
+        &mut self,
+        effect_id: &str,
+        target: EffectTarget,
+    ) -> Result<bool, RuntimeError> {
+        if !self
+            .pending_effects
+            .iter()
+            .any(|effect| effect.effect_id == effect_id && effect.target == target)
+        {
+            return Ok(false);
+        }
+        let acknowledged = self
+            .repository
+            .acknowledge_effect(effect_id)
+            .map_err(RuntimeError::Persistence)?;
+        if acknowledged {
+            self.pending_effects
+                .retain(|effect| effect.effect_id != effect_id);
+        }
+        Ok(acknowledged)
     }
 
     /// Validates and applies one transport-neutral command envelope.
@@ -451,9 +517,11 @@ impl<R: Repository> Runtime<R> {
             .map_err(|error| RuntimeError::InvalidPersistedData(error.to_string()))?;
         let previous_snapshot_json = serde_json::to_string(&self.snapshot)
             .map_err(|error| RuntimeError::InvalidPersistedData(error.to_string()))?;
+        let effect_action = action.clone();
         let mut next = self.snapshot.clone();
         apply_action(&mut next, action)?;
         next.revision = self.snapshot.revision + 1;
+        let effects = platform_effects(&effect_action, &next);
         let result = CommandResult {
             command_id: command_id.into(),
             revision: next.revision,
@@ -478,11 +546,17 @@ impl<R: Repository> Runtime<R> {
                 previous_snapshot_json: &previous_snapshot_json,
                 snapshot_json: &snapshot_json,
                 result_json: &result_json,
+                effects: &effects,
             })
             .map_err(RuntimeError::Persistence)?
         {
             CommitOutcome::Committed => {
                 self.snapshot = next;
+                self.pending_effects.retain(|effect| {
+                    effect.delivery == EffectDelivery::Durable
+                        || effect.revision == self.snapshot.revision
+                });
+                self.pending_effects.extend(effects);
                 Ok(result)
             }
             CommitOutcome::Duplicate(json) => {
@@ -498,6 +572,71 @@ impl<R: Repository> Runtime<R> {
     pub fn into_repository(self) -> R {
         self.repository
     }
+}
+
+fn platform_effects(action: &RuntimeAction, snapshot: &RuntimeSnapshot) -> Vec<PlatformEffect> {
+    let (cue, event) = match action {
+        RuntimeAction::Dart { event, .. } => {
+            (game_effect_cue(snapshot, event), Some(event.clone()))
+        }
+        RuntimeAction::SoundTest { .. } => ("sound_test".to_owned(), None),
+        _ => return Vec::new(),
+    };
+    let mut effects = Vec::new();
+    if let Some(event) = event.as_ref() {
+        effects.push(PlatformEffect {
+            effect_id: format!("effect:{}:visual:projector", snapshot.revision),
+            revision: snapshot.revision,
+            target: EffectTarget::Projector,
+            delivery: EffectDelivery::Discardable,
+            kind: PlatformEffectKind::Visual {
+                cue: cue.clone(),
+                event: event.clone(),
+            },
+        });
+    }
+    if !snapshot.settings.sound.enabled {
+        return effects;
+    }
+    let targets: &[EffectTarget] = match snapshot.settings.sound.output {
+        SoundOutput::Controller => &[EffectTarget::Controller],
+        SoundOutput::Projector => &[EffectTarget::Projector],
+        SoundOutput::Both => &[EffectTarget::Controller, EffectTarget::Projector],
+    };
+    effects.extend(targets.iter().map(|target| PlatformEffect {
+        effect_id: format!(
+            "effect:{}:sound:{}",
+            snapshot.revision,
+            match target {
+                EffectTarget::Controller => "controller",
+                EffectTarget::Projector => "projector",
+            }
+        ),
+        revision: snapshot.revision,
+        target: *target,
+        delivery: EffectDelivery::Recoverable,
+        kind: PlatformEffectKind::Sound {
+            cue: cue.clone(),
+            event: event.clone(),
+        },
+    }));
+    effects
+}
+
+fn game_effect_cue(snapshot: &RuntimeSnapshot, event: &DartEvent) -> String {
+    if matches!(event, DartEvent::Miss { .. }) {
+        return "miss".into();
+    }
+    let Some(RuntimeGame::Registered(game)) = snapshot.game.as_ref() else {
+        return "hit".into();
+    };
+    game.state()
+        .mode_state
+        .get("last_effect")
+        .and_then(serde_json::Value::as_str)
+        .filter(|cue| !cue.is_empty())
+        .unwrap_or("hit")
+        .to_owned()
 }
 
 #[allow(clippy::too_many_lines)] // One exhaustive match keeps the public protocol mapping visible.
@@ -1048,6 +1187,7 @@ pub struct MemoryRepository {
     snapshot: Option<String>,
     results: HashMap<String, String>,
     fail_next_commit: bool,
+    effects: HashMap<String, PlatformEffect>,
 }
 
 impl MemoryRepository {
@@ -1065,6 +1205,25 @@ impl Repository for MemoryRepository {
         Ok(self.results.get(command_id).cloned())
     }
 
+    fn load_pending_effects(&self, current_revision: u64) -> Result<Vec<PlatformEffect>, String> {
+        let mut effects: Vec<_> = self
+            .effects
+            .values()
+            .filter(|effect| {
+                effect.delivery == EffectDelivery::Durable
+                    || (effect.delivery == EffectDelivery::Recoverable
+                        && effect.revision == current_revision)
+            })
+            .cloned()
+            .collect();
+        effects.sort_by(|left, right| left.effect_id.cmp(&right.effect_id));
+        Ok(effects)
+    }
+
+    fn acknowledge_effect(&mut self, effect_id: &str) -> Result<bool, String> {
+        Ok(self.effects.remove(effect_id).is_some())
+    }
+
     fn commit(&mut self, request: CommitRequest<'_>) -> Result<CommitOutcome, String> {
         if self.fail_next_commit {
             self.fail_next_commit = false;
@@ -1076,6 +1235,16 @@ impl Repository for MemoryRepository {
         self.snapshot = Some(request.snapshot_json.into());
         self.results
             .insert(request.command_id.into(), request.result_json.into());
+        self.effects.retain(|_, effect| {
+            effect.delivery == EffectDelivery::Durable || effect.revision == request.next_revision
+        });
+        self.effects.extend(
+            request
+                .effects
+                .iter()
+                .cloned()
+                .map(|effect| (effect.effect_id.clone(), effect)),
+        );
         Ok(CommitOutcome::Committed)
     }
 }
@@ -1854,6 +2023,96 @@ mod tests {
         );
         let public = restored.public_snapshot();
         assert_eq!(public.settings, restored.snapshot().settings);
+    }
+
+    #[test]
+    fn sound_effects_are_committed_deduplicated_and_acknowledged() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        runtime
+            .dispatch(
+                "runtime",
+                "sound-on",
+                None,
+                RuntimeAction::UpdateSoundSettings {
+                    enabled: true,
+                    output: SoundOutput::Both,
+                },
+            )
+            .expect("sound");
+        runtime
+            .dispatch(
+                "runtime",
+                "start",
+                None,
+                RuntimeAction::StartCountUp {
+                    players: players(),
+                    rounds: 5,
+                },
+            )
+            .expect("game");
+        let action = RuntimeAction::Dart {
+            event: DartEvent::Hit {
+                seq: 7,
+                field: 20,
+                ring: Ring::Triple,
+                multiplier: 3,
+                label: "T20".into(),
+                score: 60,
+            },
+            source: DartSource::Board,
+        };
+        runtime
+            .dispatch("runtime", "dart-7", None, action.clone())
+            .expect("dart");
+        let effects = runtime.public_snapshot().effects;
+        assert_eq!(effects.len(), 3);
+        assert!(effects.iter().all(|effect| effect.revision == 3));
+        assert!(
+            effects
+                .iter()
+                .any(|effect| effect.delivery == EffectDelivery::Discardable)
+        );
+        let bootstrap_effects = runtime.bootstrap_snapshot().effects;
+        assert_eq!(bootstrap_effects.len(), 2);
+        assert!(
+            bootstrap_effects
+                .iter()
+                .all(|effect| effect.delivery != EffectDelivery::Discardable)
+        );
+        let duplicate = runtime
+            .dispatch("runtime", "dart-7", None, action)
+            .expect("duplicate");
+        assert!(duplicate.duplicate);
+        assert_eq!(runtime.public_snapshot().effects.len(), 3);
+
+        let controller = effects
+            .iter()
+            .find(|effect| effect.target == EffectTarget::Controller)
+            .expect("controller effect");
+        assert!(
+            runtime
+                .acknowledge_effect(&controller.effect_id, EffectTarget::Controller)
+                .expect("ack")
+        );
+        assert_eq!(runtime.public_snapshot().effects.len(), 2);
+        assert!(
+            !runtime
+                .acknowledge_effect(&controller.effect_id, EffectTarget::Controller)
+                .expect("duplicate ack")
+        );
+
+        runtime
+            .dispatch(
+                "runtime",
+                "theme",
+                None,
+                RuntimeAction::UpdateArtTheme {
+                    theme: ArtTheme::Neon,
+                },
+            )
+            .expect("newer revision");
+        assert!(runtime.public_snapshot().effects.is_empty());
     }
 
     #[test]

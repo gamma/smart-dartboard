@@ -80,6 +80,19 @@ Umgesetzt und lokal verifiziert:
   Display-Override synchronisiert, ohne den darunter laufenden Session-Screen
   zu überschreiben. Nach einem Crash wird eine Korrektursperre bewusst gelöst
   und ein aktivierter Soundausgang wieder in `starting` überführt,
+- plattformweiter `PlatformEffect`-Vertrag für Sound- und visuelle Treffer-Cues.
+  Stabile Effect-IDs, Zielrolle, erzeugende Revision und Lieferklasse werden
+  zusammen mit Runtime, Journal, Historie und Statistik atomar in der
+  SQLite-Outbox committed. Sound-Cues bleiben nach einem Crash innerhalb ihrer
+  erzeugenden Revision bis zur bestätigten Ausführung wiederaufnehmbar;
+  kurzlebige visuelle Cues werden weder aus einem Prozessneustart rekonstruiert
+  noch beim späteren Anstecken, Reload oder Reconnect eines Displays wiederholt.
+  Beide verfallen spätestens mit einer neueren Revision. Control,
+  Browser-Projector, macOS-Projector,
+  iOS-External-Display und Companion bestätigen ausschließlich die ihnen
+  zugeordnete Rolle. Die UI dedupliziert über die Effect-ID und leitet einen
+  alten `last_event` bei anderen Zustandsänderungen nicht erneut als Treffer
+  weiter,
 - das native Projector-Fenster und der iOS-External-Display-Host erhalten genau
   eine begrenzte Reporting-Bridge: Sie dürfen ihre Geometrie und ihren
   Soundstatus melden, aber weder Kalibrierung noch Spiel oder sonstiges Setup

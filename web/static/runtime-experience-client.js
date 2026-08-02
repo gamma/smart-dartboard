@@ -51,6 +51,8 @@
       this.unsubscribe=null;
       this.unsubscribeHost=null;
       this.lastSoundTestId=null;
+      this.lastDartEventKey=null;
+      this.deliveredEffectIds=new Set();
     }
 
     async bootstrap(){
@@ -62,6 +64,7 @@
       ]);
       this.envelope=envelope;
       this.lastSoundTestId=envelope.payload?.settings?.sound_test_id || null;
+      this.lastDartEventKey=this.dartEventKey(envelope.payload?.game?.state?.last_event);
       this.modes=modes;
       this.profiles=profiles;
       this.statistics=statistics;
@@ -184,10 +187,73 @@
       });
     }
 
+    effectTarget(){
+      const parameters=new URLSearchParams(global.location?.search || '');
+      return this.core instanceof api.ExternalProjectorRuntimeClient
+        || this.core instanceof api.CompanionProjectorRuntimeClient
+        || parameters.get('native-companion')==='1'
+        || String(global.location?.pathname || '').includes('projector')
+        ? 'projector'
+        : 'controller';
+    }
+
+    dartEventKey(event){
+      return event && (event.type==='hit' || event.type==='miss')
+        ? `${event.type}:${event.seq}`
+        : null;
+    }
+
+    eventsFromEnvelope(envelope){
+      const effects=(envelope?.payload?.effects || []).filter(item=>
+        item.target===this.effectTarget()
+        && (item.kind?.type==='sound' || item.kind?.type==='visual')
+        && !this.deliveredEffectIds.has(item.effect_id));
+      const grouped=new Map();
+      effects.forEach(effect=>{
+        this.deliveredEffectIds.add(effect.effect_id);
+        const event=effect.kind.event || {type:'sound_test',seq:effect.effect_id};
+        const key=this.dartEventKey(event);
+        if(key) this.lastDartEventKey=key;
+        const groupKey=key || `effect:${effect.effect_id}`;
+        const entry=grouped.get(groupKey) || {...event,effect_cue:effect.kind.cue,_effect_ids:[]};
+        entry._effect_ids.push(effect.effect_id);
+        if(effect.kind.type==='sound'){
+          entry.effect_id=effect.effect_id;
+          entry.sound_effect_id=effect.effect_id;
+        }else{
+          entry.effect_id ||= effect.effect_id;
+          entry.visual_effect_id=effect.effect_id;
+        }
+        grouped.set(groupKey,entry);
+      });
+      const events=[...grouped.values()].map(event=>{
+        const effectIds=event._effect_ids;
+        delete event._effect_ids;
+        event.acknowledge_effect=()=>Promise.all(effectIds.map(effectId=>
+          this.core.acknowledgeEffect(effectId).catch(()=>false)));
+        return event;
+      });
+      if(events.length) return events;
+      const stateEvent=envelope?.payload?.game?.state?.last_event;
+      const key=this.dartEventKey(stateEvent);
+      if(!key || key===this.lastDartEventKey) return [];
+      this.lastDartEventKey=key;
+      return [stateEvent];
+    }
+
+    publishEvents(events,fallback){
+      if(!events.length){
+        this.publish(fallback);
+        return;
+      }
+      events.forEach((event,index)=>this.publish(index===0 ? {...fallback,...event} : event));
+    }
+
     async refresh({publish=true,event}={}){
       this.envelope=await this.core.request_snapshot();
       this.lastSoundTestId=this.envelope.payload?.settings?.sound_test_id || null;
-      if(publish) this.publish(event);
+      const platformEvents=this.eventsFromEnvelope(this.envelope);
+      if(publish) this.publishEvents(platformEvents,event);
       return this.experience();
     }
 
@@ -337,14 +403,13 @@
         onClose:()=>listener.onClose?.(),
         onError:error=>listener.onClose?.(error),
         onMessage:envelope=>{
-          const soundTestId=envelope.payload?.settings?.sound_test_id || null;
-          const soundEvent=soundTestId && soundTestId!==this.lastSoundTestId
-            ? {type:'sound_test',seq:soundTestId}
-            : undefined;
-          this.lastSoundTestId=soundTestId;
           this.envelope=envelope;
-          this.publish(soundEvent || envelope.payload?.game?.state?.last_event || undefined);
+          this.publishEvents(this.eventsFromEnvelope(envelope));
         },
+      });
+      global.queueMicrotask(()=>{
+        const events=this.eventsFromEnvelope(this.envelope);
+        if(events.length) this.publishEvents(events);
       });
       if(this.core instanceof api.TauriRuntimeClient
         || this.core instanceof api.ExternalProjectorRuntimeClient

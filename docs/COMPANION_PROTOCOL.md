@@ -95,8 +95,10 @@ denselben read-only Projector-Renderer wie AirPlay/HDMI.
   AirPlay/HDMI als Fallback an.
 - Der Companion zeigt einen neutralen Reconnect-Zustand, keinen veralteten
   vermeintlich aktuellen Spielstand.
-- Nach Reconnect folgt zuerst ein Vollsnapshot; Effekte vor diesem Snapshot
-  werden nicht nachträglich abgespielt.
+- Nach Reconnect folgt zuerst ein Vollsnapshot. Kurzlebige visuelle Effekte
+  werden nicht nachträglich abgespielt; ein noch unbestätigter Sound-Cue der
+  weiterhin aktuellen Revision darf anhand seiner Effect-ID einmalig erneut
+  versucht werden.
 - Sound wird über Effect-ID dedupliziert und bleibt standardmäßig der
   Projector-Rolle zugeordnet.
 
@@ -170,6 +172,10 @@ Implementiert und automatisiert getestet:
   Replikation und die Command-Allowlist; WebKit prüft Pairing, produktive
   Spielansicht, Geometrie-Report, deaktivierte Testwerkzeuge und
   Disconnect-Rückkehr.
+- Effect-Outbox-Bestätigungen laufen über einen eigenen authentisierten
+  HTTPS-Rückkanal. Der Host akzeptiert dort ausschließlich Effect-IDs, die im
+  noch offenen Outbox-Zustand der Projector-Rolle zugeordnet sind; daraus
+  entsteht keine neue Spielrevision und keine allgemeine Command-Autorität.
 
 Noch offen:
 

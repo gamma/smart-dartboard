@@ -13,8 +13,8 @@ use sdb_companion::{
     PairingAuthority, PairingBootstrap, PairingError, PairingGrant, PairingOffer, PairingRequest,
 };
 use sdb_contracts::{
-    CommandEnvelope, ContractError, DartSource, Envelope, ErrorCode, MessageKind, PROTOCOL_VERSION,
-    RuntimeCommand,
+    CommandEnvelope, ContractError, DartSource, EffectTarget, Envelope, ErrorCode, MessageKind,
+    PROTOCOL_VERSION, RuntimeCommand,
 };
 use sdb_game_core::{GameMetadata, registered_game_metadata};
 use sdb_runtime::{CommandResult, Runtime, RuntimePublicSnapshot};
@@ -79,6 +79,12 @@ struct ServiceInfo {
     service: &'static str,
     api: &'static str,
     production_replacement: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct EffectAcknowledgement {
+    effect_id: String,
+    acknowledged: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -216,16 +222,36 @@ impl AppState {
     }
 
     fn snapshot(&self, message_id: impl Into<String>) -> Result<StateMessage, ContractError> {
+        self.state_message(message_id, false)
+    }
+
+    fn bootstrap_snapshot(
+        &self,
+        message_id: impl Into<String>,
+    ) -> Result<StateMessage, ContractError> {
+        self.state_message(message_id, true)
+    }
+
+    fn state_message(
+        &self,
+        message_id: impl Into<String>,
+        bootstrap: bool,
+    ) -> Result<StateMessage, ContractError> {
         let runtime = self
             .runtime
             .lock()
             .map_err(|_| internal_error("runtime lock poisoned"))?;
+        let snapshot = if bootstrap {
+            runtime.bootstrap_snapshot()
+        } else {
+            runtime.public_snapshot()
+        };
         Ok(Envelope::new(
             runtime.instance_id(),
             message_id,
             runtime.snapshot().revision,
             MessageKind::State,
-            runtime.public_snapshot(),
+            snapshot,
         ))
     }
 }
@@ -248,6 +274,10 @@ fn router(state: AppState) -> Router {
         .route("/api/v2/runtime/bootstrap", get(bootstrap))
         .route("/api/v2/runtime/snapshot", get(snapshot))
         .route("/api/v2/runtime/commands", post(command))
+        .route(
+            "/api/v2/runtime/effects/{target}/{effect_id}/ack",
+            post(acknowledge_effect),
+        )
         .route("/api/v2/runtime/events", get(websocket))
         .route("/api/v2/companion/pairing/open", post(open_pairing))
         .route("/api/v2/companion/pairing", post(pair_companion))
@@ -263,6 +293,10 @@ fn router(state: AppState) -> Router {
         .route(
             "/api/v2/companion/runtime/events",
             get(companion_websocket),
+        )
+        .route(
+            "/api/v2/companion/runtime/effects/{effect_id}/ack",
+            post(companion_acknowledge_effect),
         )
         .route("/api/v2/board/status", post(board_status))
         .route("/api/v2/board/packets", post(board_packet))
@@ -435,11 +469,11 @@ async fn board_packet(
 }
 
 async fn bootstrap(State(state): State<AppState>) -> Result<Json<StateMessage>, ApiError> {
-    Ok(Json(state.snapshot(Uuid::new_v4().to_string())?))
+    Ok(Json(state.bootstrap_snapshot(Uuid::new_v4().to_string())?))
 }
 
 async fn snapshot(State(state): State<AppState>) -> Result<Json<StateMessage>, ApiError> {
-    Ok(Json(state.snapshot(Uuid::new_v4().to_string())?))
+    Ok(Json(state.bootstrap_snapshot(Uuid::new_v4().to_string())?))
 }
 
 async fn open_pairing(
@@ -577,6 +611,28 @@ async fn companion_websocket(
             state.companions,
             token,
         )
+    }))
+}
+
+async fn companion_acknowledge_effect(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(effect_id): Path<String>,
+) -> Result<Json<EffectAcknowledgement>, ApiError> {
+    companion_configured(&state)?;
+    authorize_companion(&state, &headers)?;
+    if !valid_effect_id(&effect_id) {
+        return Err(invalid_command("effect ID is invalid").into());
+    }
+    let acknowledged = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?
+        .acknowledge_effect(&effect_id, EffectTarget::Projector)
+        .map_err(|_| internal_error("effect acknowledgement failed"))?;
+    Ok(Json(EffectAcknowledgement {
+        effect_id,
+        acknowledged,
     }))
 }
 
@@ -777,6 +833,32 @@ async fn command(
     Ok(Json(result))
 }
 
+async fn acknowledge_effect(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((target, effect_id)): Path<(String, String)>,
+) -> Result<Json<EffectAcknowledgement>, ApiError> {
+    validate_same_origin(&headers)?;
+    if !valid_effect_id(&effect_id) {
+        return Err(invalid_command("effect ID is invalid").into());
+    }
+    let target = match target.as_str() {
+        "controller" => EffectTarget::Controller,
+        "projector" => EffectTarget::Projector,
+        _ => return Err(invalid_command("effect target is invalid").into()),
+    };
+    let acknowledged = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?
+        .acknowledge_effect(&effect_id, target)
+        .map_err(|_| internal_error("effect acknowledgement failed"))?;
+    Ok(Json(EffectAcknowledgement {
+        effect_id,
+        acknowledged,
+    }))
+}
+
 async fn websocket(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -784,7 +866,7 @@ async fn websocket(
 ) -> Result<Response, ApiError> {
     validate_websocket_origin(&headers)?;
     let receiver = state.states.subscribe();
-    let initial = state.snapshot(Uuid::new_v4().to_string())?;
+    let initial = state.bootstrap_snapshot(Uuid::new_v4().to_string())?;
     Ok(upgrade.on_upgrade(move |socket| stream_states(socket, initial, receiver)))
 }
 
@@ -889,7 +971,7 @@ fn companion_snapshot(state: &AppState) -> Result<CompanionFrame, ContractError>
         runtime_instance_id: runtime.instance_id().to_owned(),
         revision: runtime.snapshot().revision,
         kind: CompanionFrameKind::Snapshot,
-        payload: serde_json::to_value(runtime.public_snapshot())
+        payload: serde_json::to_value(runtime.bootstrap_snapshot())
             .map_err(|_| internal_error("companion snapshot serialization failed"))?,
     })
 }
@@ -1099,6 +1181,14 @@ fn invalid_command(message: &str) -> ContractError {
         message: message.into(),
         details: None,
     }
+}
+
+fn valid_effect_id(effect_id: &str) -> bool {
+    !effect_id.is_empty()
+        && effect_id.len() <= 256
+        && effect_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b':'))
 }
 
 fn board_unavailable(message: &str) -> ContractError {
@@ -1574,6 +1664,98 @@ mod tests {
         .expect("json");
         assert_eq!(value["revision"], 1);
         assert_eq!(value["state"]["game_type"], "count_up");
+    }
+
+    #[tokio::test]
+    async fn effect_outbox_is_exposed_and_acknowledged_per_surface() {
+        let app = test_app();
+        post_command(
+            &app,
+            serde_json::json!({
+                "protocol_version":1,"command_id":"sound-on",
+                "runtime_instance_id":"test-runtime","expected_revision":0,
+                "command":{"type":"update_sound_settings","enabled":true,"output":"both"}
+            }),
+        )
+        .await;
+        post_command(
+            &app,
+            serde_json::json!({
+                "protocol_version":1,"command_id":"start",
+                "runtime_instance_id":"test-runtime","expected_revision":1,
+                "command":{"type":"start_game","game_type":"countup",
+                    "player_ids":["Ada"],"options":{"rounds":5}}
+            }),
+        )
+        .await;
+        post_command(
+            &app,
+            serde_json::json!({
+                "protocol_version":1,"command_id":"dart-1",
+                "runtime_instance_id":"test-runtime","expected_revision":2,
+                "command":{"type":"ingest_dart","source":"board","event":{
+                    "type":"hit","seq":1,"field":20,"ring":"triple",
+                    "multiplier":3,"label":"T20","score":60}}
+            }),
+        )
+        .await;
+        let bootstrap = app
+            .clone()
+            .oneshot(
+                Request::get("/api/v2/runtime/bootstrap")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("bootstrap");
+        let state: Value = serde_json::from_slice(
+            &to_bytes(bootstrap.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("state");
+        assert_eq!(
+            state["payload"]["effects"].as_array().map(Vec::len),
+            Some(2)
+        );
+        assert!(
+            state["payload"]["effects"]
+                .as_array()
+                .expect("effects")
+                .iter()
+                .all(|effect| effect["delivery"] != "discardable")
+        );
+
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v2/runtime/effects/controller/effect:3:sound:controller/ack")
+                    .header(header::HOST, "localhost")
+                    .header(header::ORIGIN, "http://evil.example")
+                    .body(Body::from("{}"))
+                    .expect("cross-origin ack"),
+            )
+            .await
+            .expect("cross-origin response");
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v2/runtime/effects/controller/effect:3:sound:controller/ack")
+                    .body(Body::from("{}"))
+                    .expect("ack"),
+            )
+            .await
+            .expect("ack response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let acknowledgement: Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("ack body"),
+        )
+        .expect("ack JSON");
+        assert_eq!(acknowledgement["acknowledged"], true);
+        assert_eq!(acknowledgement["effect_id"], "effect:3:sound:controller");
     }
 
     #[tokio::test]

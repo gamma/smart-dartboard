@@ -2,7 +2,7 @@
 
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use sdb_companion::{CompanionRole, PairedDevice};
-use sdb_contracts::{DartEvent, DartSource};
+use sdb_contracts::{DartEvent, DartSource, EffectDelivery, PlatformEffect};
 use sdb_runtime::{
     CommitOutcome, CommitRequest, Repository, RuntimeAction, RuntimeGame, RuntimeSnapshot,
 };
@@ -2652,6 +2652,57 @@ impl Repository for SqliteRepository {
             .map_err(|error| error.to_string())
     }
 
+    fn load_pending_effects(&self, current_revision: u64) -> Result<Vec<PlatformEffect>, String> {
+        let mut statement = self
+            .connection
+            .prepare(
+                "SELECT effect_id, committed_revision, effect_json FROM effect_outbox
+                 WHERE status='pending' ORDER BY committed_revision, effect_id",
+            )
+            .map_err(|error| error.to_string())?;
+        let rows = statement
+            .query_map([], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, String>(2)?,
+                ))
+            })
+            .map_err(|error| error.to_string())?;
+        let mut effects = Vec::new();
+        for row in rows {
+            let (effect_id, revision, json) = row.map_err(|error| error.to_string())?;
+            let effect: PlatformEffect =
+                serde_json::from_str(&json).map_err(|error| error.to_string())?;
+            let revision = u64::try_from(revision)
+                .map_err(|_| "effect outbox contains a negative revision".to_owned())?;
+            if !valid_effect_id(&effect_id)
+                || effect.effect_id != effect_id
+                || effect.revision != revision
+            {
+                return Err("effect outbox metadata is inconsistent".into());
+            }
+            if effect.delivery == EffectDelivery::Durable
+                || (effect.delivery == EffectDelivery::Recoverable
+                    && effect.revision == current_revision)
+            {
+                effects.push(effect);
+            }
+        }
+        Ok(effects)
+    }
+
+    fn acknowledge_effect(&mut self, effect_id: &str) -> Result<bool, String> {
+        self.connection
+            .execute(
+                "UPDATE effect_outbox SET status='delivered'
+                 WHERE effect_id=?1 AND status='pending'",
+                [effect_id],
+            )
+            .map(|changed| changed == 1)
+            .map_err(|error| error.to_string())
+    }
+
     fn commit(&mut self, request: CommitRequest<'_>) -> Result<CommitOutcome, String> {
         let next_revision = i64::try_from(request.next_revision)
             .map_err(|_| "revision exceeds SQLite integer range".to_string())?;
@@ -2718,16 +2769,74 @@ impl Repository for SqliteRepository {
                 ],
             )
             .map_err(|error| error.to_string())?;
+        expire_stale_effects(&transaction, request.next_revision)?;
+        for effect in request.effects {
+            if !valid_effect_id(&effect.effect_id) || effect.revision != request.next_revision {
+                return Err("effect metadata is invalid".into());
+            }
+            let effect_json = serde_json::to_string(effect).map_err(|error| error.to_string())?;
+            transaction
+                .execute(
+                    "INSERT INTO effect_outbox(
+                        effect_id, committed_revision, effect_json, status
+                     ) VALUES(?1, ?2, ?3, 'pending')",
+                    params![effect.effect_id, next_revision, effect_json],
+                )
+                .map_err(|error| error.to_string())?;
+        }
         project_domain(&transaction, &request)?;
         transaction.commit().map_err(|error| error.to_string())?;
         Ok(CommitOutcome::Committed)
     }
 }
 
+fn expire_stale_effects(transaction: &Transaction<'_>, next_revision: u64) -> Result<(), String> {
+    let mut statement = transaction
+        .prepare(
+            "SELECT effect_id, effect_json FROM effect_outbox
+             WHERE status='pending' AND committed_revision < ?1",
+        )
+        .map_err(|error| error.to_string())?;
+    let next_revision_sql = to_sql_i64(next_revision, "revision")?;
+    let rows = statement
+        .query_map([next_revision_sql], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|error| error.to_string())?;
+    let mut expired = Vec::new();
+    for row in rows {
+        let (effect_id, json) = row.map_err(|error| error.to_string())?;
+        let effect: PlatformEffect =
+            serde_json::from_str(&json).map_err(|error| error.to_string())?;
+        if effect.delivery != EffectDelivery::Durable {
+            expired.push(effect_id);
+        }
+    }
+    drop(statement);
+    for effect_id in expired {
+        transaction
+            .execute(
+                "UPDATE effect_outbox SET status='discarded'
+                 WHERE effect_id=?1 AND status='pending'",
+                [effect_id],
+            )
+            .map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+fn valid_effect_id(effect_id: &str) -> bool {
+    !effect_id.is_empty()
+        && effect_id.len() <= 256
+        && effect_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b':'))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sdb_contracts::{DartEvent, PlayerRef, Ring};
+    use sdb_contracts::{DartEvent, EffectTarget, PlayerRef, Ring, SoundOutput};
     use sdb_game_core::{GameStatus, seed_from_id};
     use sdb_runtime::{Runtime, RuntimeAction};
     use sdb_session_core::Screen;
@@ -2778,6 +2887,112 @@ mod tests {
             serde_json::from_str(&journal[0].action_json).expect("action JSON");
         assert_eq!(action["type"], "start_count_up");
         std::fs::remove_file(temporary).expect("remove test database");
+    }
+
+    #[test]
+    #[allow(clippy::too_many_lines)] // One test keeps commit, crash recovery, ack and expiry in order.
+    fn sqlite_effect_outbox_is_atomic_recoverable_and_acknowledgeable() {
+        let temporary = std::env::temp_dir().join(format!(
+            "sdb-effects-{}-{}.sqlite",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_file(&temporary);
+        {
+            let repository = SqliteRepository::open(&temporary).expect("open");
+            let mut runtime = Runtime::restore("first", repository).expect("runtime");
+            runtime
+                .dispatch(
+                    "first",
+                    "sound-on",
+                    None,
+                    RuntimeAction::UpdateSoundSettings {
+                        enabled: true,
+                        output: SoundOutput::Both,
+                    },
+                )
+                .expect("sound");
+            runtime
+                .dispatch(
+                    "first",
+                    "start",
+                    None,
+                    RuntimeAction::StartCountUp {
+                        players: vec![("ada".into(), "Ada".into())],
+                        rounds: 5,
+                    },
+                )
+                .expect("game");
+            runtime
+                .dispatch(
+                    "first",
+                    "dart-1",
+                    None,
+                    RuntimeAction::Dart {
+                        event: DartEvent::Hit {
+                            seq: 1,
+                            field: 20,
+                            ring: Ring::Triple,
+                            multiplier: 3,
+                            label: "T20".into(),
+                            score: 60,
+                        },
+                        source: DartSource::Board,
+                    },
+                )
+                .expect("dart");
+            assert_eq!(runtime.public_snapshot().effects.len(), 3);
+        }
+        let repository = SqliteRepository::open(&temporary).expect("reopen");
+        let mut runtime = Runtime::restore("second", repository).expect("restore");
+        let effects = runtime.public_snapshot().effects;
+        assert_eq!(effects.len(), 2);
+        let projector = effects
+            .iter()
+            .find(|effect| effect.target == EffectTarget::Projector)
+            .expect("projector effect");
+        assert!(
+            runtime
+                .acknowledge_effect(&projector.effect_id, EffectTarget::Projector)
+                .expect("ack")
+        );
+        assert_eq!(runtime.public_snapshot().effects.len(), 1);
+        let controller = runtime
+            .public_snapshot()
+            .effects
+            .into_iter()
+            .find(|effect| effect.target == EffectTarget::Controller)
+            .expect("controller effect");
+        assert!(
+            runtime
+                .acknowledge_effect(&controller.effect_id, EffectTarget::Controller)
+                .expect("controller ack")
+        );
+        runtime
+            .dispatch(
+                "second",
+                "newer",
+                None,
+                RuntimeAction::UpdateArtTheme {
+                    theme: sdb_contracts::ArtTheme::Neon,
+                },
+            )
+            .expect("expire visual effect");
+        assert!(runtime.public_snapshot().effects.is_empty());
+        let repository = runtime.into_repository();
+        let statuses: (i64, i64) = repository
+            .connection
+            .query_row(
+                "SELECT
+                    SUM(CASE WHEN status='delivered' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN status='discarded' THEN 1 ELSE 0 END)
+                 FROM effect_outbox",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("effect statuses");
+        assert_eq!(statuses, (2, 1));
+        std::fs::remove_file(temporary).expect("remove database");
     }
 
     #[test]

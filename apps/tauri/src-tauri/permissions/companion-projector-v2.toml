@@ -1,4 +1,4 @@
 [[permission]]
 identifier = "allow-companion-projector-v2"
 description = "Allows the paired Companion role to read its replicated Projector state and report only presentation geometry or sound status."
-commands.allow = ["companion_projector_v2_bootstrap", "companion_projector_v2_query", "companion_projector_v2_report"]
+commands.allow = ["companion_projector_v2_bootstrap", "companion_projector_v2_query", "companion_projector_v2_report", "companion_projector_v2_ack_effect"]

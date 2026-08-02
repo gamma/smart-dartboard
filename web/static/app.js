@@ -358,6 +358,7 @@ function updateExperience(experience, event){
     const lastThrow=experience.game?.throws?.at(-1);
     const throwWasCounted=!isThrow || (lastThrow && Number(lastThrow.seq)===Number(event.seq));
     if(throwWasCounted) playEventCue(event, experience);
+    event.acknowledge_effect?.();
     if(isThrow && throwWasCounted){
       if(isProjector() && (isBombEvent(experience,event) || isCandyFireEvent(experience,event))){
         const candyFire=isCandyFireEvent(experience,event);
@@ -1777,58 +1778,59 @@ function tone(frequency,duration=0.12,delay=0,type='sine',gain=0.12){
 }
 function playEventCue(event,experience){
   if(!audioEnabledHere(experience)) return;
-  const key=`${event.type}:${event.seq ?? event.action ?? Date.now()}`;
+  const key=event.effect_id || `${event.type}:${event.seq ?? event.action ?? Date.now()}`;
+  const cue=event.effect_cue || '';
   if(key===appState.lastCueKey) return;
   appState.lastCueKey=key;
-  if(event.type==='sound_test'){
+  if(cue==='sound_test' || event.type==='sound_test'){
     [440,660,880].forEach((frequency,index)=>tone(frequency,.2,index*.1,'triangle',.12));
     return;
   }
   const theme=modeBySlug(experience.game?.game_type)?.sound_theme || 'arena';
   const themeBase={arcade:500,club:390,championship:450,arena:420}[theme] || 420;
-  if(event.type==='hit' && isBombNearMissEvent(experience,event)){
+  if(event.type==='hit' && (cue==='bomb_near_miss' || isBombNearMissEvent(experience,event))){
     tone(210,.15,0,'triangle',.09);
     tone(330,.2,.1,'sine',.08);
-  } else if(event.type==='hit' && isExplosionEvent(experience,event)){
+  } else if(event.type==='hit' && (cue==='bomb_explosion' || cue==='mine_explosion' || isExplosionEvent(experience,event))){
     tone(92,.38,0,'sawtooth',.18);
     tone(54,.52,.04,'sawtooth',.16);
     tone(680,.09,0,'square',.07);
-  } else if(event.type==='hit' && isCandyOverheatEvent(experience,event)){
+  } else if(event.type==='hit' && (cue==='candy_overheat' || isCandyOverheatEvent(experience,event))){
     tone(520,.11,0,'square',.12);
     tone(360,.16,.08,'triangle',.13);
     tone(220,.28,.18,'sawtooth',.1);
     tone(110,.34,.28,'sine',.08);
-  } else if(event.type==='hit' && isCandyFireEvent(experience,event)){
+  } else if(event.type==='hit' && (cue==='candy_fire' || isCandyFireEvent(experience,event))){
     tone(720,.12,0,'square',.08);
     tone(940,.1,.12,'triangle',.07);
     tone(190,.24,.38,'sawtooth',.12);
     tone(520,.16,.42,'square',.06);
-  } else if(event.type==='hit' && isDragonEvent(experience,event,'dragon_fire')){
+  } else if(event.type==='hit' && (cue==='dragon_fire' || isDragonEvent(experience,event,'dragon_fire'))){
     tone(110,.42,0,'sawtooth',.17);
     tone(72,.58,.05,'sawtooth',.13);
     tone(620,.16,.08,'square',.07);
-  } else if(event.type==='hit' && isDragonEvent(experience,event,'dragon_scale')){
+  } else if(event.type==='hit' && (cue==='dragon_scale' || isDragonEvent(experience,event,'dragon_scale'))){
     tone(210,.18,0,'triangle',.12);
     tone(145,.24,.1,'sawtooth',.08);
-  } else if(event.type==='hit' && isDragonEvent(experience,event,'dragon_egg')){
+  } else if(event.type==='hit' && (cue==='dragon_egg' || isDragonEvent(experience,event,'dragon_egg'))){
     tone(680,.12,0,'triangle',.13);
     tone(920,.18,.08,'sine',.1);
     tone(1180,.12,.17,'triangle',.06);
-  } else if(event.type==='hit' && isCookieEvent(experience,event,'cookie_board_clear')){
+  } else if(event.type==='hit' && (cue==='cookie_board_clear' || isCookieEvent(experience,event,'cookie_board_clear'))){
     [520,680,860,1080].forEach((frequency,index)=>tone(frequency,.2,index*.08,'triangle',.1));
-  } else if(event.type==='hit' && isCookieEvent(experience,event,'cookie_eaten')){
+  } else if(event.type==='hit' && (cue==='cookie_eaten' || isCookieEvent(experience,event,'cookie_eaten'))){
     tone(460,.09,0,'triangle',.11);
     tone(720,.13,.07,'square',.055);
-  } else if(event.type==='hit' && isCookieEvent(experience,event,'cookie_moldy')){
+  } else if(event.type==='hit' && (cue==='cookie_moldy' || isCookieEvent(experience,event,'cookie_moldy'))){
     tone(170,.2,0,'sawtooth',.1);
     tone(105,.28,.1,'triangle',.07);
-  } else if(event.type==='hit' && isRiskEvent(experience,event,'risk_steal')){
+  } else if(event.type==='hit' && (cue==='risk_steal' || isRiskEvent(experience,event,'risk_steal'))){
     [440,660,880,1100].forEach((frequency,index)=>tone(frequency,.2,index*.07,'square',.075));
-  } else if(event.type==='hit' && isRiskEvent(experience,event,'risk_hot_pot')){
+  } else if(event.type==='hit' && (cue==='risk_hot_pot' || isRiskEvent(experience,event,'risk_hot_pot'))){
     tone(260,.16,0,'sawtooth',.08);
     tone(390,.2,.12,'triangle',.1);
     tone(520,.24,.25,'square',.055);
-  } else if(event.type==='hit' && isRiskEvent(experience,event,'risk_secured')){
+  } else if(event.type==='hit' && (cue==='risk_secured' || isRiskEvent(experience,event,'risk_secured'))){
     tone(520,.13,0,'triangle',.1);
     tone(780,.2,.09,'sine',.08);
   } else if(event.type==='hit'){

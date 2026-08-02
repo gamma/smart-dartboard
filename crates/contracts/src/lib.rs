@@ -149,6 +149,50 @@ pub enum SoundStatus {
     Unavailable,
 }
 
+/// Product surface that must execute a committed platform effect.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffectTarget {
+    Controller,
+    Projector,
+}
+
+/// Recovery policy for an effect that has not yet been acknowledged.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EffectDelivery {
+    /// Keep retrying across revisions until a platform target acknowledges it.
+    Durable,
+    /// Retry after a crash only while the producing revision is still current.
+    Recoverable,
+    /// Deliver only to currently connected targets and never reconstruct it.
+    Discardable,
+}
+
+/// Declarative effect payload. Platform hosts decide how the cue is rendered.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum PlatformEffectKind {
+    Sound {
+        cue: String,
+        event: Option<DartEvent>,
+    },
+    Visual {
+        cue: String,
+        event: DartEvent,
+    },
+}
+
+/// An effect committed atomically with the revision that produced it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PlatformEffect {
+    pub effect_id: String,
+    pub revision: u64,
+    pub target: EffectTarget,
+    pub delivery: EffectDelivery,
+    pub kind: PlatformEffectKind,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SoundSettings {
     pub enabled: bool,

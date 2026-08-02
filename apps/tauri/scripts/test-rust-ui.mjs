@@ -30,6 +30,15 @@ async function waitUntilReady(){
   throw new Error(`Rust UI server did not become ready\n${serverOutput}`);
 }
 
+async function waitForEffectsDrained(){
+  for(let attempt=0;attempt<40;attempt++){
+    const state=await (await fetch(`${origin}/api/v2/runtime/bootstrap`)).json();
+    if((state.payload?.effects || []).length===0) return;
+    await new Promise(resolveWait=>setTimeout(resolveWait,50));
+  }
+  throw new Error('Committed platform effects were not acknowledged');
+}
+
 let browser;
 try{
   await waitUntilReady();
@@ -68,6 +77,7 @@ try{
   await control.waitForFunction(revision=>appState.experience?.revision>=revision,soundRevision);
   await control.locator('[data-action="sound-test"]').click();
   await projector.waitForFunction(()=>Boolean(appState.experience?.sound?.last_test_id));
+  await waitForEffectsDrained();
   await Promise.all([control.reload(),projector.reload()]);
   await Promise.all([
     control.waitForFunction(()=>appState.experience?.art_theme==='neon'),
@@ -88,6 +98,7 @@ try{
   await projector.waitForSelector('.projection-game',{timeout:8000});
   await projector.locator('#seg-triple-20').click({force:true});
   await control.waitForFunction(()=>document.querySelector('.score-row strong')?.textContent==='60');
+  await waitForEffectsDrained();
   await control.evaluate(async()=>{
     await action('/api/game/abort');
     await action('/api/game/prepare',{
@@ -122,7 +133,7 @@ try{
     throw new Error('Expected portable export with one session and two games');
   }
   if(browserErrors.length) throw new Error(`Browser errors:\n${browserErrors.join('\n')}`);
-  console.log('Rust Runtime UI: setup, 24 modes, synchronized play, analytics, history, replay and export passed in WebKit');
+  console.log('Rust Runtime UI: setup, 24 modes, effects, synchronized play, analytics, history, replay and export passed in WebKit');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');

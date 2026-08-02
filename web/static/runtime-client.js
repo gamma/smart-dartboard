@@ -23,6 +23,15 @@
     else listener?.[name]?.(payload);
   }
 
+  function viewTarget(){
+    const parameters=new URLSearchParams(global.location?.search || '');
+    return global.__SDB_EXTERNAL_PROJECTOR__
+      || parameters.get('native-companion')==='1'
+      || String(global.location?.pathname || '').includes('projector')
+      ? 'projector'
+      : 'controller';
+  }
+
   class HostedRuntimeClient {
     constructor(browserLocation=global.location){
       this.location=browserLocation;
@@ -73,6 +82,12 @@
     }
 
     query(path){ return this.request(path); }
+
+    acknowledgeEffect(effectId){
+      return this.request(`/api/v2/runtime/effects/${viewTarget()}/${encodeURIComponent(effectId)}/ack`,{
+        method:'POST',headers:{'content-type':'application/json'},body:'{}',
+      });
+    }
 
     async dispatch(command,{commandId:stableId=commandId(),expectedRevision=this.revision}={}){
       if(!this.runtimeInstanceId || this.revision===null){
@@ -170,6 +185,7 @@
     async bootstrap(){ return this.acceptEnvelope(await this.invoke('runtime_v2_bootstrap')); }
     async request_snapshot(){ return this.acceptEnvelope(await this.invoke('runtime_v2_snapshot')); }
     query(path){ return this.invoke('runtime_v2_query',{path}); }
+    acknowledgeEffect(effectId){ return this.invoke('runtime_v2_ack_effect',{effectId}); }
     async dispatch(command,{commandId:stableId=commandId(),expectedRevision=this.revision}={}){
       if(!this.runtimeInstanceId || this.revision===null){
         throw new RuntimeClientError('RuntimeClient must bootstrap before dispatch');
@@ -249,6 +265,7 @@
     async bootstrap(){ return this.acceptEnvelope(await this.bridge.bootstrap()); }
     async request_snapshot(){ return this.acceptEnvelope(await this.bridge.bootstrap()); }
     query(path){ return this.bridge.query(path); }
+    acknowledgeEffect(effectId){ return this.bridge.acknowledgeEffect(effectId); }
     async dispatch(command,{commandId:stableId=commandId(),expectedRevision=this.revision}={}){
       if(!this.runtimeInstanceId || this.revision===null){
         throw new RuntimeClientError('RuntimeClient must bootstrap before dispatch');
@@ -318,6 +335,9 @@
     }
     async request_snapshot(){ return this.bootstrap(); }
     query(path){ return this.invoke('companion_projector_v2_query',{path}); }
+    acknowledgeEffect(effectId){
+      return this.invoke('companion_projector_v2_ack_effect',{effectId});
+    }
     async dispatch(command,{commandId:stableId=commandId(),expectedRevision=this.revision}={}){
       if(command.type!=='report_projector_geometry' && command.type!=='report_sound_status'){
         throw new RuntimeClientError('Companion projector is read-only');
@@ -361,10 +381,11 @@
   }
 
   class TestRuntimeClient {
-    constructor({envelope,dispatch,queries={}}){
+    constructor({envelope,dispatch,queries={},acknowledgeEffect=()=>Promise.resolve(true)}){
       this.envelope=envelope;
       this.dispatchHandler=dispatch;
       this.queries=queries;
+      this.acknowledgeEffectHandler=acknowledgeEffect;
       this.listeners=new Set();
     }
     async bootstrap(){ return this.envelope; }
@@ -373,6 +394,7 @@
       return this.dispatchHandler?.(command,options,this) ?? null;
     }
     async query(path){ return this.queries[path]; }
+    acknowledgeEffect(effectId){ return this.acknowledgeEffectHandler(effectId); }
     subscribe(listener){
       this.listeners.add(listener);
       listenerCall(listener,'onOpen');

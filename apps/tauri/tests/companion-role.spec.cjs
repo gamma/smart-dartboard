@@ -36,7 +36,13 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
           players:[{id:'ada',name:'Ada',score:120}],current_player_index:0,
           round_number:2,darts_in_turn:1,turn_score:60,status:'running',last_event:null,
         }},
-        settings: {},
+        settings: {sound:{enabled:true,output:'projector',status:'ready'}},
+        effects: [{
+          effect_id:'dart-8:sound:projector',revision:8,target:'projector',delivery:'durable',
+          kind:{type:'sound',cue:'hit',event:{
+            type:'hit',seq:8,field:20,ring:'triple',multiplier:3,label:'T20',score:60,
+          }},
+        }],
       },
     };
     const modes=[{
@@ -74,6 +80,9 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
                 throw new Error(`forbidden Companion report: ${args.envelope.command.type}`);
               }
               return {command_id:args.envelope.command_id,revision:8,duplicate:false};
+            case 'companion_projector_v2_ack_effect':
+              if(args.effectId!=='dart-8:sound:projector') throw new Error('unexpected effect ID');
+              return true;
             case 'companion_discovered_hosts':
               return [{
                 service_name: 'Smart Dartboard Arcade',
@@ -155,6 +164,9 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
   await expect.poll(async()=>page.evaluate(() => window.__nativeCalls
     .some(call=>call.command==='companion_projector_v2_report'
       && call.args.envelope.command.type==='report_projector_geometry'))).toBe(true);
+  await expect.poll(async()=>page.evaluate(() => window.__nativeCalls
+    .some(call=>call.command==='companion_projector_v2_ack_effect'
+      && call.args.effectId==='dart-8:sound:projector'))).toBe(true);
   expect(await page.evaluate(() => window.__nativeCalls
     .some(call=>call.command==='runtime_v2_dispatch'))).toBe(false);
 
