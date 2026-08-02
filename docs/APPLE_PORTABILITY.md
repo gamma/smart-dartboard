@@ -458,6 +458,14 @@ Suspend/Resume-Sequenz geprüft. Verhalten mit realer Scheibe, iOS-
 Hintergrundzeitlimits und WLAN-/AirPlay-Unterbrechungen ist weiterhin ein
 Hardware-Gate, keine aus dem Simulator abgeleitete Supportaussage.
 
+macOS verwendet für Systemruhe und Aufwachen denselben Zustandsübergang. Ein
+kleiner AppKit-Adapter beobachtet die beiden `NSWorkspace`-Benachrichtigungen;
+Rust serialisiert danach Adapterabbau und Wiederanlauf genauso wie auf iOS.
+Der Adapter ist im signaturfreien App-Bundle kompiliert und verlinkt. Ein
+echter Sleep/Wake-Lauf mit verbundenem Board ist weiterhin Teil der
+Hardwarequalifikation und wird nicht durch einen reinen Build als bestanden
+gewertet.
+
 ## 9. Empfohlene Umsetzungsschritte
 
 1. Mit einem minimalen M0-Spike CoreBluetooth, zwei WebViews sowie eigenständige

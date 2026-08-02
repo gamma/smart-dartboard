@@ -75,7 +75,6 @@ struct NativeState {
     companion_changes: broadcast::Sender<()>,
     app_role: NativeAppRole,
     lifecycle: AppLifecyclePhase,
-    #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
     lifecycle_generation: u64,
     diagnostics: DiagnosticLogger,
 }
@@ -372,7 +371,10 @@ impl NativeState {
         Ok(self.public())
     }
 
-    #[cfg_attr(not(any(target_os = "ios", test)), allow(dead_code))]
+    #[cfg_attr(
+        not(any(target_os = "ios", target_os = "macos", test)),
+        allow(dead_code)
+    )]
     fn set_lifecycle(&mut self, phase: AppLifecyclePhase) -> Option<u64> {
         if self.lifecycle == phase {
             return None;
@@ -2418,7 +2420,6 @@ struct NativeCompanionService {
     client_status: Arc<Mutex<Option<CompanionClientView>>>,
     client_frame: Arc<Mutex<Option<PublicState>>>,
     client_task: AsyncMutex<Option<JoinHandle<()>>>,
-    #[cfg_attr(not(target_os = "ios"), allow(dead_code))]
     lifecycle_gate: AsyncMutex<()>,
 }
 
@@ -2498,8 +2499,8 @@ async fn restart_companion_client(app: &tauri::AppHandle, service: &NativeCompan
     *service.client_task.lock().await = Some(task);
 }
 
-#[cfg(target_os = "ios")]
-fn handle_ios_lifecycle(app: &tauri::AppHandle, phase: AppLifecyclePhase) {
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn handle_apple_lifecycle(app: &tauri::AppHandle, phase: AppLifecyclePhase) {
     let Some(shared_state) = app.try_state::<SharedNativeState>() else {
         return;
     };
@@ -2584,6 +2585,15 @@ fn handle_ios_lifecycle(app: &tauri::AppHandle, phase: AppLifecyclePhase) {
             publish_public_state(&app, &public);
         }
     });
+}
+
+#[cfg(target_os = "macos")]
+const fn lifecycle_phase_for_sleeping(sleeping: bool) -> AppLifecyclePhase {
+    if sleeping {
+        AppLifecyclePhase::Suspended
+    } else {
+        AppLifecyclePhase::Active
+    }
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -2907,6 +2917,34 @@ mod apple_board_host {
         if let Some(stop) = stop_function() {
             unsafe { stop() };
         }
+    }
+}
+
+#[cfg(target_os = "macos")]
+#[allow(unsafe_code)]
+mod macos_lifecycle_host {
+    use super::{APP_HANDLE, handle_apple_lifecycle, lifecycle_phase_for_sleeping};
+
+    #[link(name = "sdb_apple_board_transport", kind = "static")]
+    unsafe extern "C" {
+        fn sdb_install_app_lifecycle_host();
+        fn sdb_stop_app_lifecycle_host();
+    }
+
+    pub fn install() {
+        unsafe { sdb_install_app_lifecycle_host() };
+    }
+
+    pub fn stop() {
+        unsafe { sdb_stop_app_lifecycle_host() };
+    }
+
+    #[unsafe(no_mangle)]
+    pub extern "C" fn sdb_app_sleep_changed(sleeping: bool) {
+        let Some(app) = APP_HANDLE.get() else {
+            return;
+        };
+        handle_apple_lifecycle(app, lifecycle_phase_for_sleeping(sleeping));
     }
 }
 
@@ -4139,6 +4177,8 @@ pub fn run() {
             });
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let _ = APP_HANDLE.set(app.handle().clone());
+            #[cfg(target_os = "macos")]
+            macos_lifecycle_host::install();
             #[cfg(target_os = "ios")]
             {
                 if let Some(state) = app.try_state::<SharedNativeState>() {
@@ -4252,15 +4292,22 @@ pub fn run() {
         {
             match window_event {
                 tauri::WindowEvent::Suspended => {
-                    handle_ios_lifecycle(app, AppLifecyclePhase::Suspended);
+                    handle_apple_lifecycle(app, AppLifecyclePhase::Suspended);
                 }
                 tauri::WindowEvent::Resumed => {
-                    handle_ios_lifecycle(app, AppLifecyclePhase::Active);
+                    handle_apple_lifecycle(app, AppLifecyclePhase::Active);
                 }
                 _ => {}
             }
         }
-        #[cfg(not(target_os = "ios"))]
+        #[cfg(target_os = "macos")]
+        {
+            let _ = app;
+            if matches!(event, tauri::RunEvent::Exit) {
+                macos_lifecycle_host::stop();
+            }
+        }
+        #[cfg(not(any(target_os = "ios", target_os = "macos")))]
         let _ = (app, event);
     });
 }
@@ -4410,6 +4457,19 @@ mod tests {
         legacy.as_object_mut().expect("object").remove("lifecycle");
         let decoded: PublicState = serde_json::from_value(legacy).expect("legacy public state");
         assert_eq!(decoded.lifecycle, AppLifecyclePhase::Active);
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn macos_sleep_notifications_map_to_the_shared_lifecycle() {
+        assert_eq!(
+            lifecycle_phase_for_sleeping(true),
+            AppLifecyclePhase::Suspended
+        );
+        assert_eq!(
+            lifecycle_phase_for_sleeping(false),
+            AppLifecyclePhase::Active
+        );
     }
 
     #[test]

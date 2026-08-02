@@ -272,6 +272,13 @@ Umgesetzt und lokal verifiziert:
   Controller- oder Projector-Rolle neu. Runtime-Revision und laufendes Spiel
   bleiben dabei committed und unverändert. Doppelte Lifecycle-Events sind
   idempotent; Diagnoseereignisse machen Suspend und Resume nachvollziehbar.
+- expliziter macOS-System-Lifecycle: Ein dünner AppKit-Host übersetzt
+  `NSWorkspaceWillSleepNotification` und `NSWorkspaceDidWakeNotification` in
+  denselben serialisierten Lifecycle-Pfad. Dadurch werden BLE, Bonjour,
+  Companion-Replikation und lokaler TLS-Host vor dem Ruhezustand gestoppt und
+  nach dem Aufwachen rollenabhängig neu gestartet, ohne Runtime-Revision oder
+  Spielstand zu verändern. Der Release-App-Build belegt die native Verlinkung;
+  echter System-Ruhezustand mit verbundener Scheibe bleibt Hardwareabnahme.
 
 Noch nicht als produktionsreif nachgewiesen:
 

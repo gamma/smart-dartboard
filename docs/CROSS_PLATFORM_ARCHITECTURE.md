@@ -943,3 +943,10 @@ nicht. Resume startet rollenabhängig neu. Ein CI-Smoke-Test installiert die App
 auf einem iPad-Simulator und weist Suspend/Resume bei identischer
 Runtime-Revision in den redigierten Diagnoselogs nach. Reale
 Hintergrundzeitlimits und Reconnect-Verhalten bleiben Teil der Hardwareabnahme.
+
+macOS führt `NSWorkspaceWillSleepNotification` und
+`NSWorkspaceDidWakeNotification` über einen schmalen AppKit-Host in exakt
+denselben serialisierten Lifecycle-Übergang. Der native App-Build prüft die
+Verlinkung und die gemeinsame Zustandslogik ist per Rust-Test belegt. Erst ein
+realer Sleep/Wake-Test mit angeschlossener Scheibe qualifiziert jedoch das
+Reconnect-Verhalten für den Spielhallenbetrieb.
