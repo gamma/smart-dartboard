@@ -42,6 +42,9 @@ Das macOS-`.app` wird reproduzierbar ohne Signatur gebaut, lokal direkt
 gestartet und in CI sieben Tage als ZIP-Artefakt bereitgestellt. Das beweist
 Packaging und Start, aber noch keine Verteilung: Developer-ID-Signatur,
 Notarisierung, Stapling und Installation auf einem zweiten Mac bleiben offen.
+Während einer aktiven Session verhindert die native App automatischen Display-
+und Systemruhezustand; iOS/iPadOS verwendet für denselben Sessionzeitraum den
+Idle-Timer. Reale Langzeit- und Akkutests bleiben Teil der Hardwareabnahme.
 
 Die Linux-BLE-Freigabe verlangt einen Host mit BlueZ und erreichbarem
 System-D-Bus. Docker Desktop auf macOS oder Windows qualifiziert diesen Pfad

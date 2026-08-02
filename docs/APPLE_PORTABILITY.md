@@ -473,6 +473,14 @@ echter Sleep/Wake-Lauf mit verbundenem Board ist weiterhin Teil der
 Hardwarequalifikation und wird nicht durch einen reinen Build als bestanden
 gewertet.
 
+Im normalen Arcade-Betrieb verhindert die App den automatischen Ruhezustand
+bereits pro Session statt global: macOS hält Display und System mit einer
+`NSProcessInfo`-Aktivität wach, iOS/iPadOS deaktiviert den Idle-Timer. Die
+Sperre folgt dem autoritativen Sessionstatus und ist nur in der aktiven
+Controller-Rolle gesetzt. Nach Sessionende, Suspend, Rollenwechsel oder
+App-Ende wird sie freigegeben. Manuell ausgelöster Systemruhezustand bleibt
+möglich und läuft weiterhin durch den oben beschriebenen Lifecycle-Pfad.
+
 Der macOS-Displaypfad reagiert außerdem auf
 `NSApplicationDidChangeScreenParametersNotification`. Die App unterscheidet
 den Monitor des Control-Fensters von eigenständigen erweiterten Desktops,

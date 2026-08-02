@@ -293,6 +293,14 @@ Umgesetzt und lokal verifiziert:
   nach dem Aufwachen rollenabhängig neu gestartet, ohne Runtime-Revision oder
   Spielstand zu verändern. Der Release-App-Build belegt die native Verlinkung;
   echter System-Ruhezustand mit verbundener Scheibe bleibt Hardwareabnahme.
+- sessionspezifisches Wachhalten auf Apple-Geräten: Solange die Controller-
+  Rolle eine aktive Session besitzt und die App aktiv ist, blockiert macOS
+  automatischen Display- und Systemruhezustand über eine `NSProcessInfo`-
+  Aktivität; iOS/iPadOS deaktiviert denselben Zeitraum den Idle-Timer. Das gilt
+  auch für Spielauswahl und Ergebnisbild innerhalb der Session. Sessionende,
+  Companion-Rolle, Suspend und App-Ende geben die Sperre wieder frei. Die
+  gemeinsame Policy ist per Rust-Test belegt, beide nativen Symbole sind in
+  den gebauten ARM64-App-Bundles verlinkt.
 
 Noch nicht als produktionsreif nachgewiesen:
 

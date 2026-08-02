@@ -3003,6 +3003,7 @@ dependencies = [
  "sdb-diagnostics",
  "sdb-game-core",
  "sdb-runtime",
+ "sdb-session-core",
  "sdb-storage",
  "serde",
  "serde_json",

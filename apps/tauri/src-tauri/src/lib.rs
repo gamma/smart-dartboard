@@ -20,6 +20,8 @@ use sdb_diagnostics::{
 };
 use sdb_game_core::registered_game_metadata;
 use sdb_runtime::{CommandResult, Runtime, RuntimeAction, RuntimeGameState, RuntimePublicSnapshot};
+#[cfg(any(target_os = "ios", target_os = "macos", test))]
+use sdb_session_core::SessionStatus;
 use sdb_storage::{CURRENT_SCHEMA_VERSION, SqliteRepository};
 use serde::{Deserialize, Serialize};
 use std::{
@@ -4126,6 +4128,8 @@ fn publish_public_state(app: &tauri::AppHandle, public: &PublicState) {
     if let Some(state) = app.try_state::<SharedNativeState>()
         && let Ok(state) = state.lock()
     {
+        #[cfg(any(target_os = "ios", target_os = "macos"))]
+        apple_arcade_activity::set_active(arcade_session_active(&state));
         publish_to_external_projector(&state);
         let _ = state.companion_states.send(public.clone());
         runtime_message = Some(runtime_v2_envelope(&state));
@@ -4133,6 +4137,64 @@ fn publish_public_state(app: &tauri::AppHandle, public: &PublicState) {
     let _ = app.emit("runtime-state", public);
     if let Some(message) = runtime_message {
         let _ = app.emit("runtime-v2-state", message);
+    }
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos", test))]
+const fn should_keep_awake(
+    role: NativeAppRole,
+    lifecycle: AppLifecyclePhase,
+    session_status: Option<SessionStatus>,
+) -> bool {
+    matches!(role, NativeAppRole::Controller)
+        && matches!(lifecycle, AppLifecyclePhase::Active)
+        && matches!(session_status, Some(SessionStatus::Active))
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+fn arcade_session_active(state: &NativeState) -> bool {
+    should_keep_awake(
+        state.app_role,
+        state.lifecycle,
+        state.runtime.snapshot().session.state().session_status,
+    )
+}
+
+#[cfg(any(target_os = "ios", target_os = "macos"))]
+#[allow(unsafe_code)]
+mod apple_arcade_activity {
+    #[cfg(target_os = "ios")]
+    use std::ffi::c_void;
+
+    type SetActive = unsafe extern "C" fn(bool);
+
+    #[cfg(target_os = "macos")]
+    #[link(name = "sdb_apple_board_transport", kind = "static")]
+    unsafe extern "C" {
+        fn sdb_set_arcade_session_active(active: bool);
+    }
+
+    #[cfg(target_os = "ios")]
+    fn set_active_function() -> Option<SetActive> {
+        let address = unsafe {
+            libc::dlsym(
+                libc::RTLD_DEFAULT,
+                c"sdb_set_arcade_session_active".as_ptr(),
+            )
+        };
+        (!address.is_null())
+            .then(|| unsafe { std::mem::transmute::<*mut c_void, SetActive>(address) })
+    }
+
+    #[cfg(target_os = "macos")]
+    const fn set_active_function() -> Option<SetActive> {
+        Some(sdb_set_arcade_session_active)
+    }
+
+    pub fn set_active(active: bool) {
+        if let Some(set_active) = set_active_function() {
+            unsafe { set_active(active) };
+        }
     }
 }
 
@@ -4385,6 +4447,10 @@ pub fn run() {
             });
             #[cfg(any(target_os = "ios", target_os = "macos"))]
             let _ = APP_HANDLE.set(app.handle().clone());
+            #[cfg(any(target_os = "ios", target_os = "macos"))]
+            if let Ok(state) = native_state.lock() {
+                apple_arcade_activity::set_active(arcade_session_active(&state));
+            }
             #[cfg(target_os = "macos")]
             macos_lifecycle_host::install();
             #[cfg(target_os = "ios")]
@@ -4529,6 +4595,7 @@ pub fn run() {
                 refresh_macos_projector(app);
             }
             if matches!(event, tauri::RunEvent::Exit) {
+                apple_arcade_activity::set_active(false);
                 macos_lifecycle_host::stop();
             }
         }
@@ -4682,6 +4749,35 @@ mod tests {
         legacy.as_object_mut().expect("object").remove("lifecycle");
         let decoded: PublicState = serde_json::from_value(legacy).expect("legacy public state");
         assert_eq!(decoded.lifecycle, AppLifecyclePhase::Active);
+    }
+
+    #[test]
+    fn arcade_keep_awake_requires_an_active_controller_session() {
+        assert!(should_keep_awake(
+            NativeAppRole::Controller,
+            AppLifecyclePhase::Active,
+            Some(SessionStatus::Active),
+        ));
+        assert!(!should_keep_awake(
+            NativeAppRole::Controller,
+            AppLifecyclePhase::Suspended,
+            Some(SessionStatus::Active),
+        ));
+        assert!(!should_keep_awake(
+            NativeAppRole::CompanionProjector,
+            AppLifecyclePhase::Active,
+            Some(SessionStatus::Active),
+        ));
+        assert!(!should_keep_awake(
+            NativeAppRole::Controller,
+            AppLifecyclePhase::Active,
+            Some(SessionStatus::Finished),
+        ));
+        assert!(!should_keep_awake(
+            NativeAppRole::Controller,
+            AppLifecyclePhase::Active,
+            None,
+        ));
     }
 
     #[cfg(target_os = "macos")]

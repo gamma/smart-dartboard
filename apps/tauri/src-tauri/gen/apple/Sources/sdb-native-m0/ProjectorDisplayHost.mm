@@ -283,3 +283,9 @@ void sdb_projector_update(const char *state_json) {
     [[SDBProjectorDisplayHost sharedHost] updateStateJSON:json];
   });
 }
+
+void sdb_set_arcade_session_active(bool active) {
+  dispatch_async(dispatch_get_main_queue(), ^{
+    UIApplication.sharedApplication.idleTimerDisabled = active;
+  });
+}

@@ -3,12 +3,13 @@ import { readFile } from 'node:fs/promises';
 const read=path=>readFile(new URL(`../${path}`,import.meta.url),'utf8');
 const matrix=JSON.parse(await read('docs/PLATFORM_MATRIX.json'));
 const [rustToolchain,workspace,nativeCargo,nativePackage,nativeLock,rootLock,
-  storageCargo,tauriConfig,xcodeProject,macLifecycle,rustDocker,bleDocker,ci,release]=await Promise.all([
+  storageCargo,tauriConfig,xcodeProject,macLifecycle,iosDisplay,rustDocker,bleDocker,ci,release]=await Promise.all([
   read('rust-toolchain.toml'),read('Cargo.toml'),read('apps/tauri/src-tauri/Cargo.toml'),
   read('apps/tauri/package.json'),read('apps/tauri/package-lock.json'),read('Cargo.lock'),
   read('crates/storage/Cargo.toml'),read('apps/tauri/src-tauri/tauri.conf.json'),
   read('apps/tauri/src-tauri/gen/apple/sdb-native-m0.xcodeproj/project.pbxproj'),
   read('apps/tauri/src-tauri/gen/apple/Sources/sdb-native-m0/AppLifecycleHost.mm'),
+  read('apps/tauri/src-tauri/gen/apple/Sources/sdb-native-m0/ProjectorDisplayHost.mm'),
   read('Dockerfile.rust'),read('Dockerfile.ble'),read('.github/workflows/ci.yml'),
   read('.github/workflows/container-release.yml'),
 ]);
@@ -73,6 +74,10 @@ expect(macLifecycle.includes('NSWorkspaceWillSleepNotification')
   && macLifecycle.includes('NSApplicationDidChangeScreenParametersNotification')
   && macLifecycle.includes('sdb_app_screen_parameters_changed'),
   'macOS lifecycle/display adapter drift');
+expect(macLifecycle.includes('NSActivityIdleDisplaySleepDisabled')
+  && macLifecycle.includes('NSActivityIdleSystemSleepDisabled')
+  && iosDisplay.includes('idleTimerDisabled = active'),
+  'Apple arcade keep-awake adapter drift');
 expect(release.includes('platforms: linux/amd64,linux/arm64'),'container architecture drift');
 expect(tauriJson.bundle.macOS.minimumSystemVersion===matrix.platforms.macos.minimum,
   'macOS deployment target drift');
