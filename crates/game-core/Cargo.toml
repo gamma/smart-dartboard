@@ -8,7 +8,7 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-sdb-contracts = { path = "../contracts" }
+sdb-contracts = { version = "0.1.0", path = "../contracts" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

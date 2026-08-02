@@ -9,13 +9,13 @@ repository.workspace = true
 
 [dependencies]
 axum = { version = "0.8", features = ["ws"] }
-sdb-board = { path = "../board" }
-sdb-companion = { path = "../companion" }
-sdb-contracts = { path = "../contracts" }
-sdb-diagnostics = { path = "../diagnostics" }
-sdb-game-core = { path = "../game-core" }
-sdb-runtime = { path = "../runtime" }
-sdb-storage = { path = "../storage" }
+sdb-board = { version = "0.1.0", path = "../board" }
+sdb-companion = { version = "0.1.0", path = "../companion" }
+sdb-contracts = { version = "0.1.0", path = "../contracts" }
+sdb-diagnostics = { version = "0.1.0", path = "../diagnostics" }
+sdb-game-core = { version = "0.1.0", path = "../game-core" }
+sdb-runtime = { version = "0.1.0", path = "../runtime" }
+sdb-storage = { version = "0.1.0", path = "../storage" }
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

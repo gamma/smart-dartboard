@@ -8,9 +8,9 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-sdb-contracts = { path = "../contracts" }
-sdb-game-core = { path = "../game-core" }
-sdb-session-core = { path = "../session-core" }
+sdb-contracts = { version = "0.1.0", path = "../contracts" }
+sdb-game-core = { version = "0.1.0", path = "../game-core" }
+sdb-session-core = { version = "0.1.0", path = "../session-core" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

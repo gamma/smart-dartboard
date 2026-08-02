@@ -320,6 +320,11 @@ Umgesetzt und lokal verifiziert:
   Companion-Rolle, Suspend und App-Ende geben die Sperre wieder frei. Die
   gemeinsame Policy ist per Rust-Test belegt, beide nativen Symbole sind in
   den gebauten ARM64-App-Bundles verlinkt.
+- eine committed `cargo-deny`-Policy prüft den vollständigen Rust-Graph für
+  Linux AMD64/ARM64 sowie die priorisierten ARM64-Apple-Ziele auf RustSec-
+  Advisories, erlaubte Lizenzen, Wildcards und nicht freigegebene Registry-/
+  Git-Quellen. Der wöchentliche und PR-basierte Security-Workflow führt diese
+  Prüfung unabhängig von den normalen Coretests aus.
 
 Noch nicht als produktionsreif nachgewiesen:
 
@@ -347,6 +352,11 @@ Rust-Core:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo deny check
+cargo deny --manifest-path apps/tauri/src-tauri/Cargo.toml --all-features \
+  --target aarch64-apple-darwin \
+  --target aarch64-apple-ios \
+  --target aarch64-apple-ios-sim check
 ```
 
 Companion-UI mit WebKit:

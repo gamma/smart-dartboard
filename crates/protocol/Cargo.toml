@@ -13,8 +13,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]
-sdb-contracts = { path = "../contracts" }
+sdb-contracts = { version = "0.1.0", path = "../contracts" }
 
 [lints]
 workspace = true
-

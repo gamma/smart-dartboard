@@ -4,7 +4,7 @@ const read=path=>readFile(new URL(`../${path}`,import.meta.url),'utf8');
 const matrix=JSON.parse(await read('docs/PLATFORM_MATRIX.json'));
 const [rustToolchain,workspace,nativeCargo,nativePackage,nativeLock,rootLock,
   storageCargo,tauriConfig,nativeBuild,controlCapability,projectorCapability,nativeShell,
-  iosLifecycleTest,xcodeProject,macLifecycle,iosDisplay,rustDocker,bleDocker,ci,release]=await Promise.all([
+  iosLifecycleTest,xcodeProject,macLifecycle,iosDisplay,rustDocker,bleDocker,ci,security,deny,release]=await Promise.all([
   read('rust-toolchain.toml'),read('Cargo.toml'),read('apps/tauri/src-tauri/Cargo.toml'),
   read('apps/tauri/package.json'),read('apps/tauri/package-lock.json'),read('Cargo.lock'),
   read('crates/storage/Cargo.toml'),read('apps/tauri/src-tauri/tauri.conf.json'),
@@ -15,6 +15,7 @@ const [rustToolchain,workspace,nativeCargo,nativePackage,nativeLock,rootLock,
   read('apps/tauri/src-tauri/gen/apple/Sources/sdb-native-m0/AppLifecycleHost.mm'),
   read('apps/tauri/src-tauri/gen/apple/Sources/sdb-native-m0/ProjectorDisplayHost.mm'),
   read('Dockerfile.rust'),read('Dockerfile.ble'),read('.github/workflows/ci.yml'),
+  read('.github/workflows/security.yml'),read('deny.toml'),
   read('.github/workflows/container-release.yml'),
 ]);
 
@@ -71,6 +72,12 @@ expect(ci.includes('playwright install chromium webkit'),'CI browser installatio
 expect(ci.includes('run test:chromium') && ci.includes('run test:webkit'),'CI browser coverage drift');
 expect(packageJson.scripts['test:rust-modes']==='node scripts/test-rust-mode-catalog.mjs'
   && ci.includes('run test:rust-modes'),'CI Rust mode catalog drift');
+expect(security.includes('EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25')
+  && security.includes('manifest-path: apps/tauri/src-tauri/Cargo.toml')
+  && security.includes('--target aarch64-apple-darwin')
+  && deny.includes('unknown-git = "deny"')
+  && deny.includes('wildcards = "deny"'),
+  'Rust dependency security coverage drift');
 expect(ci.includes('run build:macos:app') && ci.includes('Smart-Dartboard-macOS-unsigned.zip'),
   'CI macOS app bundle drift');
 expect(ci.includes('run ios:build:device')

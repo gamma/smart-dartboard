@@ -8,8 +8,8 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
-sdb-contracts = { path = "../contracts" }
-sdb-protocol = { path = "../protocol" }
+sdb-contracts = { version = "0.1.0", path = "../contracts" }
+sdb-protocol = { version = "0.1.0", path = "../protocol" }
 serde.workspace = true
 
 [lints]

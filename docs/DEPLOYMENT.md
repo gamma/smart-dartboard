@@ -8,7 +8,7 @@ Das Repository verwendet vier Workflows:
 |---|---|---|
 | `ci.yml` | Pull Requests, Push auf `main`, manuell | Python-Tests, Python-Kompilierung, JavaScript-Syntax, Compose-Prüfung, Website-Build, Container-Build und HTTP-Smoke-Test |
 | `pages.yml` | relevante Pushes auf `main`, manuell | statische Website validieren und nach GitHub Pages deployen |
-| `security.yml` | Pull Requests, Push auf `main`, montags, manuell | Dependency Review und CodeQL für Python und JavaScript |
+| `security.yml` | Pull Requests, Push auf `main`, montags, manuell | Dependency Review, RustSec-/Lizenz-/Source-Policy für Cargo und CodeQL für Python und JavaScript |
 | `container-release.yml` | veröffentlichtes GitHub Release | AMD64-/ARM64-Image nach GitHub Container Registry veröffentlichen, SBOM und Build-Provenienz erzeugen |
 
 Dependabot prüft wöchentlich Python-Abhängigkeiten, GitHub Actions und das
@@ -21,6 +21,26 @@ mindestens diese Statuschecks verpflichtend sein:
 - `Container build and smoke test`
 - `CodeQL (python)`
 - `CodeQL (javascript-typescript)`
+- `Rust advisories and licenses`
+
+Die Rust-Policy liegt nachvollziehbar in `deny.toml`. Sie prüft den gemeinsamen
+Dependency-Graph für Linux AMD64/ARM64, macOS ARM64 sowie iOS-Gerät und
+ARM64-Simulator. Bekannte Security-Advisories schlagen fehl; neue Lizenzen,
+Wildcard-Abhängigkeiten, unbekannte Registries und Git-Abhängigkeiten benötigen
+eine bewusste Policy-Änderung im Review. Nicht gepflegte transitive
+Tauri-Abhängigkeiten ohne sicheren Upgradepfad sind bewusst toleriert; sie
+blockieren den Build, sobald sie direkte Projektabhängigkeiten sind. Echte
+Vulnerability-Advisories bleiben auch transitiv Fehler.
+
+Lokal entsprechen dem CI-Job diese beiden Aufrufe:
+
+```bash
+cargo deny check
+cargo deny --manifest-path apps/tauri/src-tauri/Cargo.toml --all-features \
+  --target aarch64-apple-darwin \
+  --target aarch64-apple-ios \
+  --target aarch64-apple-ios-sim check
+```
 
 Direkte Pushes auf `main` können zusätzlich gesperrt werden. Für ein kleines
 Projekt ist alternativ weiterhin ein direkter Push möglich; die Workflows

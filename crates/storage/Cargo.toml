@@ -9,11 +9,11 @@ repository.workspace = true
 
 [dependencies]
 rusqlite = { version = "0.38", features = ["backup", "bundled"] }
-sdb-companion = { path = "../companion" }
-sdb-contracts = { path = "../contracts" }
-sdb-game-core = { path = "../game-core" }
-sdb-runtime = { path = "../runtime" }
-sdb-session-core = { path = "../session-core" }
+sdb-companion = { version = "0.1.0", path = "../companion" }
+sdb-contracts = { version = "0.1.0", path = "../contracts" }
+sdb-game-core = { version = "0.1.0", path = "../game-core" }
+sdb-runtime = { version = "0.1.0", path = "../runtime" }
+sdb-session-core = { version = "0.1.0", path = "../session-core" }
 serde.workspace = true
 serde_json.workspace = true
 thiserror.workspace = true

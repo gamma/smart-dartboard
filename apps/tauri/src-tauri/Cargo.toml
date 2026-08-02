@@ -21,15 +21,15 @@ base64 = "0.22"
 futures-util = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-sdb-board = { path = "../../../crates/board" }
-sdb-companion = { path = "../../../crates/companion" }
-sdb-companion-transport = { path = "../../../crates/companion-transport" }
-sdb-contracts = { path = "../../../crates/contracts" }
-sdb-diagnostics = { path = "../../../crates/diagnostics" }
-sdb-game-core = { path = "../../../crates/game-core" }
-sdb-runtime = { path = "../../../crates/runtime" }
-sdb-session-core = { path = "../../../crates/session-core" }
-sdb-storage = { path = "../../../crates/storage" }
+sdb-board = { version = "0.1.0", path = "../../../crates/board" }
+sdb-companion = { version = "0.1.0", path = "../../../crates/companion" }
+sdb-companion-transport = { version = "0.1.0", path = "../../../crates/companion-transport" }
+sdb-contracts = { version = "0.1.0", path = "../../../crates/contracts" }
+sdb-diagnostics = { version = "0.1.0", path = "../../../crates/diagnostics" }
+sdb-game-core = { version = "0.1.0", path = "../../../crates/game-core" }
+sdb-runtime = { version = "0.1.0", path = "../../../crates/runtime" }
+sdb-session-core = { version = "0.1.0", path = "../../../crates/session-core" }
+sdb-storage = { version = "0.1.0", path = "../../../crates/storage" }
 tauri = { version = "2.11.5", features = [] }
 tokio = { version = "1.47", features = ["io-util", "net", "sync", "time"] }
 tokio-rustls = { version = "0.26", default-features = false, features = ["ring", "tls12"] }
