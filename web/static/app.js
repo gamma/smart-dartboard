@@ -364,8 +364,17 @@ function updateExperience(experience, event){
     const isThrow=event.type==='hit' || event.type==='miss';
     const lastThrow=experience.game?.throws?.at(-1);
     const throwWasCounted=!isThrow || (lastThrow && Number(lastThrow.seq)===Number(event.seq));
-    if(throwWasCounted) playEventCue(event, experience);
-    event.acknowledge_effect?.();
+    let cuePlayed=false;
+    if(throwWasCounted){
+      try{
+        cuePlayed=playEventCue(event, experience);
+      }catch(_){
+        reportAudioStatus('unavailable');
+      }
+    }
+    const soundDelivered=!event.sound_effect_id || cuePlayed;
+    if(!soundDelivered) event.defer_sound_effect?.();
+    event.acknowledge_effect?.({sound:soundDelivered,visual:true});
     if(isThrow && throwWasCounted){
       if(isProjector() && (isBombEvent(experience,event) || isCandyFireEvent(experience,event))){
         const candyFire=isCandyFireEvent(experience,event);
@@ -1855,9 +1864,9 @@ function ensureAudio(reportStatus=false){
   return appState.audio;
 }
 function tone(frequency,duration=0.12,delay=0,type='sine',gain=0.12){
-  if(!audioEnabledHere()) return;
+  if(!audioEnabledHere()) return false;
   const context=ensureAudio();
-  if(!context || context.state!=='running') return;
+  if(!context || context.state!=='running') return false;
   const oscillator=context.createOscillator(), volume=context.createGain();
   oscillator.type=type; oscillator.frequency.value=frequency;
   volume.gain.setValueAtTime(0.0001,context.currentTime+delay);
@@ -1865,16 +1874,19 @@ function tone(frequency,duration=0.12,delay=0,type='sine',gain=0.12){
   volume.gain.exponentialRampToValueAtTime(0.0001,context.currentTime+delay+duration);
   oscillator.connect(volume).connect(context.destination);
   oscillator.start(context.currentTime+delay); oscillator.stop(context.currentTime+delay+duration+0.02);
+  return true;
 }
 function playEventCue(event,experience){
-  if(!audioEnabledHere(experience)) return;
+  if(!audioEnabledHere(experience)) return false;
+  const context=ensureAudio();
+  if(!context || context.state!=='running') return false;
   const key=event.effect_id || `${event.type}:${event.seq ?? event.action ?? Date.now()}`;
   const cue=event.effect_cue || '';
-  if(key===appState.lastCueKey) return;
+  if(key===appState.lastCueKey) return true;
   appState.lastCueKey=key;
   if(cue==='sound_test' || event.type==='sound_test'){
     [440,660,880].forEach((frequency,index)=>tone(frequency,.2,index*.1,'triangle',.12));
-    return;
+    return true;
   }
   const theme=modeBySlug(experience.game?.game_type)?.sound_theme || 'arena';
   const themeBase={arcade:500,club:390,championship:450,arena:420}[theme] || 420;
@@ -1930,11 +1942,12 @@ function playEventCue(event,experience){
   } else if(event.type==='miss') tone(110,.28,0,'sawtooth',.08);
   else if(event.type==='continue'||event.type==='next_player') tone(330,.14);
   else if(event.type==='hardware_status'&&event.status==='error') tone(95,.4,0,'sawtooth',.06);
-  if(experience.game.status==='finished' && experience.game.winner_id){
+  if(experience.game?.status==='finished' && experience.game.winner_id){
     [392,523,659,784].forEach((frequency,index)=>tone(frequency,.35,index*.12,'triangle',.13));
-  }else if(experience.game.status==='finished'){
+  }else if(experience.game?.status==='finished'){
     [180,145,110].forEach((frequency,index)=>tone(frequency,.3,index*.12,'sawtooth',.07));
   }
+  return true;
 }
 function startCountdown(){
   clearInterval(appState.countdownTimer);

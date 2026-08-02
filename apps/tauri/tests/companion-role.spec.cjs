@@ -36,6 +36,18 @@ test('controller setup exposes no legacy M0 test command', async ({ page }) => {
 
 test('companion discovery requires fingerprint confirmation before pairing', async ({ page }) => {
   await page.addInitScript(() => {
+    class NativeAutoplayAudioContext {
+      constructor(){ this.state='running'; this.currentTime=0; this.destination={}; }
+      resume(){ this.state='running'; return Promise.resolve(); }
+      createOscillator(){
+        return {frequency:{value:0},connect:node=>node,start(){},stop(){}};
+      }
+      createGain(){
+        return {gain:{setValueAtTime(){},exponentialRampToValueAtTime(){}},connect:node=>node};
+      }
+    }
+    window.AudioContext=NativeAutoplayAudioContext;
+    window.webkitAudioContext=NativeAutoplayAudioContext;
     const publicState = {
       app_role: 'companion_projector',
       runtime_instance_id: 'companion-dormant-runtime',
@@ -65,6 +77,12 @@ test('companion discovery requires fingerprint confirmation before pairing', asy
         game: {game_type:'count_up',state:{
           players:[{id:'ada',name:'Ada',score:120}],current_player_index:0,
           round_number:2,darts_in_turn:1,turn_score:60,status:'running',last_event:null,
+          editable_darts:[{
+            action_id:'dart-8',player_id:'ada',round_number:2,dart_in_turn:1,
+            outcome:'scored',event:{
+              type:'hit',seq:8,field:20,ring:'triple',multiplier:3,label:'T20',score:60,
+            },
+          }],
         }},
         settings: {sound:{enabled:true,output:'projector',status:'ready'}},
         effects: [{

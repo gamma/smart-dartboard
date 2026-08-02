@@ -234,10 +234,21 @@
         grouped.set(groupKey,entry);
       });
       const events=[...grouped.values()].map(event=>{
-        const effectIds=event._effect_ids;
+        const effectIds=event._effect_ids.map(effectId=>({
+          effectId,
+          kind:effectId===event.sound_effect_id?'sound':'visual',
+        }));
         delete event._effect_ids;
-        event.acknowledge_effect=()=>Promise.all(effectIds.map(effectId=>
-          this.core.acknowledgeEffect(effectId).catch(()=>false)));
+        event.defer_sound_effect=()=>{
+          effectIds.filter(effect=>effect.kind==='sound')
+            .forEach(effect=>this.deliveredEffectIds.delete(effect.effectId));
+        };
+        event.acknowledge_effect=({sound=true,visual=true}={})=>Promise.all(effectIds
+          .filter(effect=>(effect.kind==='sound' && sound) || (effect.kind==='visual' && visual))
+          .map(effect=>this.core.acknowledgeEffect(effect.effectId).catch(()=>{
+            this.deliveredEffectIds.delete(effect.effectId);
+            return false;
+          })));
         return event;
       });
       if(events.length) return events;

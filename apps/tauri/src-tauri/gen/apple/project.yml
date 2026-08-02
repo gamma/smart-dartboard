@@ -29,8 +29,10 @@ targets:
     platform: iOS
     sources:
       - path: Sources
+        excludes:
+          - sdb-native-m0/AppLifecycleHost.h
+          - sdb-native-m0/AppLifecycleHost.mm
       - path: Assets.xcassets
-      - path: Externals
       - path: sdb-native-m0_iOS
       - path: assets
         buildPhase: resources
@@ -54,6 +56,8 @@ targets:
         CFBundleShortVersionString: 0.1.0
         CFBundleVersion: "0.1.0"
         NSBluetoothAlwaysUsageDescription: Smart Dartboard verbindet sich mit deiner elektronischen Dartscheibe.
+        NSBonjourServices: [_sdb-darts._tcp]
+        NSLocalNetworkUsageDescription: Smart Dartboard verbindet den Controller sicher mit einem Companion-iPad als Projektor.
         UIBackgroundModes: [bluetooth-central]
     entitlements:
       path: sdb-native-m0_iOS/sdb-native-m0_iOS.entitlements
@@ -74,6 +78,7 @@ targets:
     dependencies:
       - framework: libapp.a
         embed: false
+      - sdk: AVFoundation.framework
       - sdk: CoreGraphics.framework
       - sdk: CoreBluetooth.framework
       - sdk: Metal.framework

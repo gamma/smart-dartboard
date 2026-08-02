@@ -106,6 +106,11 @@ expect(macLifecycle.includes('NSActivityIdleDisplaySleepDisabled')
   && macLifecycle.includes('NSActivityIdleSystemSleepDisabled')
   && iosDisplay.includes('idleTimerDisabled = active'),
   'Apple arcade keep-awake adapter drift');
+expect(iosDisplay.includes('mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone')
+  && iosDisplay.includes('allowsAirPlayForMediaPlayback = YES')
+  && iosDisplay.includes('AVAudioSessionCategoryPlayback')
+  && xcodeProject.includes('AVFoundation.framework'),
+  'Apple projector audio configuration drift');
 expect(release.includes('platforms: linux/amd64,linux/arm64'),'container architecture drift');
 expect(ci.includes('rust-container-arm64:')
   && ci.includes('runs-on: ubuntu-24.04-arm')

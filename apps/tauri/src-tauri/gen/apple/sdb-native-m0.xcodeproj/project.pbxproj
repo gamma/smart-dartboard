@@ -8,16 +8,16 @@
 
 /* Begin PBXBuildFile section */
 		12E6FD74EB7C335FA3E1A749 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 4BBB39A5278574C663F72A0A /* Assets.xcassets */; };
-		1A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = 2A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm */; };
-		1B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = 2B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm */; };
 		179125BCC41C2DD5409596E2 /* Metal.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 664DBB93EFBC8B306B3A8922 /* Metal.framework */; };
+		2B15AE0A7D72E621B0DEAD6D /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6E21BA861F968593052B78FD /* AVFoundation.framework */; };
 		35F61D673558B421FC3D670C /* ProjectorDisplayHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = EA9BFC414BC28065A79C93A0 /* ProjectorDisplayHost.mm */; };
 		3B437BB1B33E4B19FAF6AEE6 /* QuartzCore.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0CB82108290AA99350E05CAD /* QuartzCore.framework */; };
-		4923A4935C256B9855FFFC73 /* libapp.a in Resources */ = {isa = PBXBuildFile; fileRef = DAE57E1E821C1B95F9E635E6 /* libapp.a */; };
 		52BE30277572DABEC40BE063 /* Security.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 203FF380527E4CB403054650 /* Security.framework */; };
 		577CFC2641E3EAE43F3DEACA /* UIKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = E29BE45429DDFE60C0089110 /* UIKit.framework */; };
 		59A8C84D38C1D6431B5CAD9D /* CoreBluetooth.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 7215C9DB52C663ED57174077 /* CoreBluetooth.framework */; };
 		9823E4AD829BCE3E7A175922 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 91CF9EBAD127047153940344 /* CoreGraphics.framework */; };
+		B54EE144D80A27A59DEBB41F /* CompanionKeychainHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = 71AB5D48CA250CB669ED1C31 /* CompanionKeychainHost.mm */; };
+		D0A21CFE36EE997912A088E3 /* CompanionBonjourHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = 6CEAE7668CB1610E967CE1F1 /* CompanionBonjourHost.mm */; };
 		D571B95AA1786C4A54511A0E /* main.mm in Sources */ = {isa = PBXBuildFile; fileRef = 7D40A1650231C610CD8C3C99 /* main.mm */; };
 		D5898D485B2BC4F88031444E /* BoardTransportHost.mm in Sources */ = {isa = PBXBuildFile; fileRef = 62A18C92C1E928ECA55C7FDC /* BoardTransportHost.mm */; };
 		E204201F0FB38CF5073797A6 /* WebKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = F887F5660CD9632B7C904FD8 /* WebKit.framework */; };
@@ -32,17 +32,18 @@
 		0BAFD467DA43568B74DB0718 /* main.rs */ = {isa = PBXFileReference; path = main.rs; sourceTree = "<group>"; };
 		0CB82108290AA99350E05CAD /* QuartzCore.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = QuartzCore.framework; path = System/Library/Frameworks/QuartzCore.framework; sourceTree = SDKROOT; };
 		10E6EDDDE86EA282DA5C8C80 /* LaunchScreen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = LaunchScreen.storyboard; sourceTree = "<group>"; };
+		1164CB26CC579147DA5C2C32 /* CompanionKeychainHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CompanionKeychainHost.h; sourceTree = "<group>"; };
 		203FF380527E4CB403054650 /* Security.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Security.framework; path = System/Library/Frameworks/Security.framework; sourceTree = SDKROOT; };
 		244093BCAD3DB7B9D9EA8B4C /* BoardTransportHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = BoardTransportHost.h; sourceTree = "<group>"; };
-		2A0A0C0D0E0F101112131415 /* CompanionKeychainHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CompanionKeychainHost.h; sourceTree = "<group>"; };
-		2A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CompanionKeychainHost.mm; sourceTree = "<group>"; };
-		2B0A0C0D0E0F101112131415 /* CompanionBonjourHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CompanionBonjourHost.h; sourceTree = "<group>"; };
-		2B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CompanionBonjourHost.mm; sourceTree = "<group>"; };
 		4BBB39A5278574C663F72A0A /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5B056CC525D69904F551CC56 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
+		5DB0BC8FD3FC8176DD3219B7 /* CompanionBonjourHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = CompanionBonjourHost.h; sourceTree = "<group>"; };
 		62A18C92C1E928ECA55C7FDC /* BoardTransportHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = BoardTransportHost.mm; sourceTree = "<group>"; };
 		664DBB93EFBC8B306B3A8922 /* Metal.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Metal.framework; path = System/Library/Frameworks/Metal.framework; sourceTree = SDKROOT; };
 		6C93AFE2F52A68BAE26268C2 /* lib.rs */ = {isa = PBXFileReference; path = lib.rs; sourceTree = "<group>"; };
+		6CEAE7668CB1610E967CE1F1 /* CompanionBonjourHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CompanionBonjourHost.mm; sourceTree = "<group>"; };
+		6E21BA861F968593052B78FD /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		71AB5D48CA250CB669ED1C31 /* CompanionKeychainHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = CompanionKeychainHost.mm; sourceTree = "<group>"; };
 		7215C9DB52C663ED57174077 /* CoreBluetooth.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreBluetooth.framework; path = System/Library/Frameworks/CoreBluetooth.framework; sourceTree = SDKROOT; };
 		74BA6DEB4FF7464F40C74728 /* sdb-native-m0_iOS.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = "sdb-native-m0_iOS.entitlements"; sourceTree = "<group>"; };
 		7BF1B662EDAAECA04E85FD80 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
@@ -51,7 +52,6 @@
 		B9CC417A162E3407588330FE /* ProjectorDisplayHost.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = ProjectorDisplayHost.h; sourceTree = "<group>"; };
 		BE2C4AF5160B57ED1ABD16C6 /* assets */ = {isa = PBXFileReference; lastKnownFileType = folder; path = assets; sourceTree = SOURCE_ROOT; };
 		BF36697C53B0946F7B5E5F49 /* MetalKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = MetalKit.framework; path = System/Library/Frameworks/MetalKit.framework; sourceTree = SDKROOT; };
-		DAE57E1E821C1B95F9E635E6 /* libapp.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; path = libapp.a; sourceTree = "<group>"; };
 		E29BE45429DDFE60C0089110 /* UIKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = UIKit.framework; path = System/Library/Frameworks/UIKit.framework; sourceTree = SDKROOT; };
 		EA9BFC414BC28065A79C93A0 /* ProjectorDisplayHost.mm */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.cpp.objcpp; path = ProjectorDisplayHost.mm; sourceTree = "<group>"; };
 		ED32A4CE2C4BDFD971DC011F /* sdb-native-m0_iOS.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = "sdb-native-m0_iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -64,6 +64,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FE0B79560AE4D1117D2813A0 /* libapp.a in Frameworks */,
+				2B15AE0A7D72E621B0DEAD6D /* AVFoundation.framework in Frameworks */,
 				9823E4AD829BCE3E7A175922 /* CoreGraphics.framework in Frameworks */,
 				59A8C84D38C1D6431B5CAD9D /* CoreBluetooth.framework in Frameworks */,
 				179125BCC41C2DD5409596E2 /* Metal.framework in Frameworks */,
@@ -78,22 +79,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		0EE868A9EF7FFE385C8578B5 /* arm64 */ = {
-			isa = PBXGroup;
-			children = (
-				10872FA3188566BC2A325FEB /* debug */,
-			);
-			path = arm64;
-			sourceTree = "<group>";
-		};
-		10872FA3188566BC2A325FEB /* debug */ = {
-			isa = PBXGroup;
-			children = (
-				DAE57E1E821C1B95F9E635E6 /* libapp.a */,
-			);
-			path = debug;
-			sourceTree = "<group>";
-		};
 		26A601B14D1FF38CE801B242 /* Sources */ = {
 			isa = PBXGroup;
 			children = (
@@ -108,7 +93,6 @@
 				BE2C4AF5160B57ED1ABD16C6 /* assets */,
 				4BBB39A5278574C663F72A0A /* Assets.xcassets */,
 				10E6EDDDE86EA282DA5C8C80 /* LaunchScreen.storyboard */,
-				E6C327C6E0B0E45C96D2B153 /* Externals */,
 				E6DE3FEF1C27857111D38188 /* sdb-native-m0_iOS */,
 				26A601B14D1FF38CE801B242 /* Sources */,
 				5E87E99A12D71567106065A4 /* src */,
@@ -146,6 +130,7 @@
 		DE09ADBE4EE2953F8EEF90A8 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				6E21BA861F968593052B78FD /* AVFoundation.framework */,
 				7215C9DB52C663ED57174077 /* CoreBluetooth.framework */,
 				91CF9EBAD127047153940344 /* CoreGraphics.framework */,
 				5B056CC525D69904F551CC56 /* libapp.a */,
@@ -157,14 +142,6 @@
 				F887F5660CD9632B7C904FD8 /* WebKit.framework */,
 			);
 			name = Frameworks;
-			sourceTree = "<group>";
-		};
-		E6C327C6E0B0E45C96D2B153 /* Externals */ = {
-			isa = PBXGroup;
-			children = (
-				0EE868A9EF7FFE385C8578B5 /* arm64 */,
-			);
-			path = Externals;
 			sourceTree = "<group>";
 		};
 		E6DE3FEF1C27857111D38188 /* sdb-native-m0_iOS */ = {
@@ -181,23 +158,16 @@
 			children = (
 				244093BCAD3DB7B9D9EA8B4C /* BoardTransportHost.h */,
 				62A18C92C1E928ECA55C7FDC /* BoardTransportHost.mm */,
-				2B0A0C0D0E0F101112131415 /* CompanionBonjourHost.h */,
-				2B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm */,
-				2A0A0C0D0E0F101112131415 /* CompanionKeychainHost.h */,
-				2A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm */,
+				5DB0BC8FD3FC8176DD3219B7 /* CompanionBonjourHost.h */,
+				6CEAE7668CB1610E967CE1F1 /* CompanionBonjourHost.mm */,
+				1164CB26CC579147DA5C2C32 /* CompanionKeychainHost.h */,
+				71AB5D48CA250CB669ED1C31 /* CompanionKeychainHost.mm */,
 				7D40A1650231C610CD8C3C99 /* main.mm */,
 				B9CC417A162E3407588330FE /* ProjectorDisplayHost.h */,
 				EA9BFC414BC28065A79C93A0 /* ProjectorDisplayHost.mm */,
 				B149A77DF041ECF18529B10D /* bindings */,
 			);
 			path = "sdb-native-m0";
-			sourceTree = "<group>";
-		};
-		"TEMP_7A353B40-562E-48A7-AA57-4D5E9FCBF68C" /* x86_64 */ = {
-			isa = PBXGroup;
-			children = (
-			);
-			path = x86_64;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -261,7 +231,6 @@
 				12E6FD74EB7C335FA3E1A749 /* Assets.xcassets in Resources */,
 				E571E4C5EE7922CADDFF9CDA /* LaunchScreen.storyboard in Resources */,
 				F354FDA0EA86D3D7CA6B0707 /* assets in Resources */,
-				4923A4935C256B9855FFFC73 /* libapp.a in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -297,8 +266,8 @@
 			buildActionMask = 2147483647;
 			files = (
 				D5898D485B2BC4F88031444E /* BoardTransportHost.mm in Sources */,
-				1B0B0C0D0E0F101112131415 /* CompanionBonjourHost.mm in Sources */,
-				1A0B0C0D0E0F101112131415 /* CompanionKeychainHost.mm in Sources */,
+				D0A21CFE36EE997912A088E3 /* CompanionBonjourHost.mm in Sources */,
+				B54EE144D80A27A59DEBB41F /* CompanionKeychainHost.mm in Sources */,
 				35F61D673558B421FC3D670C /* ProjectorDisplayHost.mm in Sources */,
 				D571B95AA1786C4A54511A0E /* main.mm in Sources */,
 			);
@@ -330,7 +299,7 @@
 				);
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = de.gammaproduction.smart-dartboard;
+				PRODUCT_BUNDLE_IDENTIFIER = "de.gammaproduction.smart-dartboard";
 				PRODUCT_NAME = "Smart Dartboard";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -361,7 +330,7 @@
 				);
 				"LIBRARY_SEARCH_PATHS[arch=arm64]" = "$(inherited) $(PROJECT_DIR)/Externals/arm64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
 				"LIBRARY_SEARCH_PATHS[arch=x86_64]" = "$(inherited) $(PROJECT_DIR)/Externals/x86_64/$(CONFIGURATION) $(SDKROOT)/usr/lib/swift $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift/$(PLATFORM_NAME) $(DEVELOPER_DIR)/Toolchains/XcodeDefault.xctoolchain/usr/lib/swift-5.0/$(PLATFORM_NAME)";
-				PRODUCT_BUNDLE_IDENTIFIER = de.gammaproduction.smart-dartboard;
+				PRODUCT_BUNDLE_IDENTIFIER = "de.gammaproduction.smart-dartboard";
 				PRODUCT_NAME = "Smart Dartboard";
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

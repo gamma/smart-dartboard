@@ -119,6 +119,14 @@ Umgesetzt und lokal verifiziert:
   zugeordnete Rolle. Die UI dedupliziert über die Effect-ID und leitet einen
   alten `last_event` bei anderen Zustandsänderungen nicht erneut als Treffer
   weiter,
+- Sound- und Visual-Quittungen sind in der UI getrennt. Ein bereits gezeichnetes
+  Overlay wird auch dann abgeschlossen, wenn Web Audio noch blockiert ist; der
+  Sound bleibt dagegen erneut zustellbar und wird erst nach erfolgreicher
+  Planung im laufenden `AudioContext` bestätigt. Fehlgeschlagene Transport-
+  Quittungen werden ebenfalls wieder freigegeben. Die externe iOS-/iPadOS-
+  Projector-WebView erlaubt programmatische Medienwiedergabe und AirPlay
+  ausdrücklich; die App setzt die native Audio-Session auf Playback, ohne sie
+  schon beim Start vorzeitig zu aktivieren,
 - versionierter Teamvertrag im gemeinsamen Core. Jeder Modus deklariert sein
   Format als `individual`, `cooperative` oder `teams`. Boss Fight, Space
   Defender, Block Drop Darts und DartSweeper bilden beim Auswählen automatisch

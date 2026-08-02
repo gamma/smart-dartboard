@@ -126,6 +126,53 @@ test('experience adapter consumes each declarative effect once without replaying
   ]);
 });
 
+test('blocked audio defers only sound while visual effects are acknowledged', async ({ page }) => {
+  await page.goto('about:blank');
+  await page.addScriptTag({ path: runtimeClient });
+  await page.addScriptTag({ path: experienceClient });
+
+  const result=await page.evaluate(async()=>{
+    const hit={type:'hit',seq:8,field:20,ring:'triple',multiplier:3,label:'T20',score:60};
+    const visual={effect_id:'effect:8:visual:projector',revision:8,target:'projector',
+      delivery:'discardable',kind:{type:'visual',cue:'hit',event:hit}};
+    const sound={effect_id:'effect:8:sound:projector',revision:8,target:'projector',
+      delivery:'recoverable',kind:{type:'sound',cue:'hit',event:hit}};
+    const envelope={protocol_version:1,kind:'state',runtime_instance_id:'audio-runtime',revision:8,
+      payload:{revision:8,session:{screen:'playing',players:[],standings:[]},settings:{},
+        effects:[visual,sound],game:{game_type:'count_up',state:{players:[],status:'running',last_event:hit}}}};
+    const acknowledgements=[];
+    const core=new window.SDBRuntimeClient.TestRuntimeClient({envelope,queries:{
+      '/api/v2/modes':[],'/api/v2/players':[],'/api/v2/statistics/players':[],
+    },acknowledgeEffect:async id=>{ acknowledgements.push(id); return true; }});
+    const client=new window.SDBRuntimeClient.ExperienceRuntimeClient(core);
+    client.effectTarget=()=> 'projector';
+    await client.bootstrap();
+    const deliveries=[];
+    client.subscribe({onMessage:payload=>{
+      if(!payload.event) return;
+      deliveries.push({sound:payload.event.sound_effect_id,visual:payload.event.visual_effect_id});
+      if(deliveries.length===1){
+        payload.event.defer_sound_effect();
+        payload.event.acknowledge_effect({sound:false,visual:true});
+      }else{
+        payload.event.acknowledge_effect({sound:true,visual:true});
+      }
+    }});
+    await new Promise(resolve=>queueMicrotask(resolve));
+    core.publish(envelope);
+    await new Promise(resolve=>queueMicrotask(resolve));
+    return {deliveries,acknowledgements};
+  });
+
+  expect(result.deliveries).toEqual([
+    {sound:'effect:8:sound:projector',visual:'effect:8:visual:projector'},
+    {sound:'effect:8:sound:projector',visual:undefined},
+  ]);
+  expect(result.acknowledgements).toEqual([
+    'effect:8:visual:projector','effect:8:sound:projector',
+  ]);
+});
+
 test('native host events update independently from game revisions', async ({ page }) => {
   await page.goto('about:blank');
   await page.addScriptTag({ path: runtimeClient });

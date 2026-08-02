@@ -1,5 +1,6 @@
 #import "ProjectorDisplayHost.h"
 
+#import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 
@@ -50,6 +51,14 @@ extern "C" void sdb_projector_string_free(char *value);
 
 - (void)install {
   NSLog(@"Smart Dartboard DisplayHost: installing");
+  NSError *audioError = nil;
+  AVAudioSession *audioSession = AVAudioSession.sharedInstance;
+  if (![audioSession setCategory:AVAudioSessionCategoryPlayback
+                            mode:AVAudioSessionModeDefault
+                         options:0
+                           error:&audioError]) {
+    NSLog(@"Smart Dartboard DisplayHost: audio session unavailable: %@", audioError);
+  }
   NSNotificationCenter *notifications = NSNotificationCenter.defaultCenter;
   [notifications addObserver:self
                     selector:@selector(screenDidConnect:)
@@ -99,6 +108,8 @@ extern "C" void sdb_projector_string_free(char *value);
   }
 
   WKWebViewConfiguration *configuration = [[WKWebViewConfiguration alloc] init];
+  configuration.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
+  configuration.allowsAirPlayForMediaPlayback = YES;
   [configuration setURLSchemeHandler:self forURLScheme:@"sdb-projector"];
   WKUserContentController *contentController = [[WKUserContentController alloc] init];
   [contentController addScriptMessageHandler:self name:@"sdbProjectorCommand"];
