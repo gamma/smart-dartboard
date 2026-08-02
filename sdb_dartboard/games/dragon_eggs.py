@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .arcade import choose_targets, finish_round_game, overlay_item, same_target, zone_id
+from .arcade import choose_targets_for_state, finish_round_game, overlay_item, same_target, zone_id
 from .base import GameMetadata, GameOption, InstructionStep, ThrowOutcome
 
 
@@ -33,6 +33,7 @@ class DragonEggsMode:
             InstructionStep("Drachenfeuer", "Die dritte Flamme verbrennt zusätzlich die Hälfte deiner positiven Punkte dieses Zugs.", "dragon"),
         ],
         sound_theme="arcade",
+        ruleset_version=2,
     )
 
     def initialize_player(self, player: Any, options: Dict[str, Any]) -> None:
@@ -45,12 +46,18 @@ class DragonEggsMode:
             "turn_positive": {player.id: 0 for player in state.players},
             "collected": {player.id: [] for player in state.players},
             "layout_round": state.round_number,
+            "last_effect": "",
+            "effect_points": 0,
+            "dragon_heat": 0,
+            "dragon_fire_penalty": 0,
         }
         self._shuffle(state)
 
     def _shuffle(self, state: Any) -> None:
-        eggs = choose_targets(int(state.options.get("eggs", 4)), "normal")
-        scales = choose_targets(8, "normal", exclude=[zone_id(item) for item in eggs])
+        eggs = choose_targets_for_state(state, int(state.options.get("eggs", 4)), "normal")
+        scales = choose_targets_for_state(
+            state, 8, "normal", exclude=[zone_id(item) for item in eggs]
+        )
         state.mode_state["eggs"] = eggs
         state.mode_state["scales"] = scales
         state.mode_state["collected"] = {player.id: [] for player in state.players}
@@ -63,6 +70,12 @@ class DragonEggsMode:
             state.mode_state["layout_round"] = state.round_number
 
     def apply_throw(self, state: Any, player: Any, event: Dict[str, Any]) -> ThrowOutcome:
+        state.mode_state.update({
+            "last_effect": "",
+            "effect_points": 0,
+            "dragon_heat": int(state.mode_state["heat"].get(player.id, 0)),
+            "dragon_fire_penalty": 0,
+        })
         eggs = state.mode_state.get("eggs", [])
         scales = state.mode_state.get("scales", [])
         egg = next(
@@ -76,6 +89,7 @@ class DragonEggsMode:
             player.score += points
             state.mode_state["turn_positive"][player.id] += points
             event["effect"] = "dragon_egg"
+            state.mode_state.update({"last_effect": "dragon_egg", "effect_points": points})
             outcome = ThrowOutcome(points, "Ei geknackt! +30")
         elif egg:
             outcome = ThrowOutcome(0, "Dieses Ei ist schon leer")
@@ -93,7 +107,13 @@ class DragonEggsMode:
                 event["dragon_fire_penalty"] = 15 + penalty
                 event["dragon_heat"] = 0
                 message = f"DRACHENFEUER! -{15 + penalty}"
+                state.mode_state["dragon_fire_penalty"] = 15 + penalty
             state.mode_state["heat"][player.id] = heat
+            state.mode_state.update({
+                "last_effect": event["effect"],
+                "effect_points": points,
+                "dragon_heat": heat,
+            })
             player.score += points
             outcome = ThrowOutcome(points, message)
         else:

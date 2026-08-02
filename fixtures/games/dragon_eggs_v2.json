@@ -1,0 +1,48 @@
+{
+  "fixture_schema_version": 1,
+  "ruleset_version": 2,
+  "random_seed": 42,
+  "players": [
+    {"id":"ada","name":"Ada","avatar":"fox","color":"#ff00aa"},
+    {"id":"bob","name":"Bob","avatar":"comet","color":"#00ffaa"}
+  ],
+  "options": {"rounds":5,"eggs":4},
+  "steps": [
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":1,"field":4,"ring":"double","multiplier":2,"label":"D4","score":8}},
+      "expected":{"scores":[30,0],"heat":[0,0],"positive":[30,0],"collected":[["D4"],[]],"eggs":["D4","D13","T6","T12"],"scales":["D17","T11","T4","T18","T17","S7","S19","T16"],"layout_round":1,"last_effect":"dragon_egg","effect_points":30,"dragon_heat":0,"dragon_fire_penalty":0,"random_cursor":12,"current_player_index":0,"darts_in_turn":1,"turn_score":30,"round_number":1,"status":"running"}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":2,"field":4,"ring":"double","multiplier":2,"label":"D4","score":8}},
+      "expected":{"scores":[30,0],"heat":[0,0],"positive":[30,0],"collected":[["D4"],[]],"eggs":["D4","D13","T6","T12"],"scales":["D17","T11","T4","T18","T17","S7","S19","T16"],"layout_round":1,"last_effect":"","effect_points":0,"dragon_heat":0,"dragon_fire_penalty":0,"random_cursor":12,"current_player_index":0,"darts_in_turn":2,"turn_score":30,"round_number":1,"status":"running"}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":3,"field":17,"ring":"double","multiplier":2,"label":"D17","score":34}},
+      "expected":{"scores":[15,0],"heat":[1,0],"positive":[30,0],"collected":[["D4"],[]],"eggs":["D4","D13","T6","T12"],"scales":["D17","T11","T4","T18","T17","S7","S19","T16"],"layout_round":1,"last_effect":"dragon_scale","effect_points":-15,"dragon_heat":1,"dragon_fire_penalty":0,"random_cursor":12,"current_player_index":0,"darts_in_turn":3,"turn_score":15,"round_number":1,"status":"hold"}
+    },
+    {
+      "command":{"type":"continue"},
+      "expected":{"scores":[15,0],"heat":[1,0],"positive":[30,0],"collected":[["D4"],[]],"eggs":["D4","D13","T6","T12"],"scales":["D17","T11","T4","T18","T17","S7","S19","T16"],"layout_round":1,"last_effect":"dragon_scale","effect_points":-15,"dragon_heat":1,"dragon_fire_penalty":0,"random_cursor":12,"current_player_index":1,"darts_in_turn":0,"turn_score":0,"round_number":1,"status":"running"}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":4,"field":17,"ring":"double","multiplier":2,"label":"D17","score":34}},
+      "expected":{"scores":[15,-15],"heat":[1,1],"positive":[30,0],"collected":[["D4"],[]],"eggs":["D4","D13","T6","T12"],"scales":["D17","T11","T4","T18","T17","S7","S19","T16"],"layout_round":1,"last_effect":"dragon_scale","effect_points":-15,"dragon_heat":1,"dragon_fire_penalty":0,"random_cursor":12,"current_player_index":1,"darts_in_turn":1,"turn_score":-15,"round_number":1,"status":"running"}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":5,"field":17,"ring":"double","multiplier":2,"label":"D17","score":34}},
+      "expected":{"scores":[15,-30],"heat":[1,2],"positive":[30,0],"collected":[["D4"],[]],"eggs":["D4","D13","T6","T12"],"scales":["D17","T11","T4","T18","T17","S7","S19","T16"],"layout_round":1,"last_effect":"dragon_scale","effect_points":-15,"dragon_heat":2,"dragon_fire_penalty":0,"random_cursor":12,"current_player_index":1,"darts_in_turn":2,"turn_score":-30,"round_number":1,"status":"running"}
+    },
+    {
+      "command":{"type":"dart","event":{"type":"hit","seq":6,"field":17,"ring":"double","multiplier":2,"label":"D17","score":34}},
+      "expected":{"scores":[15,-45],"heat":[1,0],"positive":[30,0],"collected":[["D4"],[]],"eggs":["D4","D13","T6","T12"],"scales":["D17","T11","T4","T18","T17","S7","S19","T16"],"layout_round":1,"last_effect":"dragon_fire","effect_points":-15,"dragon_heat":0,"dragon_fire_penalty":15,"random_cursor":12,"current_player_index":1,"darts_in_turn":3,"turn_score":-45,"round_number":1,"status":"hold"}
+    },
+    {
+      "command":{"type":"correct","action_id":5,"event":{"type":"hit","seq":99,"field":13,"ring":"double","multiplier":2,"label":"D13","score":26}},
+      "expected":{"scores":[15,0],"heat":[1,2],"positive":[30,30],"collected":[["D4"],["D13"]],"eggs":["D4","D13","T6","T12"],"scales":["D17","T11","T4","T18","T17","S7","S19","T16"],"layout_round":1,"last_effect":"dragon_scale","effect_points":-15,"dragon_heat":2,"dragon_fire_penalty":0,"random_cursor":12,"current_player_index":1,"darts_in_turn":3,"turn_score":0,"round_number":1,"status":"hold"}
+    },
+    {
+      "command":{"type":"continue"},
+      "expected":{"scores":[15,0],"heat":[1,2],"positive":[0,30],"collected":[[],[]],"eggs":["S2","T17","S10","D3"],"scales":["T18","T19","T1","S1","S11","D19","D16","D15"],"layout_round":2,"last_effect":"dragon_scale","effect_points":-15,"dragon_heat":2,"dragon_fire_penalty":0,"random_cursor":24,"current_player_index":0,"darts_in_turn":0,"turn_score":0,"round_number":2,"status":"running"}
+    }
+  ]
+}

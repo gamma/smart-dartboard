@@ -1177,7 +1177,7 @@ mod tests {
                 .expect("body"),
         )
         .expect("mode metadata");
-        assert_eq!(modes.as_array().map(Vec::len), Some(18));
+        assert_eq!(modes.as_array().map(Vec::len), Some(19));
         assert!(
             modes
                 .as_array()
@@ -1260,6 +1260,7 @@ mod tests {
             })
         }));
         assert_block_drop_metadata(&modes);
+        assert_dragon_eggs_metadata(&modes);
     }
 
     fn assert_block_drop_metadata(modes: &Value) {
@@ -1281,6 +1282,21 @@ mod tests {
                                 item["icon"] == "drop" && item["secondary_color"] == "#e76f51"
                             })
                     })
+            })
+        }));
+    }
+
+    fn assert_dragon_eggs_metadata(modes: &Value) {
+        assert!(modes.as_array().is_some_and(|items| {
+            items.iter().any(|mode| {
+                mode["slug"] == "dragon_eggs"
+                    && mode["ruleset_version"] == 2
+                    && mode["artwork"] == "/static/assets/modes/dragon_eggs.webp"
+                    && mode["options"][0]["default"] == 5
+                    && mode["options"][1]["default"] == 4
+                    && mode["instructions"]
+                        .as_array()
+                        .is_some_and(|steps| steps.len() == 3)
             })
         }));
     }

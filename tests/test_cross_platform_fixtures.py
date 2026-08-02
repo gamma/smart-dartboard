@@ -66,6 +66,9 @@ KING_OF_BOARD_FIXTURE = (
 BLOCK_DROP_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "games" / "block_drop_v2.json"
 )
+DRAGON_EGGS_FIXTURE = (
+    Path(__file__).parents[1] / "fixtures" / "games" / "dragon_eggs_v2.json"
+)
 SESSION_FIXTURE = (
     Path(__file__).parents[1] / "fixtures" / "sessions" / "session_v1.json"
 )
@@ -851,6 +854,35 @@ class CrossPlatformProtocolFixtureTests(unittest.TestCase):
                 "status": state.status,
                 "winner_ids": state.winner_ids,
                 "result_type": state.result_type,
+            }
+            self.assertEqual(actual, step["expected"])
+
+    def test_python_dragon_eggs_matches_shared_rust_fixture(self) -> None:
+        fixture = json.loads(DRAGON_EGGS_FIXTURE.read_text(encoding="utf-8"))
+        self.assertEqual(2, fixture["ruleset_version"])
+        engine = GameEngine()
+        engine.reset("dragon_eggs", fixture["players"], options=fixture["options"], random_seed=fixture["random_seed"])
+        for step in fixture["steps"]:
+            command = step["command"]
+            if command["type"] == "dart":
+                engine.handle_event(dict(command["event"]))
+            elif command["type"] == "continue":
+                engine.continue_turn()
+            elif command["type"] == "correct":
+                engine.correct_throw(int(command["action_id"]), dict(command["event"]))
+            state = engine.state
+            mode = state.mode_state
+            values = lambda key: [mode[key][player.id] for player in state.players]
+            labels = lambda key: [target["label"] for target in mode[key]]
+            actual = {
+                "scores": [player.score for player in state.players], "heat": values("heat"),
+                "positive": values("turn_positive"), "collected": values("collected"),
+                "eggs": labels("eggs"), "scales": labels("scales"), "layout_round": mode["layout_round"],
+                "last_effect": mode["last_effect"], "effect_points": mode["effect_points"],
+                "dragon_heat": mode["dragon_heat"], "dragon_fire_penalty": mode["dragon_fire_penalty"],
+                "random_cursor": state.random_cursor, "current_player_index": state.current_player_index,
+                "darts_in_turn": state.darts_in_turn, "turn_score": state.turn_score,
+                "round_number": state.round_number, "status": state.status,
             }
             self.assertEqual(actual, step["expected"])
 

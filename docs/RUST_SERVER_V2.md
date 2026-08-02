@@ -126,10 +126,10 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 
 - CountUp, X01, Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King
   of the Board, Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon,
-  Lightning Round, Mini Golf, Simon Says, Treasure Hunt und Block Drop starten;
+  Lightning Round, Mini Golf, Simon Says, Treasure Hunt, Block Drop und Dragon Eggs starten;
   Cricket, 8-Ball, Avoid the Bomb, Color Clash, Heart Chase, King of the Board,
   Target Rush, Ghost Chase, Risk It, Robin Hood, Candy Cannon, Lightning Round,
-  Mini Golf, Simon Says, Treasure Hunt und Block Drop nutzen
+  Mini Golf, Simon Says, Treasure Hunt, Block Drop und Dragon Eggs nutzen
   dieselbe generische, statische Modus-Registry statt neuer Runtime- oder
   Serverzweige,
 - Sessionprofile einschließlich Avatar und Spielerfarbe bleiben beim Start
