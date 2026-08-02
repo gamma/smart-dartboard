@@ -1168,10 +1168,7 @@ mod native_companion_transport {
                 .local_addr()
                 .map_err(|error| format!("companion listener address failed: {error}"))?;
             let handle = Handle::new();
-            let diagnostics = native
-                .lock()
-                .ok()
-                .map(|state| state.diagnostics.clone());
+            let diagnostics = native.lock().ok().map(|state| state.diagnostics.clone());
             let server = axum_server::from_tcp_rustls(listener, self.tls.clone())
                 .map_err(|error| format!("companion TLS listener failed: {error}"))?
                 .handle(handle.clone())
@@ -1307,10 +1304,17 @@ mod native_companion_transport {
             return Err(TransportError::forbidden("Companion report is not allowed"));
         }
         let (result, public) = {
-            let mut state = service.native.lock().map_err(|_| TransportError::internal())?;
+            let mut state = service
+                .native
+                .lock()
+                .map_err(|_| TransportError::internal())?;
             authenticate(&state, token)?;
-            state.require_controller().map_err(|_| TransportError::forbidden("host unavailable"))?;
-            let result = state.runtime.dispatch_envelope(envelope)
+            state
+                .require_controller()
+                .map_err(|_| TransportError::forbidden("host unavailable"))?;
+            let result = state
+                .runtime
+                .dispatch_envelope(envelope)
                 .map_err(|_| TransportError::bad_request("Companion report was rejected"))?;
             (result, state.public())
         };
@@ -1682,7 +1686,9 @@ mod native_companion_transport {
                 .oneshot(
                     Request::post("/api/v2/companion/runtime/reports")
                         .header(header::CONTENT_TYPE, "application/json")
-                        .body(Body::from(serde_json::to_vec(&sound_report).expect("report")))
+                        .body(Body::from(
+                            serde_json::to_vec(&sound_report).expect("report"),
+                        ))
                         .expect("request"),
                 )
                 .await
@@ -1695,7 +1701,9 @@ mod native_companion_transport {
                     Request::post("/api/v2/companion/runtime/reports")
                         .header(header::AUTHORIZATION, format!("Bearer {}", grant.token))
                         .header(header::CONTENT_TYPE, "application/json")
-                        .body(Body::from(serde_json::to_vec(&sound_report).expect("report")))
+                        .body(Body::from(
+                            serde_json::to_vec(&sound_report).expect("report"),
+                        ))
                         .expect("request"),
                 )
                 .await
@@ -2089,13 +2097,9 @@ mod native_companion_client {
         if body.len() > 64 * 1_024 {
             return Err("Companion report exceeds size limit".into());
         }
-        let mut response = post_authenticated_json(
-            host,
-            grant,
-            "/api/v2/companion/runtime/reports",
-            &body,
-        )
-        .await?;
+        let mut response =
+            post_authenticated_json(host, grant, "/api/v2/companion/runtime/reports", &body)
+                .await?;
         let result = serde_json::from_slice(&response)
             .map_err(|_| "invalid Companion report response".to_owned());
         response.zeroize();
@@ -2134,7 +2138,8 @@ mod native_companion_client {
         let authority = format!("{}.local", host.host_id);
         let mut header = Zeroizing::new(format!(
             "POST {path} HTTP/1.1\r\nHost: {authority}\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-            grant.token.as_str(), body.len()
+            grant.token.as_str(),
+            body.len()
         ));
         tls.write_all(header.as_bytes())
             .await
@@ -2483,10 +2488,7 @@ fn companion_v2_envelope(state: &PublicState) -> Envelope<RuntimePublicSnapshot>
 }
 
 #[cfg(any(target_os = "ios", target_os = "macos"))]
-fn clear_companion_client_frame(
-    app: &tauri::AppHandle,
-    frame: &Arc<Mutex<Option<PublicState>>>,
-) {
+fn clear_companion_client_frame(app: &tauri::AppHandle, frame: &Arc<Mutex<Option<PublicState>>>) {
     if let Ok(mut current) = frame.lock() {
         *current = None;
     }
@@ -2662,7 +2664,9 @@ fn arrange_macos_projector(app: &tauri::AppHandle) -> Result<(), String> {
         .get_webview_window("projector")
         .ok_or_else(|| "projector window is unavailable".to_owned())?;
     let control = app.get_webview_window("control");
-    let displays = projector.available_monitors().map_err(|error| error.to_string())?;
+    let displays = projector
+        .available_monitors()
+        .map_err(|error| error.to_string())?;
     let control_monitor = control
         .as_ref()
         .and_then(|window| window.current_monitor().ok().flatten())
@@ -2883,8 +2887,8 @@ async fn companion_client_loop(
 #[allow(unsafe_code)]
 mod apple_board {
     use super::{
-        APP_HANDLE, AppLifecyclePhase, BoardFailureCode, BoardPhase, BoardStatus, NativeAppRole,
-        SharedNativeState, DiagnosticLevel, DiagnosticScope, board_failure_name, board_phase_name,
+        APP_HANDLE, AppLifecyclePhase, BoardFailureCode, BoardPhase, BoardStatus, DiagnosticLevel,
+        DiagnosticScope, NativeAppRole, SharedNativeState, board_failure_name, board_phase_name,
         publish_public_state,
     };
     use std::ffi::{CStr, c_char};
@@ -3116,8 +3120,7 @@ mod apple_board_host {
 #[allow(unsafe_code)]
 mod macos_lifecycle_host {
     use super::{
-        APP_HANDLE, handle_apple_lifecycle, lifecycle_phase_for_sleeping,
-        refresh_macos_projector,
+        APP_HANDLE, handle_apple_lifecycle, lifecycle_phase_for_sleeping, refresh_macos_projector,
     };
 
     #[link(name = "sdb_apple_board_transport", kind = "static")]
@@ -3354,7 +3357,9 @@ fn runtime_v2_query_value(state: &NativeState, path: &str) -> Result<serde_json:
         return serde_json::to_value(registered_game_metadata()).map_err(|error| error.to_string());
     }
     let parameters = url.query_pairs().collect::<HashMap<_, _>>();
-    let include_test = parameters.get("include_test").is_some_and(|value| value == "true");
+    let include_test = parameters
+        .get("include_test")
+        .is_some_and(|value| value == "true");
     let repository = state.runtime.repository();
     let value = match route {
         "/api/v2/host" => serde_json::to_value(state.public()),
@@ -3367,22 +3372,35 @@ fn runtime_v2_query_value(state: &NativeState, path: &str) -> Result<serde_json:
                 .map_err(|error| error.to_string())?,
         ),
         "/api/v2/statistics/modes" => serde_json::to_value(
-            repository.mode_statistics(include_test).map_err(|error| error.to_string())?,
+            repository
+                .mode_statistics(include_test)
+                .map_err(|error| error.to_string())?,
         ),
         "/api/v2/statistics/heatmap" => serde_json::to_value(
-            repository.heatmap(
-                parameters.get("player_id").map(AsRef::as_ref),
-                parameters.get("session_id").map(AsRef::as_ref),
-                parameters.get("game_type").map(AsRef::as_ref),
-                include_test,
-            ).map_err(|error| error.to_string())?,
+            repository
+                .heatmap(
+                    parameters.get("player_id").map(AsRef::as_ref),
+                    parameters.get("session_id").map(AsRef::as_ref),
+                    parameters.get("game_type").map(AsRef::as_ref),
+                    include_test,
+                )
+                .map_err(|error| error.to_string())?,
         ),
         "/api/v2/history/sessions" => {
-            let limit = parameters.get("limit").and_then(|value| value.parse().ok()).unwrap_or(50);
-            serde_json::to_value(repository.sessions(limit).map_err(|error| error.to_string())?)
+            let limit = parameters
+                .get("limit")
+                .and_then(|value| value.parse().ok())
+                .unwrap_or(50);
+            serde_json::to_value(
+                repository
+                    .sessions(limit)
+                    .map_err(|error| error.to_string())?,
+            )
         }
         "/api/v2/data/export" => serde_json::to_value(
-            repository.export_data().map_err(|error| error.to_string())?,
+            repository
+                .export_data()
+                .map_err(|error| error.to_string())?,
         ),
         "/api/v2/diagnostics/export" => {
             let export = state.diagnostics.export(
@@ -3406,26 +3424,45 @@ fn runtime_v2_query_value(state: &NativeState, path: &str) -> Result<serde_json:
         }
         _ if route.starts_with("/api/v2/history/sessions/") => {
             let id = route.trim_start_matches("/api/v2/history/sessions/");
-            serde_json::to_value(repository.session_detail(id).map_err(|error| error.to_string())?
-                .ok_or_else(|| "session not found".to_string())?)
+            serde_json::to_value(
+                repository
+                    .session_detail(id)
+                    .map_err(|error| error.to_string())?
+                    .ok_or_else(|| "session not found".to_string())?,
+            )
         }
         _ if route.starts_with("/api/v2/history/games/") && route.ends_with("/replay") => {
-            let id = route.trim_start_matches("/api/v2/history/games/")
-                .trim_end_matches("/replay").trim_end_matches('/');
-            serde_json::to_value(repository.game_replay(id).map_err(|error| error.to_string())?
-                .ok_or_else(|| "game not found".to_string())?)
+            let id = route
+                .trim_start_matches("/api/v2/history/games/")
+                .trim_end_matches("/replay")
+                .trim_end_matches('/');
+            serde_json::to_value(
+                repository
+                    .game_replay(id)
+                    .map_err(|error| error.to_string())?
+                    .ok_or_else(|| "game not found".to_string())?,
+            )
         }
         _ if route.starts_with("/api/v2/history/games/") => {
             let id = route.trim_start_matches("/api/v2/history/games/");
-            serde_json::to_value(repository.game_detail(id).map_err(|error| error.to_string())?
-                .ok_or_else(|| "game not found".to_string())?)
+            serde_json::to_value(
+                repository
+                    .game_detail(id)
+                    .map_err(|error| error.to_string())?
+                    .ok_or_else(|| "game not found".to_string())?,
+            )
         }
         _ if route.starts_with("/api/v2/training/") && route.ends_with("/recommendations") => {
-            let id = route.trim_start_matches("/api/v2/training/")
-                .trim_end_matches("/recommendations").trim_end_matches('/');
-            serde_json::to_value(repository.training_recommendations(id)
-                .map_err(|error| error.to_string())?
-                .ok_or_else(|| "player not found".to_string())?)
+            let id = route
+                .trim_start_matches("/api/v2/training/")
+                .trim_end_matches("/recommendations")
+                .trim_end_matches('/');
+            serde_json::to_value(
+                repository
+                    .training_recommendations(id)
+                    .map_err(|error| error.to_string())?
+                    .ok_or_else(|| "player not found".to_string())?,
+            )
         }
         _ => return Err("unsupported native runtime query".into()),
     };
@@ -3838,7 +3875,10 @@ fn companion_projector_v2_bootstrap(
     state: State<'_, SharedNativeState>,
     service: State<'_, NativeCompanionService>,
 ) -> Result<Envelope<RuntimePublicSnapshot>, String> {
-    state.lock().map_err(|error| error.to_string())?.require_companion()?;
+    state
+        .lock()
+        .map_err(|error| error.to_string())?
+        .require_companion()?;
     service
         .client_frame
         .lock()
@@ -3901,7 +3941,11 @@ async fn companion_projector_v2_report(
     if !runtime_v2_projector_report_allowed(&envelope.command) {
         return Err("Companion may only report geometry or sound status".into());
     }
-    let grant = service.active_grant.lock().await.clone()
+    let grant = service
+        .active_grant
+        .lock()
+        .await
+        .clone()
         .filter(native_companion_client::ActiveGrant::is_usable)
         .ok_or_else(|| "Companion is not paired".to_owned())?;
     let host = apple_bonjour::browser_snapshot()?
@@ -4273,12 +4317,7 @@ fn record_diagnostic_error(
     );
 }
 
-fn record_app_diagnostic_error(
-    app: &tauri::AppHandle,
-    component: &str,
-    event: &str,
-    code: &str,
-) {
+fn record_app_diagnostic_error(app: &tauri::AppHandle, component: &str, event: &str, code: &str) {
     if let Some(state) = app.try_state::<SharedNativeState>()
         && let Ok(state) = state.lock()
     {
@@ -4317,10 +4356,8 @@ pub fn run() {
         .setup(|app| {
             let data_dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&data_dir)?;
-            let diagnostics = DiagnosticLogger::open(
-                data_dir.join("logs"),
-                diagnostic_context("tauri-native"),
-            )?;
+            let diagnostics =
+                DiagnosticLogger::open(data_dir.join("logs"), diagnostic_context("tauri-native"))?;
             let mut repository = SqliteRepository::open(data_dir.join("runtime.sqlite"))
                 .map_err(std::io::Error::other)?;
             #[cfg(any(target_os = "ios", target_os = "macos"))]
@@ -4343,7 +4380,10 @@ pub fn run() {
                         DiagnosticLevel::Warn,
                         "companion",
                         "identity_setup_failed",
-                        DiagnosticScope { adapter_error_code: Some("secure_identity_unavailable"), ..DiagnosticScope::default() },
+                        DiagnosticScope {
+                            adapter_error_code: Some("secure_identity_unavailable"),
+                            ..DiagnosticScope::default()
+                        },
                         serde_json::json!({}),
                     );
                     eprintln!("Companion setup is unavailable; see diagnostics");
@@ -4373,7 +4413,11 @@ pub fn run() {
                 DiagnosticScope {
                     runtime_instance_id: Some(native_state.runtime.instance_id()),
                     revision: Some(native_state.runtime.snapshot().revision),
-                    board_state: Some(if native_state.app_role == NativeAppRole::Controller { "unavailable" } else { "disabled" }),
+                    board_state: Some(if native_state.app_role == NativeAppRole::Controller {
+                        "unavailable"
+                    } else {
+                        "disabled"
+                    }),
                     ..DiagnosticScope::default()
                 },
                 serde_json::json!({
@@ -4588,8 +4632,7 @@ pub fn run() {
                 && label == "control"
                 && matches!(
                     window_event,
-                    tauri::WindowEvent::Moved(_)
-                        | tauri::WindowEvent::ScaleFactorChanged { .. }
+                    tauri::WindowEvent::Moved(_) | tauri::WindowEvent::ScaleFactorChanged { .. }
                 )
             {
                 refresh_macos_projector(app);
@@ -4661,12 +4704,18 @@ mod tests {
         }
         let export = runtime_v2_query_value(&state, "/api/v2/data/export").expect("export");
         assert_eq!(export["schema_version"], 2);
-        let diagnostics = runtime_v2_query_value(&state, "/api/v2/diagnostics/export")
-            .expect("diagnostics");
+        let diagnostics =
+            runtime_v2_query_value(&state, "/api/v2/diagnostics/export").expect("diagnostics");
         assert_eq!(diagnostics["database_included"], false);
         assert_eq!(diagnostics["versions"]["schema"], CURRENT_SCHEMA_VERSION);
-        assert!(native_query_allowed("control", "/api/v2/diagnostics/export"));
-        assert!(!native_query_allowed("projector", "/api/v2/diagnostics/export"));
+        assert!(native_query_allowed(
+            "control",
+            "/api/v2/diagnostics/export"
+        ));
+        assert!(!native_query_allowed(
+            "projector",
+            "/api/v2/diagnostics/export"
+        ));
         assert!(!native_query_allowed("projector", "/api/v2/data/export"));
         assert!(native_query_allowed("projector", "/api/v2/modes"));
         assert!(runtime_v2_query_value(&state, "/api/v2/history/games/missing").is_err());
@@ -4699,7 +4748,10 @@ mod tests {
         )
         .expect("native import");
         assert_eq!(summary.players_added, 1);
-        assert_eq!(state.runtime.repository().players().expect("players").len(), 1);
+        assert_eq!(
+            state.runtime.repository().players().expect("players").len(),
+            1
+        );
 
         let oversized = serde_json::json!({"padding": "x".repeat(16 * 1024 * 1024)});
         assert!(
@@ -5010,7 +5062,10 @@ mod tests {
             .await
             .expect("report state timeout")
             .expect("report state frame");
-        assert_eq!(reported.runtime.settings.sound.status, sdb_contracts::SoundStatus::Ready);
+        assert_eq!(
+            reported.runtime.settings.sound.status,
+            sdb_contracts::SoundStatus::Ready
+        );
         let updated = {
             let mut state = state.lock().expect("state");
             let public = state.ingest_test_hit().expect("test hit");
@@ -5102,8 +5157,8 @@ mod tests {
                     .is_some_and(|modes| modes.len() == 24)
             );
             assert_eq!(
-                companion_projector_v2_query_value(&state, "/api/v2/host")
-                    .expect("read-only host")["test_events"],
+                companion_projector_v2_query_value(&state, "/api/v2/host").expect("read-only host")
+                    ["test_events"],
                 false
             );
             assert!(companion_projector_v2_query_value(&state, "/api/v2/data/export").is_err());
