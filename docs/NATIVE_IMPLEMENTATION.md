@@ -93,6 +93,15 @@ Umgesetzt und lokal verifiziert:
   zugeordnete Rolle. Die UI dedupliziert über die Effect-ID und leitet einen
   alten `last_event` bei anderen Zustandsänderungen nicht erneut als Treffer
   weiter,
+- versionierter Teamvertrag im gemeinsamen Core. Jeder Modus deklariert sein
+  Format als `individual`, `cooperative` oder `teams`. Boss Fight, Space
+  Defender, Block Drop Darts und DartSweeper bilden beim Auswählen automatisch
+  genau ein Koop-Team aus allen Session-Spielern; dessen stabile Team-ID und
+  Mitglieder laufen durch Session-, Game- und Public State. Ein Teamsieg zählt
+  weiterhin atomar als Sieg und drei Sessionpunkte für jedes Mitglied. Explizite
+  gegnerische Teamaufteilungen werden bereits als vollständige, disjunkte
+  Spielerpartition validiert und können von künftigen `teams`-Modi verwendet
+  werden,
 - das native Projector-Fenster und der iOS-External-Display-Host erhalten genau
   eine begrenzte Reporting-Bridge: Sie dürfen ihre Geometrie und ihren
   Soundstatus melden, aber weder Kalibrierung noch Spiel oder sonstiges Setup

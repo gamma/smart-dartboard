@@ -70,6 +70,7 @@ static INSTRUCTIONS: [GameInstruction; 4] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "risk_it",
     ruleset_version: 3,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Risk It",
     tagline: "Banken oder den Hot Pot riskieren",
     description: "Treffer füllen deinen Pot. Banke nach Dart 1 oder 2 – nach Dart 3 kann der nächste Spieler den Pot mit einem Treffer stehlen.",

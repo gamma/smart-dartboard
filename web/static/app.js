@@ -541,12 +541,25 @@ function controlPlayers(){
 
 function modeCard(mode){
   mode=localMode(mode);
+  const format=modeFormatLabel(mode);
   return `<button class="mode-card" data-action="select-mode" data-mode="${escapeHtml(mode.slug)}" style="--accent:${escapeHtml(mode.accent)}">
     <img src="${modeAsset(mode.slug)}" alt="" loading="eager" onerror="this.onerror=null;this.src='/static/assets/modes/countup.webp'">
     <span class="mode-shade"></span>
-    <span class="mode-copy"><small>${escapeHtml(mode.tagline)}</small><b>${escapeHtml(mode.title)}</b><em>${escapeHtml(mode.description)}</em></span>
+    <span class="mode-copy"><small>${format?`<i class="mode-format">${escapeHtml(format)}</i>`:''}${escapeHtml(mode.tagline)}</small><b>${escapeHtml(mode.title)}</b><em>${escapeHtml(mode.description)}</em></span>
     <i>→</i>
   </button>`;
+}
+function modeFormatLabel(mode){
+  if(mode?.format==='cooperative') return t('coop_mode');
+  if(mode?.format==='teams') return t('team_mode');
+  return '';
+}
+function activeTeamPanel(mode){
+  if(mode?.format!=='cooperative' && mode?.format!=='teams') return '';
+  const teams=appState.experience.session?.active_game_teams || [];
+  if(!teams.length) return '';
+  const players=appState.experience.session?.players || [];
+  return `<aside class="active-team-panel"><span>${mode.format==='cooperative'?t('one_coop_team'):t('configured_teams')}</span>${teams.map(team=>`<div style="--team:${escapeHtml(team.color)}"><b>${escapeHtml(team.name)}</b><small>${team.player_ids.map(id=>players.find(player=>player.id===id)?.name).filter(Boolean).map(escapeHtml).join(' · ')}</small></div>`).join('')}</aside>`;
 }
 function controlGameSelect(){
   const session = appState.experience.session;
@@ -649,7 +662,7 @@ function controlInstructions(){
     </div>
     <div class="instruction-content">
       <div class="instruction-list">${selectedOptionRules(mode,'control-selected-rules')}${controlLegend(mode.control_legend,'control-instructions')}${instructionSteps(mode)}</div>
-      <div class="game-options">${starterSelector()}${mode.options.map(option => optionControl(option,appState.experience.selected_options[option.key])).join('')}</div>
+      <div class="game-options">${activeTeamPanel(mode)}${starterSelector()}${mode.options.map(option => optionControl(option,appState.experience.selected_options[option.key])).join('')}</div>
     </div>
     <footer class="sticky-actions">
       ${actionButton(t('other_game'),'back-games','ghost')}
@@ -1289,7 +1302,7 @@ function projectorInstructions(){
     ? controlLegend(mode.control_legend,'projector-guide')
     : `<div class="projector-step-list">${instructionSteps(mode)}</div>`;
   return projectorBackdrop(mode,`<div class="projector-instructions">
-    <div><div class="kicker">${escapeHtml(mode.tagline)}</div><h1>${escapeHtml(mode.title)}</h1><p>${escapeHtml(mode.description)}</p>${starter&&hasStarterChoice()?`<div class="projector-starter"><span>${t('starter')}</span><b>${avatarEmoji(starter.avatar)} ${escapeHtml(starter.name)}</b><small>${starterSourceLabel(appState.experience.starter?.selection)}</small></div>`:''}</div>
+    <div><div class="kicker">${modeFormatLabel(mode)?`${escapeHtml(modeFormatLabel(mode))} · `:''}${escapeHtml(mode.tagline)}</div><h1>${escapeHtml(mode.title)}</h1><p>${escapeHtml(mode.description)}</p>${activeTeamPanel(mode)}${starter&&hasStarterChoice()?`<div class="projector-starter"><span>${t('starter')}</span><b>${avatarEmoji(starter.avatar)} ${escapeHtml(starter.name)}</b><small>${starterSourceLabel(appState.experience.starter?.selection)}</small></div>`:''}</div>
     <div class="projector-instruction-content">${selectedOptionRules(mode,'projector-selected-rules')}${instructions}</div>
   </div>`,'mode-projector');
 }

@@ -148,7 +148,10 @@
       return {
         screen:settings.display_override || this.localScreen || session.screen || 'attract',
         session:session.session_id?{
-          id:session.session_id,status:session.session_status,players:session.players || [],
+          ...session,id:session.session_id,status:session.session_status,
+          players:session.players || [],teams:session.teams || [],
+          active_game_teams:session.active_game_teams || [],
+          active_game_winner_team_ids:session.active_game_winner_team_ids || [],
         }:null,
         game_id:session.game_id || null,
         selected_mode:selectedMode,
@@ -292,7 +295,8 @@
       if(path==='/api/session/start'){
         const selected=new Set(payload.player_ids || []);
         const players=this.profiles.filter(player=>selected.has(player.id));
-        return this.command({type:'start_session',session_id:uuid(),players},{type:'session_started'});
+        const teams=Array.isArray(payload.teams) ? payload.teams : [];
+        return this.command({type:'start_session',session_id:uuid(),players,teams},{type:'session_started'});
       }
       if(path==='/api/session/close'){
         if(!this.sessionState().session_id){

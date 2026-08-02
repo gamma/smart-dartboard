@@ -54,6 +54,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "treasure_hunt",
     ruleset_version: 1,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Treasure Hunt",
     tagline: "Finde Schätze, meide Fallen",
     description: "Das Board ist eine Schatzkarte. Treffer decken versteckte Münzen, Gold und Fallen auf.",

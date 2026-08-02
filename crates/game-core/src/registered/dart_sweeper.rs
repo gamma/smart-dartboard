@@ -64,6 +64,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "dart_sweeper",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Cooperative,
     title: "DartSweeper",
     tagline: "Räumt gemeinsam das Minenfeld",
     description: "Die 20 Zahlen werden zu Minesweeper-Feldern. Double, Triple und Bull decken zusätzliche sichere Zahlen auf.",
@@ -477,6 +478,7 @@ mod tests {
                 name: id.to_uppercase(),
                 avatar: "comet".into(),
                 color: "#28e7ff".into(),
+                team_id: None,
             })
             .collect()
     }

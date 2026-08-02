@@ -51,6 +51,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "dragon_eggs",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Dragon Eggs",
     tagline: "Eier bergen, Drachenfeuer vermeiden",
     description: "Sammle goldene Eier. Jede rote Schuppe heizt den Drachen auf – die dritte entfacht sein Feuer.",

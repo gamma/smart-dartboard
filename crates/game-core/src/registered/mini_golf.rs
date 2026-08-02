@@ -72,6 +72,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "mini_golf",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Mini Golf Darts",
     tagline: "Neun Löcher auf der Scheibe",
     description: "Alle spielen dasselbe Loch. Je früher du das Ziel triffst, desto weniger Schläge sammelst du.",

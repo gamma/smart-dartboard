@@ -77,6 +77,7 @@ static INSTRUCTIONS: [GameInstruction; 4] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "ghost_chase",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Ghost Chase",
     tagline: "Fang den hüpfenden Geist",
     description: "Triff den Geist für eine wachsende Dreier-Combo. Nach drei Fehlversuchen flieht er weiter.",

@@ -65,6 +65,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "color_clash",
     ruleset_version: 3,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Color Clash",
     tagline: "Gold zählt, Rot tut weh",
     description: "Das Board wird zur Arcade-Fläche: Farben bestimmen die Punkte, nicht der klassische Dartwert.",

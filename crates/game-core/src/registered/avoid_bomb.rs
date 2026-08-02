@@ -133,6 +133,7 @@ static INSTRUCTIONS: [GameInstruction; 5] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "avoid_bomb",
     ruleset_version: 4,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Avoid the Bomb",
     tagline: "Sammle Punkte – meide Rot",
     description: "Normale Treffer zählen, aber rote Bomben ziehen Punkte ab und sorgen für Party-Chaos.",

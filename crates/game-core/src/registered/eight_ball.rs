@@ -24,6 +24,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "eight_ball",
     ruleset_version: 1,
+    format: sdb_contracts::GameFormat::Individual,
     title: "8-Ball Darts",
     tagline: "Räume deine Kugeln ab",
     description: "Ein klares Duell: erst die eigenen Kugeln versenken, dann Double Bull als schwarze 8.",

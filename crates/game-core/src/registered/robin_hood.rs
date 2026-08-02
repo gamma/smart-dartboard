@@ -67,6 +67,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "robin_hood",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Robin Hood Hunt",
     tagline: "Spalte die Sheriff-Pfeile",
     description: "Jage die drei Ziele des Vorgängers. Jeder eigene Treffer wird danach zum Ziel für den nächsten Spieler.",

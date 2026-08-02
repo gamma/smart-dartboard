@@ -67,6 +67,7 @@ static INSTRUCTIONS: [GameInstruction; 4] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "cookie_monster",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Cookie Monster",
     tagline: "Keksdose leer essen",
     description: "Räume dein persönliches Cookie-Board ab, meide Schimmel und schalte erst dann die nächste Keksdose frei.",

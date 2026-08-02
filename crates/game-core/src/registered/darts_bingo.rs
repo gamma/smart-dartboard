@@ -72,6 +72,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "darts_bingo",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Darts Bingo",
     tagline: "Aufgaben markieren, Linie holen",
     description: "Alle spielen dieselbe 3×3-Karte aus Dartaufgaben. Eine Linie oder die volle Karte gewinnt nach einer fairen Ausgleichsrunde.",

@@ -1812,6 +1812,7 @@ fn project_domain(
         RuntimeAction::StartSession {
             session_id,
             players,
+            ..
         } => {
             for player in players {
                 transaction
@@ -3005,12 +3006,14 @@ mod tests {
                 name: "Ada".into(),
                 avatar: "comet".into(),
                 color: "#28e7ff".into(),
+                team_id: None,
             },
             PlayerRef {
                 id: "bob".into(),
                 name: "Bob".into(),
                 avatar: "nova".into(),
                 color: "#ffd166".into(),
+                team_id: None,
             },
         ];
         for (command_id, action) in [
@@ -3019,6 +3022,7 @@ mod tests {
                 RuntimeAction::StartSession {
                     session_id: "session-next-player".into(),
                     players,
+                    teams: Vec::new(),
                 },
             ),
             (
@@ -3105,7 +3109,9 @@ mod tests {
                             name: "Ada".into(),
                             avatar: "nova".into(),
                             color: "#ff00aa".into(),
+                            team_id: None,
                         }],
+                        teams: Vec::new(),
                     },
                 )
                 .expect("session");
@@ -3398,7 +3404,9 @@ mod tests {
                         name: "Ada".into(),
                         avatar: "🦊".into(),
                         color: "#ff00aa".into(),
+                        team_id: None,
                     }],
+                    teams: Vec::new(),
                 },
             )
             .expect("session");
@@ -3552,7 +3560,9 @@ mod tests {
                         name: "Ada".into(),
                         avatar: "comet".into(),
                         color: "#28e7ff".into(),
+                        team_id: None,
                     }],
+                    teams: Vec::new(),
                 },
             ),
             (
@@ -3708,7 +3718,9 @@ mod tests {
                         name: "Ada".into(),
                         avatar: "comet".into(),
                         color: "#28e7ff".into(),
+                        team_id: None,
                     }],
+                    teams: Vec::new(),
                 },
             ),
             (
@@ -3782,6 +3794,7 @@ mod tests {
                 name: name.into(),
                 avatar: "comet".into(),
                 color: "#28e7ff".into(),
+                team_id: None,
             })
             .collect();
         for (command_id, action) in [
@@ -3790,6 +3803,7 @@ mod tests {
                 RuntimeAction::StartSession {
                     session_id: "session-countup-edit".into(),
                     players,
+                    teams: Vec::new(),
                 },
             ),
             (
@@ -3923,6 +3937,7 @@ mod tests {
             name: "Ada".into(),
             avatar: "comet".into(),
             color: "#28e7ff".into(),
+            team_id: None,
         };
         for (command_id, action) in [
             (
@@ -3930,6 +3945,7 @@ mod tests {
                 RuntimeAction::StartSession {
                     session_id: "session-undo".into(),
                     players: vec![player],
+                    teams: Vec::new(),
                 },
             ),
             (
@@ -4008,7 +4024,9 @@ mod tests {
                         name: "Ada".into(),
                         avatar: "comet".into(),
                         color: "#28e7ff".into(),
+                        team_id: None,
                     }],
+                    teams: Vec::new(),
                 },
             ),
             (
@@ -4165,6 +4183,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // The complete test/nonproduction projection is one atomic flow.
     fn projector_test_throw_marks_the_whole_game_nonproduction() {
         let repository = SqliteRepository::in_memory().expect("repository");
         let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
@@ -4178,7 +4197,9 @@ mod tests {
                         name: "Ada".into(),
                         avatar: "comet".into(),
                         color: "#28e7ff".into(),
+                        team_id: None,
                     }],
+                    teams: Vec::new(),
                 },
             ),
             (
@@ -4377,7 +4398,9 @@ mod tests {
                         name: "Ada".into(),
                         avatar: "comet".into(),
                         color: "#28e7ff".into(),
+                        team_id: None,
                     }],
+                    teams: Vec::new(),
                 },
             )
             .expect_err("projection must fail");

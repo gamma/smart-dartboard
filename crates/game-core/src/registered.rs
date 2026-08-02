@@ -122,6 +122,7 @@ pub struct GameControlLegend {
 pub struct GameMetadata {
     pub slug: &'static str,
     pub ruleset_version: u16,
+    pub format: sdb_contracts::GameFormat,
     pub title: &'static str,
     pub tagline: &'static str,
     pub description: &'static str,
@@ -142,6 +143,8 @@ pub struct GameMetadata {
 pub struct RegisteredPlayer {
     pub id: String,
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
     #[serde(default = "default_player_avatar")]
     pub avatar: String,
     #[serde(default = "default_player_color")]
@@ -313,6 +316,7 @@ impl RegisteredGame {
                 name,
                 avatar: default_player_avatar(),
                 color: fallback_player_color(index).into(),
+                team_id: None,
             })
             .collect();
         Self::new_seeded_with_players(game_type, players, options, random_seed)
@@ -349,6 +353,7 @@ impl RegisteredGame {
                 .map(|player| RegisteredPlayer {
                     id: player.id,
                     name: player.name,
+                    team_id: player.team_id,
                     avatar: player.avatar,
                     color: player.color,
                     score: 0,
@@ -959,6 +964,7 @@ static COUNTUP_INSTRUCTIONS: [GameInstruction; 3] = [
 static COUNTUP_METADATA: GameMetadata = GameMetadata {
     slug: "countup",
     ruleset_version: 1,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Count Up",
     tagline: "Jeder Punkt zählt",
     description: "Sammelt über mehrere Aufnahmen so viele Punkte wie möglich.",
@@ -1049,6 +1055,7 @@ static X01_INSTRUCTIONS: [GameInstruction; 3] = [
 static X01_METADATA: GameMetadata = GameMetadata {
     slug: "x01",
     ruleset_version: 1,
+    format: sdb_contracts::GameFormat::Individual,
     title: "X01",
     tagline: "Runter auf exakt Null",
     description: "Der Turnierklassiker: 301, 501 oder 701 Punkte präzise herunterspielen.",
@@ -1068,6 +1075,7 @@ static X01_METADATA: GameMetadata = GameMetadata {
 static CRICKET_METADATA: GameMetadata = GameMetadata {
     slug: "cricket",
     ruleset_version: 1,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Cricket",
     tagline: "Schließen und punkten",
     description: "Schließe 15 bis 20 und Bull, während du offene Felder deiner Gegner punktest.",
@@ -1375,6 +1383,19 @@ mod tests {
     }
 
     #[test]
+    fn registry_declares_cooperative_modes_explicitly() {
+        let cooperative = ["boss_fight", "space_defender", "block_drop", "dart_sweeper"];
+        for metadata in registered_game_metadata() {
+            let expected = if cooperative.contains(&metadata.slug) {
+                sdb_contracts::GameFormat::Cooperative
+            } else {
+                sdb_contracts::GameFormat::Individual
+            };
+            assert_eq!(metadata.format, expected, "{} format", metadata.slug);
+        }
+    }
+
+    #[test]
     fn registry_rejects_unknown_options_without_mutating_game_state() {
         let result = RegisteredGame::new(
             "cricket",
@@ -1489,12 +1510,14 @@ mod tests {
                     name: "Ada".into(),
                     avatar: "fox".into(),
                     color: "#ff00aa".into(),
+                    team_id: Some("coop".into()),
                 },
                 PlayerRef {
                     id: "bob".into(),
                     name: "Bob".into(),
                     avatar: "comet".into(),
                     color: "#00ffaa".into(),
+                    team_id: Some("coop".into()),
                 },
             ],
             &json!({}),
@@ -1506,6 +1529,12 @@ mod tests {
         assert_eq!(game.state().players[0].color, "#ff00aa");
         assert_eq!(game.state().players[1].avatar, "comet");
         assert_eq!(game.state().players[1].color, "#00ffaa");
+        assert!(
+            game.state()
+                .players
+                .iter()
+                .all(|player| player.team_id.as_deref() == Some("coop"))
+        );
     }
 
     #[test]

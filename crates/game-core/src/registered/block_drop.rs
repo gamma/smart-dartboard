@@ -124,6 +124,7 @@ static CONTROL_LEGEND: [GameControlLegend; 5] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "block_drop",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Cooperative,
     title: "Block Drop Darts",
     tagline: "Gemeinsam fünf Linien bauen",
     description: "Darts steuern einen fröhlichen Block-Puzzler. Alle Spieler bauen gemeinsam am selben 5×8-Feld.",

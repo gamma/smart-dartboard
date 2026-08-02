@@ -37,6 +37,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "space_defender",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Cooperative,
     title: "Space Defender",
     tagline: "Gemeinsam die Wellen stoppen",
     description: "Ein fröhliches Koop-Weltraumabenteuer: Trefft die Raumschiffe, bevor die Invasion zehn Gegner erreicht.",
@@ -404,12 +405,14 @@ mod tests {
                 name: "Ada".into(),
                 avatar: "fox".into(),
                 color: "#ff00aa".into(),
+                team_id: None,
             },
             PlayerRef {
                 id: "bob".into(),
                 name: "Bob".into(),
                 avatar: "comet".into(),
                 color: "#00ffaa".into(),
+                team_id: None,
             },
         ]
     }

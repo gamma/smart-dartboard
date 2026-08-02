@@ -3,8 +3,8 @@
 //! This crate does not create IDs, choose random starters, persist data or
 //! execute game rules. Hosts inject IDs and notify it about committed results.
 
-use sdb_contracts::PlayerRef;
 pub use sdb_contracts::StarterSelection;
+use sdb_contracts::{GameFormat, PlayerRef, TeamRef};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use thiserror::Error;
@@ -34,11 +34,15 @@ pub enum SessionStatus {
 pub struct PreparedGame {
     pub game_type: String,
     pub options: Value,
+    #[serde(default)]
+    pub format: GameFormat,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SessionStanding {
     pub player_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
     pub games: u32,
     pub wins: u32,
     pub session_points: u32,
@@ -50,6 +54,8 @@ pub struct SessionState {
     pub session_id: Option<String>,
     pub session_status: Option<SessionStatus>,
     pub players: Vec<PlayerRef>,
+    #[serde(default)]
+    pub teams: Vec<TeamRef>,
     pub prepared_game: Option<PreparedGame>,
     pub game_id: Option<String>,
     pub game_player_ids: Vec<String>,
@@ -57,6 +63,10 @@ pub struct SessionState {
     pub active_game_counted: bool,
     #[serde(default)]
     pub active_game_winner_ids: Vec<String>,
+    #[serde(default)]
+    pub active_game_teams: Vec<TeamRef>,
+    #[serde(default)]
+    pub active_game_winner_team_ids: Vec<String>,
     pub default_starter_id: Option<String>,
     pub selected_starter_id: Option<String>,
     pub starter_selection: StarterSelection,
@@ -70,11 +80,14 @@ impl Default for SessionState {
             session_id: None,
             session_status: None,
             players: Vec::new(),
+            teams: Vec::new(),
             prepared_game: None,
             game_id: None,
             game_player_ids: Vec::new(),
             active_game_counted: false,
             active_game_winner_ids: Vec::new(),
+            active_game_teams: Vec::new(),
+            active_game_winner_team_ids: Vec::new(),
             default_starter_id: None,
             selected_starter_id: None,
             starter_selection: StarterSelection::Rotation,
@@ -100,6 +113,14 @@ pub enum SessionError {
     InvalidPlayer,
     #[error("session player IDs must be unique")]
     DuplicatePlayer,
+    #[error("team definition is invalid")]
+    InvalidTeam,
+    #[error("team IDs must be unique")]
+    DuplicateTeam,
+    #[error("team players must form an exact partition of the session lineup")]
+    InvalidTeamPlayers,
+    #[error("this game requires at least two configured teams")]
+    TeamsRequired,
     #[error("an active session is required")]
     NoActiveSession,
     #[error("a prepared game is required")]
@@ -132,6 +153,20 @@ impl SessionCore {
         session_id: impl Into<String>,
         players: Vec<PlayerRef>,
     ) -> Result<&SessionState, SessionError> {
+        self.start_session_with_teams(session_id, players, Vec::new())
+    }
+
+    /// Starts a session with an optional explicit competitive-team partition.
+    ///
+    /// # Errors
+    ///
+    /// Rejects invalid players, teams or assignments.
+    pub fn start_session_with_teams(
+        &mut self,
+        session_id: impl Into<String>,
+        mut players: Vec<PlayerRef>,
+        teams: Vec<TeamRef>,
+    ) -> Result<&SessionState, SessionError> {
         if players.is_empty() {
             return Err(SessionError::NoPlayers);
         }
@@ -150,6 +185,13 @@ impl SessionCore {
         if ids.windows(2).any(|pair| pair[0] == pair[1]) {
             return Err(SessionError::DuplicatePlayer);
         }
+        validate_teams(&players, &teams)?;
+        for player in &mut players {
+            player.team_id = teams
+                .iter()
+                .find(|team| team.player_ids.contains(&player.id))
+                .map(|team| team.id.clone());
+        }
         let starter = players[0].id.clone();
         self.state = SessionState {
             screen: Screen::GameSelect,
@@ -159,17 +201,21 @@ impl SessionCore {
                 .iter()
                 .map(|player| SessionStanding {
                     player_id: player.id.clone(),
+                    team_id: player.team_id.clone(),
                     games: 0,
                     wins: 0,
                     session_points: 0,
                 })
                 .collect(),
             players,
+            teams,
             prepared_game: None,
             game_id: None,
             game_player_ids: Vec::new(),
             active_game_counted: false,
             active_game_winner_ids: Vec::new(),
+            active_game_teams: Vec::new(),
+            active_game_winner_team_ids: Vec::new(),
             default_starter_id: Some(starter.clone()),
             selected_starter_id: Some(starter),
             starter_selection: StarterSelection::Rotation,
@@ -187,13 +233,45 @@ impl SessionCore {
         game_type: impl Into<String>,
         options: Value,
     ) -> Result<&SessionState, SessionError> {
+        self.prepare_game_with_format(game_type, options, GameFormat::Individual)
+    }
+
+    /// Selects a mode and materializes its active team configuration.
+    ///
+    /// # Errors
+    ///
+    /// Requires configured teams when the mode declares team competition.
+    pub fn prepare_game_with_format(
+        &mut self,
+        game_type: impl Into<String>,
+        options: Value,
+        format: GameFormat,
+    ) -> Result<&SessionState, SessionError> {
         self.require_active_session()?;
         if self.state.game_id.is_some() {
             return Err(SessionError::NoFinishedGame);
         }
+        self.state.active_game_teams = match format {
+            GameFormat::Individual => Vec::new(),
+            GameFormat::Cooperative => vec![TeamRef {
+                id: "coop".into(),
+                name: "Team".into(),
+                color: self.state.players[0].color.clone(),
+                player_ids: self
+                    .state
+                    .players
+                    .iter()
+                    .map(|player| player.id.clone())
+                    .collect(),
+            }],
+            GameFormat::Teams if self.state.teams.len() >= 2 => self.state.teams.clone(),
+            GameFormat::Teams => return Err(SessionError::TeamsRequired),
+        };
+        self.state.active_game_winner_team_ids.clear();
         self.state.prepared_game = Some(PreparedGame {
             game_type: game_type.into(),
             options,
+            format,
         });
         self.state.screen = Screen::Instructions;
         Ok(&self.state)
@@ -210,6 +288,8 @@ impl SessionCore {
             return Err(SessionError::NoPreparedGame);
         }
         self.state.prepared_game = None;
+        self.state.active_game_teams.clear();
+        self.state.active_game_winner_team_ids.clear();
         self.state.selected_starter_id = self.state.default_starter_id.clone();
         self.state.starter_selection = StarterSelection::Rotation;
         self.state.screen = Screen::GameSelect;
@@ -264,15 +344,17 @@ impl SessionCore {
             .iter()
             .position(|player| player.id == starter)
             .ok_or(SessionError::InvalidStarter)?;
-        let ordered: Vec<PlayerRef> = self.state.players[starter_index..]
+        let mut ordered: Vec<PlayerRef> = self.state.players[starter_index..]
             .iter()
             .chain(&self.state.players[..starter_index])
             .cloned()
             .collect();
+        apply_active_team_ids(&mut ordered, &self.state.active_game_teams);
         self.state.game_player_ids = ordered.iter().map(|player| player.id.clone()).collect();
         self.state.game_id = Some(game_id.into());
         self.state.active_game_counted = false;
         self.state.active_game_winner_ids.clear();
+        self.state.active_game_winner_team_ids.clear();
         self.state.screen = Screen::Countdown;
         Ok(ordered)
     }
@@ -316,6 +398,19 @@ impl SessionCore {
         }
         self.state.active_game_counted = true;
         self.state.active_game_winner_ids = winner_ids.to_vec();
+        self.state.active_game_winner_team_ids = self
+            .state
+            .active_game_teams
+            .iter()
+            .filter(|team| {
+                !team.player_ids.is_empty()
+                    && team
+                        .player_ids
+                        .iter()
+                        .all(|player_id| winner_ids.contains(player_id))
+            })
+            .map(|team| team.id.clone())
+            .collect();
         self.state.screen = Screen::GameResult;
         Ok(&self.state)
     }
@@ -361,8 +456,9 @@ impl SessionCore {
         self.state.game_id = Some(game_id.into());
         self.state.active_game_counted = false;
         self.state.active_game_winner_ids.clear();
+        self.state.active_game_winner_team_ids.clear();
         self.state.screen = Screen::Countdown;
-        let players = self
+        let mut players = self
             .state
             .game_player_ids
             .iter()
@@ -375,6 +471,7 @@ impl SessionCore {
                     .ok_or(SessionError::InvalidStarter)
             })
             .collect::<Result<Vec<_>, _>>()?;
+        apply_active_team_ids(&mut players, &self.state.active_game_teams);
         Ok(players)
     }
 
@@ -417,6 +514,7 @@ impl SessionCore {
         }
         self.state.active_game_counted = false;
         self.state.active_game_winner_ids.clear();
+        self.state.active_game_winner_team_ids.clear();
         self.state.screen = Screen::Playing;
         Ok(&self.state)
     }
@@ -465,6 +563,8 @@ impl SessionCore {
         self.state.game_player_ids.clear();
         self.state.active_game_counted = false;
         self.state.active_game_winner_ids.clear();
+        self.state.active_game_teams.clear();
+        self.state.active_game_winner_team_ids.clear();
         self.state.starter_selection = StarterSelection::Rotation;
     }
 }
@@ -484,6 +584,58 @@ fn valid_player(player: &PlayerRef) -> bool {
         && valid_color
 }
 
+fn validate_teams(players: &[PlayerRef], teams: &[TeamRef]) -> Result<(), SessionError> {
+    if teams.is_empty() {
+        return Ok(());
+    }
+    if teams.len() < 2 || teams.len() > players.len() {
+        return Err(SessionError::InvalidTeam);
+    }
+    if teams.iter().any(|team| !valid_team(team)) {
+        return Err(SessionError::InvalidTeam);
+    }
+    let mut team_ids: Vec<&str> = teams.iter().map(|team| team.id.as_str()).collect();
+    team_ids.sort_unstable();
+    if team_ids.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err(SessionError::DuplicateTeam);
+    }
+    let mut assigned: Vec<&str> = teams
+        .iter()
+        .flat_map(|team| team.player_ids.iter().map(String::as_str))
+        .collect();
+    assigned.sort_unstable();
+    let mut player_ids: Vec<&str> = players.iter().map(|player| player.id.as_str()).collect();
+    player_ids.sort_unstable();
+    if assigned != player_ids {
+        return Err(SessionError::InvalidTeamPlayers);
+    }
+    Ok(())
+}
+
+fn valid_team(team: &TeamRef) -> bool {
+    !team.id.is_empty()
+        && team.id.len() <= 128
+        && !team.name.trim().is_empty()
+        && team.name.chars().count() <= 32
+        && valid_color(&team.color)
+        && !team.player_ids.is_empty()
+}
+
+fn valid_color(color: &str) -> bool {
+    color.len() == 7
+        && color.starts_with('#')
+        && color[1..].bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn apply_active_team_ids(players: &mut [PlayerRef], teams: &[TeamRef]) {
+    for player in players {
+        player.team_id = teams
+            .iter()
+            .find(|team| team.player_ids.contains(&player.id))
+            .map(|team| team.id.clone());
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -495,12 +647,14 @@ mod tests {
                 name: "Ada".into(),
                 avatar: "nova".into(),
                 color: "#ff00aa".into(),
+                team_id: None,
             },
             PlayerRef {
                 id: "bob".into(),
                 name: "Bob".into(),
                 avatar: "comet".into(),
                 color: "#28e7ff".into(),
+                team_id: None,
             },
         ]
     }
@@ -618,5 +772,87 @@ mod tests {
             SessionError::InvalidPlayer
         );
         assert_eq!(session.state, SessionState::default());
+    }
+
+    #[test]
+    fn cooperative_game_materializes_one_team_and_awards_every_member() {
+        let mut session = SessionCore::default();
+        session
+            .start_session("session", players())
+            .expect("session");
+        session
+            .prepare_game_with_format("boss_fight", serde_json::json!({}), GameFormat::Cooperative)
+            .expect("prepare cooperative game");
+        assert_eq!(session.state.active_game_teams.len(), 1);
+        assert_eq!(session.state.active_game_teams[0].id, "coop");
+        assert_eq!(
+            session.state.active_game_teams[0].player_ids,
+            ["ada", "bob"]
+        );
+
+        let lineup = session.start_game("game").expect("start");
+        assert!(
+            lineup
+                .iter()
+                .all(|player| player.team_id.as_deref() == Some("coop"))
+        );
+        session
+            .complete_game(&["ada".into(), "bob".into()])
+            .expect("team win");
+        assert_eq!(session.state.active_game_winner_team_ids, ["coop"]);
+        assert!(session.state.standings.iter().all(|standing| {
+            standing.games == 1 && standing.wins == 1 && standing.session_points == 3
+        }));
+
+        session.reopen_game().expect("reopen");
+        assert!(session.state.active_game_winner_team_ids.is_empty());
+        assert_eq!(session.state.active_game_teams[0].id, "coop");
+    }
+
+    #[test]
+    fn competitive_team_partition_is_validated_before_use() {
+        let teams = vec![
+            TeamRef {
+                id: "cyan".into(),
+                name: "Team Cyan".into(),
+                color: "#28e7ff".into(),
+                player_ids: vec!["ada".into()],
+            },
+            TeamRef {
+                id: "pink".into(),
+                name: "Team Pink".into(),
+                color: "#ff00aa".into(),
+                player_ids: vec!["bob".into()],
+            },
+        ];
+        let mut session = SessionCore::default();
+        session
+            .start_session_with_teams("session", players(), teams.clone())
+            .expect("team session");
+        session
+            .prepare_game_with_format("future_team_mode", Value::Null, GameFormat::Teams)
+            .expect("team game");
+        assert_eq!(session.state.active_game_teams, teams);
+
+        let mut invalid = teams;
+        invalid[1].player_ids = vec!["ada".into()];
+        let mut rejected = SessionCore::default();
+        assert_eq!(
+            rejected
+                .start_session_with_teams("session", players(), invalid)
+                .expect_err("duplicate assignment"),
+            SessionError::InvalidTeamPlayers
+        );
+
+        let mut missing = SessionCore::default();
+        missing
+            .start_session("session", players())
+            .expect("session");
+        assert_eq!(
+            missing
+                .prepare_game_with_format("future_team_mode", Value::Null, GameFormat::Teams)
+                .expect_err("teams required"),
+            SessionError::TeamsRequired
+        );
     }
 }

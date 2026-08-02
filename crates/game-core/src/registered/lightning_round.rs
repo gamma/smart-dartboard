@@ -73,6 +73,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "lightning_round",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Lightning Round",
     tagline: "Eine Aufgabe, ein Dart",
     description: "Schnelle Mini-Challenges: Löse die angezeigte Aufgabe mit deinem nächsten Dart.",

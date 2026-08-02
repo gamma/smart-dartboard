@@ -85,6 +85,7 @@ static INSTRUCTIONS: [GameInstruction; 4] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "king_of_board",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "King of the Board",
     tagline: "Erobere die Scheibe",
     description: "Jeder Treffer übernimmt ein Feld in deiner Farbe. Nach den Runden gewinnt die größte Herrschaft.",
@@ -432,12 +433,14 @@ mod tests {
                     name: "Ada".into(),
                     avatar: "fox".into(),
                     color: "#ff00aa".into(),
+                    team_id: None,
                 },
                 PlayerRef {
                     id: "bob".into(),
                     name: "Bob".into(),
                     avatar: "comet".into(),
                     color: "#00ffaa".into(),
+                    team_id: None,
                 },
             ],
             &json!({"rounds": 3, "ownership": ownership}),

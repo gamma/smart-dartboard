@@ -9,8 +9,9 @@ Rust-Runtime. Der Kernfluss von Spieleranlage über Session- und Modusauswahl bi
 zum synchronen Testtreffer ist in WebKit belegt. Persistierte
 Setup-Präferenzen, Historie, Replay, Statistiken, Training, Export und die
 plattformweite Effect-Outbox sind angeschlossen. Er ersetzt den produktiven
-Python-Pfad trotzdem noch nicht: Teammodell, Bestandsdatenmigration und reale
-BLE-Hardware sind noch nicht vollständig qualifiziert.
+Python-Pfad trotzdem noch nicht: die Bedienoberfläche für gegnerische Teams,
+Bestandsdatenmigration und reale BLE-Hardware sind noch nicht vollständig
+qualifiziert.
 
 ## Start
 
@@ -229,6 +230,11 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
   visuelle Effekte werden bei Prozessneustart oder einer neueren Revision
   verworfen; Sound bleibt innerhalb seiner erzeugenden Revision bis zum
   Ausführungsversuch wiederaufnehmbar.
+- Modusformate explizit als Einzelspiel, Koop oder gegnerische Teams
+  veröffentlichen. Die vier heutigen Koop-Modi materialisieren automatisch ein
+  gemeinsames Team, transportieren dessen Identität bis in den Spielzustand und
+  vergeben Siege sowie Sessionpunkte an alle Mitglieder. Explizite Teamlisten
+  werden vor Sessionstart als vollständige Spielerpartition validiert.
 - Historie, Replay, Spieler- und Modusstatistik, gefilterte Segment-Heatmap,
   lokale Trainingshinweise und einen portablen JSON-Export über denselben
   Storage-Vertrag im Headless-Server und im nativen IPC bereitstellen. Die
@@ -237,7 +243,8 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
-- Teammodell,
+- Point-and-click-Teameditor und ein erster Modus mit zwei gegnerischen Teams;
+  Vertrag, Validierung und automatische Koop-Teams sind vorhanden,
 - alle 24 heutigen Produktmodi sind portiert, während das adaptive Boss Fight
   V2 eine zurückgestellte Produktänderung bleibt,
 - reale BlueZ-/Boardqualifizierung mit schneller Trefferfolge, Reconnect,

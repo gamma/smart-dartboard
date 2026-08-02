@@ -65,6 +65,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "boss_fight",
     ruleset_version: 1,
+    format: sdb_contracts::GameFormat::Cooperative,
     title: "Boss Fight",
     tagline: "Alle gegen den Boss",
     description: "Der bestehende kooperative V1-Bosskampf: Treffer verursachen Schaden, exakte Schwachpunkte doppelten Schaden.",

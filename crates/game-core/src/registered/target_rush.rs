@@ -93,6 +93,7 @@ static INSTRUCTIONS: [GameInstruction; 4] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "target_rush",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Target Rush",
     tagline: "Triff das leuchtende Ziel",
     description: "Das Board zeigt ein Ziel. Easy nimmt die ganze Zahl, Normal und Hard verlangen das genaue Segment.",

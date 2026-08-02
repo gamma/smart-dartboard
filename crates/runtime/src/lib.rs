@@ -8,7 +8,7 @@ use sdb_contracts::{
     ArtTheme, CalibrationSettings, CommandEnvelope, ContractError, DartEvent, DartSource,
     DisplayOverride, EffectDelivery, EffectTarget, ErrorCode, PROTOCOL_VERSION, PlatformEffect,
     PlatformEffectKind, PlayerRef, ProjectorGeometry, RuntimeCommand, RuntimeSettings, SoundOutput,
-    SoundStatus, StarterSelection, UiLanguage,
+    SoundStatus, StarterSelection, TeamRef, UiLanguage,
 };
 use sdb_game_core::{
     CountUpGame, CountUpState, GameError, GameStatus, OutRule, RegisteredGame, RegisteredGameState,
@@ -28,6 +28,7 @@ pub enum RuntimeAction {
     StartSession {
         session_id: String,
         players: Vec<PlayerRef>,
+        teams: Vec<TeamRef>,
     },
     PrepareGame {
         game_type: String,
@@ -646,9 +647,11 @@ fn command_to_action(command: RuntimeCommand) -> Result<RuntimeAction, ContractE
         RuntimeCommand::StartSession {
             session_id,
             players,
+            teams,
         } => Ok(RuntimeAction::StartSession {
             session_id,
             players,
+            teams,
         }),
         RuntimeCommand::PrepareGame { game_type, options } => {
             Ok(RuntimeAction::PrepareGame { game_type, options })
@@ -856,13 +859,22 @@ fn apply_action(snapshot: &mut RuntimeSnapshot, action: RuntimeAction) -> Result
         RuntimeAction::StartSession {
             session_id,
             players,
+            teams,
         } => {
-            snapshot.session.start_session(session_id, players)?;
+            snapshot
+                .session
+                .start_session_with_teams(session_id, players, teams)?;
             snapshot.game = None;
             snapshot.settings.display_override = None;
         }
         RuntimeAction::PrepareGame { game_type, options } => {
-            snapshot.session.prepare_game(game_type, options)?;
+            let format = game_metadata(&game_type)
+                .map_or(sdb_contracts::GameFormat::Individual, |metadata| {
+                    metadata.format
+                });
+            snapshot
+                .session
+                .prepare_game_with_format(game_type, options, format)?;
         }
         RuntimeAction::CancelPreparedGame => {
             snapshot.session.cancel_prepared_game()?;
@@ -1265,12 +1277,14 @@ mod tests {
                 name: "Ada".into(),
                 avatar: "nova".into(),
                 color: "#ff00aa".into(),
+                team_id: None,
             },
             PlayerRef {
                 id: "bob".into(),
                 name: "Bob".into(),
                 avatar: "comet".into(),
                 color: "#28e7ff".into(),
+                team_id: None,
             },
         ]
     }
@@ -1364,6 +1378,58 @@ mod tests {
     }
 
     #[test]
+    fn prepared_cooperative_mode_materializes_the_shared_team_in_game_state() {
+        let repository = MemoryRepository::default();
+        let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
+        runtime
+            .dispatch(
+                "runtime",
+                "session",
+                None,
+                RuntimeAction::StartSession {
+                    session_id: "session".into(),
+                    players: session_players(),
+                    teams: Vec::new(),
+                },
+            )
+            .expect("session");
+        runtime
+            .dispatch(
+                "runtime",
+                "prepare",
+                None,
+                RuntimeAction::PrepareGame {
+                    game_type: "boss_fight".into(),
+                    options: serde_json::json!({}),
+                },
+            )
+            .expect("prepare");
+        assert_eq!(
+            runtime.snapshot().session.state().active_game_teams[0].player_ids,
+            ["ada", "bob"]
+        );
+        runtime
+            .dispatch(
+                "runtime",
+                "start",
+                None,
+                RuntimeAction::StartPreparedGame {
+                    game_id: "game".into(),
+                },
+            )
+            .expect("start");
+        let RuntimeGame::Registered(game) = runtime.snapshot().game.as_ref().expect("game") else {
+            panic!("registered game expected");
+        };
+        assert!(
+            game.state()
+                .players
+                .iter()
+                .all(|player| player.team_id.as_deref() == Some("coop"))
+        );
+    }
+
+    #[test]
     #[allow(clippy::too_many_lines)] // Keeps the full win/correct/re-win/delete flow together.
     fn correcting_and_deleting_checkout_synchronizes_session_points() {
         let repository = MemoryRepository::default();
@@ -1376,6 +1442,7 @@ mod tests {
                 RuntimeAction::StartSession {
                     session_id: "session".into(),
                     players: vec![session_players()[0].clone()],
+                    teams: Vec::new(),
                 },
             )
             .expect("session");
@@ -1759,6 +1826,7 @@ mod tests {
                 RuntimeAction::StartSession {
                     session_id: "session-1".into(),
                     players: session_players().into_iter().take(1).collect(),
+                    teams: Vec::new(),
                 },
             )
             .expect("session");
@@ -1846,6 +1914,7 @@ mod tests {
                 RuntimeAction::StartSession {
                     session_id: "session-1".into(),
                     players: session_players(),
+                    teams: Vec::new(),
                 },
             )
             .expect("session");

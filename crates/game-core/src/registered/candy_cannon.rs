@@ -38,6 +38,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "candy_cannon",
     ruleset_version: 1,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Candy Cannon",
     tagline: "Laden, riskieren, feuern",
     description: "Treffer laden deine Süßigkeitenkanone. Triff bei 8–10 Ladung ins Bull, bevor sie überhitzt.",

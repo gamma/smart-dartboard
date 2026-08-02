@@ -53,6 +53,25 @@ pub struct PlayerRef {
     pub name: String,
     pub avatar: String,
     pub color: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TeamRef {
+    pub id: String,
+    pub name: String,
+    pub color: String,
+    pub player_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum GameFormat {
+    #[default]
+    Individual,
+    Cooperative,
+    Teams,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -330,6 +349,8 @@ pub enum RuntimeCommand {
     StartSession {
         session_id: String,
         players: Vec<PlayerRef>,
+        #[serde(default)]
+        teams: Vec<TeamRef>,
     },
     PrepareGame {
         game_type: String,
@@ -467,5 +488,22 @@ mod tests {
         assert_eq!(value["protocol_version"], PROTOCOL_VERSION);
         assert_eq!(value["payload"]["type"], "hit");
         assert_eq!(value["payload"]["ring"], "triple");
+    }
+
+    #[test]
+    fn legacy_session_command_defaults_to_no_teams() {
+        let command: RuntimeCommand = serde_json::from_value(serde_json::json!({
+            "type": "start_session",
+            "session_id": "session",
+            "players": [{
+                "id": "ada", "name": "Ada", "avatar": "nova", "color": "#ff00aa"
+            }]
+        }))
+        .expect("legacy command");
+        let RuntimeCommand::StartSession { players, teams, .. } = command else {
+            panic!("start session expected");
+        };
+        assert_eq!(players[0].team_id, None);
+        assert!(teams.is_empty());
     }
 }

@@ -92,6 +92,17 @@ try{
   await sessionStart.click();
   await control.waitForFunction(()=>document.querySelectorAll('.mode-card').length===24);
   if(await control.locator('.mode-card').count()!==24) throw new Error('Expected 24 mode cards');
+  if(await control.locator('.mode-card .mode-format').count()!==4){
+    throw new Error('Expected four explicitly marked cooperative modes');
+  }
+  await control.locator('[data-mode="boss_fight"]').click();
+  await control.getByText('ALLE SPIELEN IN EINEM TEAM').waitFor();
+  await projector.getByText('ALLE SPIELEN IN EINEM TEAM').waitFor();
+  const cooperativeTeam=await control.evaluate(()=>appState.experience.session.active_game_teams?.[0]);
+  if(cooperativeTeam?.id!=='coop' || cooperativeTeam.player_ids.length!==1){
+    throw new Error('Expected one materialized cooperative team');
+  }
+  await control.locator('[data-action="back-games"]').click();
   await control.locator('[data-mode="countup"]').click();
   await control.locator('[data-action="start-game"]').click();
   await control.waitForSelector('.play-control',{timeout:8000});
@@ -133,7 +144,7 @@ try{
     throw new Error('Expected portable export with one session and two games');
   }
   if(browserErrors.length) throw new Error(`Browser errors:\n${browserErrors.join('\n')}`);
-  console.log('Rust Runtime UI: setup, 24 modes, effects, synchronized play, analytics, history, replay and export passed in WebKit');
+  console.log('Rust Runtime UI: setup, 24 modes, cooperative teams, effects, synchronized play, analytics, history, replay and export passed in WebKit');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');

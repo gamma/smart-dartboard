@@ -56,6 +56,7 @@ static INSTRUCTIONS: [GameInstruction; 3] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "heart_chase",
     ruleset_version: 1,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Heart Chase",
     tagline: "Schlag die Jagdpunktzahl",
     description: "Übertriff die letzte Aufnahme. Wer scheitert, verliert ein Herz und setzt trotzdem die neue Jagd.",

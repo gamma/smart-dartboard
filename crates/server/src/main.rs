@@ -1420,6 +1420,7 @@ mod tests {
         )
         .expect("mode metadata");
         assert_eq!(modes.as_array().map(Vec::len), Some(24));
+        assert_cooperative_mode_metadata(&modes);
         assert_cricket_metadata(&modes);
         assert!(modes.as_array().is_some_and(|items| {
             items
@@ -1500,6 +1501,20 @@ mod tests {
         assert_darts_bingo_metadata(&modes);
         assert_dragon_eggs_metadata(&modes);
         assert_space_defender_metadata(&modes);
+    }
+
+    fn assert_cooperative_mode_metadata(modes: &Value) {
+        let cooperative: Vec<&str> = modes
+            .as_array()
+            .expect("mode list")
+            .iter()
+            .filter(|mode| mode["format"] == "cooperative")
+            .filter_map(|mode| mode["slug"].as_str())
+            .collect();
+        assert_eq!(
+            cooperative,
+            ["block_drop", "boss_fight", "dart_sweeper", "space_defender"]
+        );
     }
 
     fn assert_block_drop_metadata(modes: &Value) {

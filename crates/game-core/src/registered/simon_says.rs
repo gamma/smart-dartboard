@@ -94,6 +94,7 @@ static INSTRUCTIONS: [GameInstruction; 5] = [
 static METADATA: GameMetadata = GameMetadata {
     slug: "simon_says",
     ruleset_version: 2,
+    format: sdb_contracts::GameFormat::Individual,
     title: "Simon Says",
     tagline: "Merken, treffen, erweitern",
     description: "Der Projector zeigt eine Sequenz. Triff die Ziele in der richtigen Reihenfolge.",
