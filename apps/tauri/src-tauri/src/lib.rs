@@ -289,21 +289,8 @@ impl NativeState {
         let (companion_states, _) = broadcast::channel(64);
         let (companion_changes, _) = broadcast::channel(16);
         let runtime_instance_id = Uuid::new_v4().to_string();
-        let mut runtime = Runtime::restore(runtime_instance_id.clone(), repository)
-            .map_err(|error| error.to_string())?;
-        if runtime.snapshot().revision == 0 && app_role == NativeAppRole::Controller {
-            runtime
-                .dispatch(
-                    &runtime_instance_id,
-                    "bootstrap-countup",
-                    Some(0),
-                    RuntimeAction::StartCountUp {
-                        players: vec![("test-player".into(), "Test Player".into())],
-                        rounds: 20,
-                    },
-                )
-                .map_err(|error| error.to_string())?;
-        }
+        let runtime =
+            Runtime::restore(runtime_instance_id, repository).map_err(|error| error.to_string())?;
         Ok(Self {
             runtime,
             next_dart_seq: 1,
@@ -438,6 +425,26 @@ impl NativeState {
             )
             .map_err(|error| error.to_string())?;
         Ok(self.public())
+    }
+
+    fn start_m0_test_game(&mut self) -> Result<(), String> {
+        self.require_controller()?;
+        if self.runtime.snapshot().game.is_some() {
+            return Ok(());
+        }
+        let runtime_instance_id = self.runtime.instance_id().to_owned();
+        self.runtime
+            .dispatch(
+                &runtime_instance_id,
+                "m0-test-countup",
+                Some(self.runtime.snapshot().revision),
+                RuntimeAction::StartCountUp {
+                    players: vec![("test-player".into(), "Test Player".into())],
+                    rounds: 20,
+                },
+            )
+            .map_err(|error| error.to_string())?;
+        Ok(())
     }
 
     #[allow(dead_code)] // Native network ingress calls this; it must never become a WebView command.
@@ -1589,6 +1596,7 @@ mod native_companion_transport {
                         },
                     )
                     .expect("sound settings");
+                state.start_m0_test_game().expect("M0 test game");
                 state.ingest_test_hit().expect("effect-producing dart");
             }
             let offer = state
@@ -4149,7 +4157,7 @@ fn runtime_dispatch(
     state: State<'_, SharedNativeState>,
     action: String,
 ) -> Result<PublicState, String> {
-    if action != "increment" {
+    if !cfg!(debug_assertions) || action != "increment" {
         return Err("unsupported M0 action".into());
     }
     increment_runtime(&app, &state)
@@ -4161,6 +4169,7 @@ fn increment_runtime(
 ) -> Result<PublicState, String> {
     let public = {
         let mut state = state.lock().map_err(|error| error.to_string())?;
+        state.start_m0_test_game()?;
         state.ingest_test_hit()?
     };
     publish_public_state(app, &public);
@@ -4950,6 +4959,11 @@ mod tests {
             )
             .expect("native state"),
         ));
+        state
+            .lock()
+            .expect("state")
+            .start_m0_test_game()
+            .expect("M0 test game");
         let offer = state
             .lock()
             .expect("state")
@@ -5109,6 +5123,7 @@ mod tests {
         let repository = SqliteRepository::in_memory().expect("repository");
         let mut state =
             NativeState::restore(repository, test_companion_identity()).expect("native state");
+        state.start_m0_test_game().expect("M0 test game");
         let packet = [1, 0, 0, 0, 5, 0, 0x0d, 0, 2, 0x0f];
         assert!(
             state
@@ -5188,12 +5203,27 @@ mod tests {
     }
 
     #[test]
+    fn fresh_controller_starts_at_attract_without_a_test_game() {
+        let repository = SqliteRepository::in_memory().expect("repository");
+        let state =
+            NativeState::restore(repository, test_companion_identity()).expect("native state");
+        assert_eq!(state.app_role, NativeAppRole::Controller);
+        assert_eq!(state.runtime.snapshot().revision, 0);
+        assert!(state.runtime.snapshot().game.is_none());
+        assert_eq!(
+            state.runtime.snapshot().session.state().screen,
+            sdb_session_core::Screen::Attract
+        );
+    }
+
+    #[test]
     fn native_runtime_recovers_committed_state_with_a_new_instance_id() {
         let path = std::env::temp_dir().join(format!("sdb-native-{}.sqlite", Uuid::new_v4()));
         let first_instance = {
             let repository = SqliteRepository::open(&path).expect("first repository");
             let mut state =
                 NativeState::restore(repository, test_companion_identity()).expect("first state");
+            state.start_m0_test_game().expect("M0 test game");
             state.ingest_test_hit().expect("committed hit");
             state
                 .select_projector_output(ProjectorOutput::LocalPreview)

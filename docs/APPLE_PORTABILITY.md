@@ -492,6 +492,12 @@ lokale Vorschau erscheint dagegen zentriert auf dem Control-Screen. Auswahl-
 und Randfalllogik sowie App-Bundle sind automatisiert geprüft, reale AirPlay-
 und HDMI-Hardware noch nicht.
 
+Der normale native Erststart enthält keinen M0-Demozustand mehr: Controller
+beginnen auf dem Startbildschirm ohne Spieler oder laufendes Spiel. Der
+automatische CountUp-/T20-Ablauf existiert nur hinter dem expliziten
+Debug-Schalter für Simulator- und Displaytests und ist in Release-Builds
+gesperrt.
+
 ## 9. Empfohlene Umsetzungsschritte
 
 1. Mit einem minimalen M0-Spike CoreBluetooth, zwei WebViews sowie eigenständige

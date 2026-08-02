@@ -56,7 +56,9 @@ Der iPad-Air-Simulator mit iOS 26.5 und seinem separaten `TVOut` wurde verwendet
 - Der vollständige unsigned `aarch64-sim`-App-Build ist erfolgreich.
 
 Der Debug-Schalter `--m0-test-hit-after-start` löst dafür einmalig denselben
-Rust-Dispatchpfad wie der UI-Button aus. Er ist in Release-Builds wirkungslos.
+Rust-Dispatchpfad wie der UI-Button aus. Nur dieser Schalter legt dafür ein
+kurzlebiges CountUp-Testspiel an; normale Erststarts bleiben auf `attract` ohne
+Spiel oder Testspieler. Der Schalter ist in Release-Builds wirkungslos.
 
 ## Folgen und offene Gates
 

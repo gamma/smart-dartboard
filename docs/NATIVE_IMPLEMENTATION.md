@@ -67,7 +67,10 @@ Umgesetzt und lokal verifiziert:
 - Apple-M0 verwendet für den Testtreffer keinen Demo-Zähler mehr: Ein
   kanonisches `T20`-Event läuft durch den gemeinsamen CountUp-Core und die
   revisionsgesicherte Runtime. Control und Projector zeigten im
-  iPad-Pro-Simulator übereinstimmend Score 60 bei Revision 2.
+  iPad-Pro-Simulator übereinstimmend Score 60 bei Revision 2. Dieses
+  CountUp-Spiel entsteht ausschließlich durch den expliziten Debug-Schalter;
+  ein frischer normaler Controller startet bei Revision 0 auf `attract`, ohne
+  Testspieler und ohne verstecktes Spiel,
 - Rust-Headless-Server mit expliziter API v2, SQLite-Recovery, idempotenten
   Command-Envelopes, Snapshot-WebSocket und nicht privilegiertem
   Vorschaucontainer. Details: [RUST_SERVER_V2.md](RUST_SERVER_V2.md).
@@ -378,17 +381,21 @@ Provisioning und Code Signing.
 Das Simulator-Script entfernt vorab nur das generierte Simulator-Archiv und
 das bereits exportierte `.app`-Bundle. Das ist nötig, weil Tauri 2.11.4 beim
 wiederholten Simulator-Build ein vorhandenes Exportziel nicht selbst ersetzt.
-Der zweite Befehl installiert das Bundle auf einem verfügbaren iPad-Simulator,
-schickt die App durch Hintergrund und Vordergrund und belegt über die
-redigierten Diagnoselogs, dass `app_suspended` und `app_resumed` dieselbe
-Runtime-Revision behalten. Ein eigens gebooteter Simulator wird anschließend
-wieder heruntergefahren.
+Der zweite Befehl erzeugt dafür einen temporären, garantiert frischen
+iPad-Simulator, installiert das Bundle, belegt den normalen Erststart bei
+Revision 0 und schickt die App durch Hintergrund und Vordergrund. Die
+redigierten Diagnoselogs müssen zeigen, dass `app_suspended` und `app_resumed`
+dieselbe Runtime-Revision behalten. Der Test fährt das eigens angelegte Gerät
+anschließend herunter und löscht es wieder; vorhandene persönliche
+Simulatoren und deren App-Daten bleiben unberührt.
 
 Der M0-Zwei-Display-Test kann in einem Debug-Build mit dem Simulator-Argument
 `--m0-test-hit-after-start` reproduziert werden. Revision 1 ist dabei der
 CountUp-Start, Revision 2 der automatische `T20`-Treffer. Der virtuelle externe
 Ausgang wird über `simctl io ... screenConfig --display external power on|off`
 verbunden beziehungsweise getrennt.
+Ohne diesen Debug-Parameter wird kein Testspiel angelegt; eine frische App
+bleibt bis zur ersten Nutzerinteraktion auf dem Startbildschirm bei Revision 0.
 
 Der gleiche Startparameter dient außerdem als Persistenz-Smoke-Test: App einmal
 mit `--m0-test-hit-after-start` starten, nach Revision 2 vollständig beenden und
