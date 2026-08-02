@@ -12,7 +12,7 @@ use sdb_runtime::{
 use sdb_session_core::{Screen, SessionCore, SessionStatus};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     time::Duration,
@@ -50,6 +50,7 @@ pub struct RuntimeJournalEntry {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlayerProfile {
     pub id: String,
     pub name: String,
@@ -59,6 +60,7 @@ pub struct PlayerProfile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SessionHistory {
     pub id: String,
     pub status: String,
@@ -71,6 +73,7 @@ pub struct SessionHistory {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct PlayerStatistics {
     pub id: String,
     pub name: String,
@@ -145,6 +148,7 @@ pub struct TrainingRecommendations {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GamePlayerHistory {
     pub id: String,
     pub name: String,
@@ -155,6 +159,7 @@ pub struct GamePlayerHistory {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GameHistory {
     pub id: String,
     pub session_id: String,
@@ -177,6 +182,7 @@ pub struct GameHistory {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct SessionDetail {
     pub session: SessionHistory,
     pub players: Vec<PlayerProfile>,
@@ -185,6 +191,7 @@ pub struct SessionDetail {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct ThrowHistory {
     pub id: u64,
     pub action_id: Option<u64>,
@@ -207,6 +214,7 @@ pub struct ThrowHistory {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GameEventHistory {
     pub id: u64,
     pub ordinal: u64,
@@ -222,6 +230,7 @@ pub struct GameEventHistory {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GameDetail {
     pub game: GameHistory,
     pub throws: Vec<ThrowHistory>,
@@ -229,11 +238,43 @@ pub struct GameDetail {
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct GameReplay {
     pub game_id: String,
     pub initial_state: Option<serde_json::Value>,
     pub final_state: Option<serde_json::Value>,
     pub events: Vec<GameEventHistory>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct ImportSummary {
+    pub schema_version: u32,
+    pub players_added: u64,
+    pub players_reused: u64,
+    pub sessions_added: u64,
+    pub games_added: u64,
+    pub throws_added: u64,
+    pub events_added: u64,
+    pub interrupted_sessions: u64,
+    pub interrupted_games: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PortableArchive {
+    schema_version: u32,
+    database_schema_version: u32,
+    exported_at: String,
+    players: Vec<PlayerProfile>,
+    sessions: Vec<Option<SessionDetail>>,
+    games: Vec<PortableGame>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct PortableGame {
+    detail: Option<GameDetail>,
+    replay: Option<GameReplay>,
 }
 
 #[derive(Debug)]
@@ -1063,6 +1104,28 @@ impl SqliteRepository {
         }))
     }
 
+    /// Imports a versioned portable history archive in one transaction.
+    ///
+    /// Existing identical player profiles are reused. Session or game ID
+    /// collisions and conflicting profiles reject the complete archive.
+    /// Runtime snapshots, settings, effects and companion credentials are
+    /// never imported.
+    ///
+    /// # Errors
+    ///
+    /// Returns an integrity error for an incompatible or internally
+    /// inconsistent archive. Any `SQLite` failure rolls back every imported row.
+    pub fn import_data(&mut self, value: serde_json::Value) -> Result<ImportSummary, StorageError> {
+        let archive: PortableArchive = serde_json::from_value(value)
+            .map_err(|error| StorageError::Integrity(format!("invalid archive JSON: {error}")))?;
+        validate_archive_header(&archive)?;
+        let transaction = self.connection.transaction()?;
+        let summary = import_archive(&transaction, &archive)?;
+        verify_integrity(&transaction)?;
+        transaction.commit()?;
+        Ok(summary)
+    }
+
     fn ids(&self, query: &str) -> Result<Vec<String>, StorageError> {
         let mut statement = self.connection.prepare(query)?;
         statement
@@ -1124,6 +1187,674 @@ impl SqliteRepository {
             events,
         }))
     }
+}
+
+fn validate_archive_header(archive: &PortableArchive) -> Result<(), StorageError> {
+    if archive.schema_version != 2 {
+        return Err(StorageError::Integrity(format!(
+            "unsupported archive schema {}",
+            archive.schema_version
+        )));
+    }
+    if archive.database_schema_version == 0 {
+        return Err(StorageError::Integrity(
+            "archive database schema must be positive".into(),
+        ));
+    }
+    if archive.database_schema_version > CURRENT_SCHEMA_VERSION {
+        return Err(StorageError::UnsupportedSchema {
+            found: archive.database_schema_version,
+            supported: CURRENT_SCHEMA_VERSION,
+        });
+    }
+    if !valid_archive_text(&archive.exported_at, 64)
+        || archive.players.len() > 10_000
+        || archive.sessions.len() > 10_000
+        || archive.games.len() > 100_000
+    {
+        return Err(StorageError::Integrity(
+            "archive header or collection limits are invalid".into(),
+        ));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)] // One validation pass keeps cross-record invariants explicit.
+fn import_archive(
+    transaction: &Transaction<'_>,
+    archive: &PortableArchive,
+) -> Result<ImportSummary, StorageError> {
+    let mut profiles = HashMap::new();
+    for player in &archive.players {
+        validate_archive_player(player)?;
+        if profiles.insert(player.id.as_str(), player).is_some() {
+            return Err(StorageError::Integrity(format!(
+                "duplicate archive player {}",
+                player.id
+            )));
+        }
+    }
+
+    let sessions = archive
+        .sessions
+        .iter()
+        .map(|session| {
+            session.as_ref().ok_or_else(|| {
+                StorageError::Integrity("archive contains a missing session detail".into())
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let games = archive
+        .games
+        .iter()
+        .map(|game| {
+            game.detail.as_ref().ok_or_else(|| {
+                StorageError::Integrity("archive contains a missing game detail".into())
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let mut session_ids = HashSet::new();
+    let mut session_games = HashMap::<&str, &GameHistory>::new();
+    let mut session_players = HashMap::<&str, HashSet<&str>>::new();
+    for detail in &sessions {
+        validate_archive_session(detail, &profiles)?;
+        if !session_ids.insert(detail.session.id.as_str()) {
+            return Err(StorageError::Integrity(format!(
+                "duplicate archive session {}",
+                detail.session.id
+            )));
+        }
+        session_players.insert(
+            detail.session.id.as_str(),
+            detail
+                .players
+                .iter()
+                .map(|player| player.id.as_str())
+                .collect(),
+        );
+        for game in &detail.games {
+            if game.session_id != detail.session.id {
+                return Err(StorageError::Integrity(format!(
+                    "game {} appears under the wrong session projection",
+                    game.id
+                )));
+            }
+            if session_games.insert(game.id.as_str(), game).is_some() {
+                return Err(StorageError::Integrity(format!(
+                    "game {} appears in multiple session projections",
+                    game.id
+                )));
+            }
+        }
+    }
+    let mut game_ids = HashSet::new();
+    for (envelope, detail) in archive.games.iter().zip(&games) {
+        validate_archive_game(detail, envelope.replay.as_ref(), &profiles)?;
+        if !game_ids.insert(detail.game.id.as_str()) {
+            return Err(StorageError::Integrity(format!(
+                "duplicate archive game {}",
+                detail.game.id
+            )));
+        }
+        if !session_ids.contains(detail.game.session_id.as_str()) {
+            return Err(StorageError::Integrity(format!(
+                "game {} references an absent session",
+                detail.game.id
+            )));
+        }
+        if detail.game.players.iter().any(|player| {
+            session_players
+                .get(detail.game.session_id.as_str())
+                .is_none_or(|players| !players.contains(player.id.as_str()))
+        }) {
+            return Err(StorageError::Integrity(format!(
+                "game {} contains a player outside its session",
+                detail.game.id
+            )));
+        }
+        if session_games.get(detail.game.id.as_str()).copied() != Some(&detail.game) {
+            return Err(StorageError::Integrity(format!(
+                "game {} differs between archive projections",
+                detail.game.id
+            )));
+        }
+    }
+    if session_games.len() != games.len() {
+        return Err(StorageError::Integrity(
+            "session and game archive projections are incomplete".into(),
+        ));
+    }
+
+    let mut summary = ImportSummary {
+        schema_version: archive.schema_version,
+        players_added: 0,
+        players_reused: 0,
+        sessions_added: 0,
+        games_added: 0,
+        throws_added: 0,
+        events_added: 0,
+        interrupted_sessions: 0,
+        interrupted_games: 0,
+    };
+    for player in &archive.players {
+        let existing = transaction
+            .query_row(
+                "SELECT name, avatar, color FROM players WHERE id=?1",
+                [&player.id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                    ))
+                },
+            )
+            .optional()?;
+        if let Some(existing) = existing {
+            if (existing.0, existing.1, existing.2)
+                != (
+                    player.name.clone(),
+                    player.avatar.clone(),
+                    player.color.clone(),
+                )
+            {
+                return Err(StorageError::Integrity(format!(
+                    "player ID {} conflicts with local data",
+                    player.id
+                )));
+            }
+            summary.players_reused += 1;
+        } else {
+            transaction.execute(
+                "INSERT INTO players(id, name, avatar, color, created_at)
+                 VALUES(?1, ?2, ?3, ?4, ?5)",
+                params![
+                    player.id,
+                    player.name,
+                    player.avatar,
+                    player.color,
+                    player.created_at
+                ],
+            )?;
+            summary.players_added += 1;
+        }
+    }
+
+    for detail in sessions {
+        reject_existing_id(transaction, "sessions", &detail.session.id)?;
+        let imported_active = detail.session.status == "active";
+        let status = if imported_active {
+            "interrupted"
+        } else {
+            detail.session.status.as_str()
+        };
+        let ended_at = if imported_active {
+            Some(archive.exported_at.as_str())
+        } else {
+            detail.session.ended_at.as_deref()
+        };
+        transaction.execute(
+            "INSERT INTO sessions(id, status, language, started_at, ended_at)
+             VALUES(?1, ?2, ?3, ?4, ?5)",
+            params![
+                detail.session.id,
+                status,
+                detail.session.language,
+                detail.session.started_at,
+                ended_at
+            ],
+        )?;
+        for (position, player) in detail.players.iter().enumerate() {
+            transaction.execute(
+                "INSERT INTO session_players(session_id, player_id, position)
+                 VALUES(?1, ?2, ?3)",
+                params![
+                    detail.session.id,
+                    player.id,
+                    i64::try_from(position).map_err(|_| StorageError::Integrity(
+                        "session player position exceeds SQLite range".into()
+                    ))?
+                ],
+            )?;
+        }
+        summary.sessions_added += 1;
+        summary.interrupted_sessions += u64::from(imported_active);
+    }
+
+    for detail in games {
+        reject_existing_id(transaction, "games", &detail.game.id)?;
+        import_game(transaction, detail, &archive.exported_at, &mut summary)?;
+    }
+    Ok(summary)
+}
+
+fn reject_existing_id(
+    transaction: &Transaction<'_>,
+    table: &str,
+    id: &str,
+) -> Result<(), StorageError> {
+    let query = match table {
+        "sessions" => "SELECT EXISTS(SELECT 1 FROM sessions WHERE id=?1)",
+        "games" => "SELECT EXISTS(SELECT 1 FROM games WHERE id=?1)",
+        _ => {
+            return Err(StorageError::Integrity(
+                "unsupported collision table".into(),
+            ));
+        }
+    };
+    let exists: bool = transaction.query_row(query, [id], |row| row.get(0))?;
+    if exists {
+        return Err(StorageError::Integrity(format!(
+            "{table} ID {id} already exists"
+        )));
+    }
+    Ok(())
+}
+
+fn validate_archive_player(player: &PlayerProfile) -> Result<(), StorageError> {
+    let valid_color = player.color.len() == 7
+        && player.color.starts_with('#')
+        && player.color[1..]
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit());
+    if !valid_archive_id(&player.id)
+        || player.name.trim().is_empty()
+        || player.name.chars().count() > 32
+        || !valid_archive_text(&player.avatar, 32)
+        || !valid_color
+        || !valid_archive_text(&player.created_at, 64)
+    {
+        return Err(StorageError::Integrity(format!(
+            "invalid archive player {}",
+            player.id
+        )));
+    }
+    Ok(())
+}
+
+fn validate_archive_session(
+    detail: &SessionDetail,
+    profiles: &HashMap<&str, &PlayerProfile>,
+) -> Result<(), StorageError> {
+    let session = &detail.session;
+    if !valid_archive_id(&session.id)
+        || !matches!(
+            session.status.as_str(),
+            "active" | "finished" | "interrupted"
+        )
+        || !matches!(session.language.as_str(), "de" | "en")
+        || !valid_archive_text(&session.started_at, 64)
+        || session
+            .ended_at
+            .as_deref()
+            .is_some_and(|value| !valid_archive_text(value, 64))
+        || detail.players.is_empty()
+        || detail.players.len() > 8
+        || session.player_count != detail.players.len() as u64
+        || session.games != detail.games.len() as u64
+        || session.finished_games
+            != detail
+                .games
+                .iter()
+                .filter(|game| game.status == "finished")
+                .count() as u64
+        || detail.statistics.len() != detail.players.len()
+    {
+        return Err(StorageError::Integrity(format!(
+            "invalid archive session {}",
+            session.id
+        )));
+    }
+    let mut player_ids = HashSet::new();
+    for player in &detail.players {
+        if profiles.get(player.id.as_str()).copied() != Some(player)
+            || !player_ids.insert(player.id.as_str())
+        {
+            return Err(StorageError::Integrity(format!(
+                "session {} contains an invalid player projection",
+                session.id
+            )));
+        }
+    }
+    let statistic_ids = detail
+        .statistics
+        .iter()
+        .map(|statistic| statistic.id.as_str())
+        .collect::<HashSet<_>>();
+    if statistic_ids.len() != detail.statistics.len()
+        || statistic_ids != player_ids
+        || detail.statistics.iter().any(|statistic| {
+            profiles.get(statistic.id.as_str()).is_none_or(|profile| {
+                statistic.name != profile.name
+                    || statistic.avatar != profile.avatar
+                    || statistic.color != profile.color
+            })
+        })
+    {
+        return Err(StorageError::Integrity(format!(
+            "session {} contains an invalid statistics projection",
+            session.id
+        )));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)] // Validates every imported game relation before insertion.
+fn validate_archive_game(
+    detail: &GameDetail,
+    replay: Option<&GameReplay>,
+    profiles: &HashMap<&str, &PlayerProfile>,
+) -> Result<(), StorageError> {
+    let game = &detail.game;
+    if !valid_archive_id(&game.id)
+        || !valid_archive_id(&game.session_id)
+        || !valid_archive_text(&game.game_type, 64)
+        || !matches!(
+            game.status.as_str(),
+            "running" | "finished" | "aborted" | "interrupted"
+        )
+        || !valid_archive_optional_text(&game.result_type, 64)
+        || !valid_archive_optional_text(&game.finish_reason, 256)
+        || game.ruleset_version == 0
+        || game.ruleset_version > u64::from(u16::MAX)
+        || !valid_archive_optional_text(&game.app_version, 64)
+        || !matches!(game.environment.as_str(), "production" | "test")
+        || !valid_archive_text(&game.started_at, 64)
+        || game
+            .ended_at
+            .as_deref()
+            .is_some_and(|value| !valid_archive_text(value, 64))
+        || game.players.is_empty()
+        || game.players.len() > 8
+        || game.darts != detail.throws.len() as u64
+        || game.winner_count != game.winner_ids.len() as u64
+        || detail.throws.len() > 100_000
+        || detail.events.len() > 100_000
+    {
+        return Err(StorageError::Integrity(format!(
+            "invalid archive game {}",
+            game.id
+        )));
+    }
+    let mut player_ids = HashSet::new();
+    for (position, player) in game.players.iter().enumerate() {
+        let Some(profile) = profiles.get(player.id.as_str()).copied() else {
+            return Err(StorageError::Integrity(format!(
+                "game {} references an absent player",
+                game.id
+            )));
+        };
+        if player.name != profile.name
+            || player.avatar != profile.avatar
+            || player.color != profile.color
+            || player.position != position as u64
+            || !player_ids.insert(player.id.as_str())
+        {
+            return Err(StorageError::Integrity(format!(
+                "game {} contains an invalid player projection",
+                game.id
+            )));
+        }
+    }
+    if game
+        .winner_ids
+        .iter()
+        .any(|winner| !player_ids.contains(winner.as_str()))
+    {
+        return Err(StorageError::Integrity(format!(
+            "game {} contains an invalid winner",
+            game.id
+        )));
+    }
+    let event_ids = detail
+        .events
+        .iter()
+        .map(|event| event.id)
+        .collect::<HashSet<_>>();
+    if event_ids.len() != detail.events.len() {
+        return Err(StorageError::Integrity(format!(
+            "game {} contains duplicate event IDs",
+            game.id
+        )));
+    }
+    for (index, event) in detail.events.iter().enumerate() {
+        if event.ordinal != index as u64 + 1
+            || !valid_archive_text(&event.event_type, 64)
+            || !valid_archive_text(&event.source, 64)
+            || !valid_archive_text(&event.created_at, 64)
+            || event
+                .player_id
+                .as_deref()
+                .is_some_and(|id| !player_ids.contains(id))
+            || event
+                .corrects_event_id
+                .is_some_and(|id| !detail.events[..index].iter().any(|prior| prior.id == id))
+        {
+            return Err(StorageError::Integrity(format!(
+                "game {} contains an invalid event",
+                game.id
+            )));
+        }
+    }
+    for throw in &detail.throws {
+        if !valid_archive_text(&throw.source, 64)
+            || !valid_archive_text(&throw.outcome, 64)
+            || !valid_archive_text(&throw.created_at, 64)
+            || throw
+                .player_id
+                .as_deref()
+                .is_some_and(|id| !player_ids.contains(id))
+            || throw.event_id.is_some_and(|id| !event_ids.contains(&id))
+        {
+            return Err(StorageError::Integrity(format!(
+                "game {} contains an invalid throw",
+                game.id
+            )));
+        }
+    }
+    if let Some(replay) = replay
+        && (replay.game_id != game.id
+            || replay.initial_state != game.initial_state
+            || replay.final_state != game.final_state
+            || (!detail.events.is_empty() && replay.events != detail.events))
+    {
+        return Err(StorageError::Integrity(format!(
+            "game {} has a mismatched replay",
+            game.id
+        )));
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)] // Keeps one game's relational insert and ID remap atomic and local.
+fn import_game(
+    transaction: &Transaction<'_>,
+    detail: &GameDetail,
+    exported_at: &str,
+    summary: &mut ImportSummary,
+) -> Result<(), StorageError> {
+    let game = &detail.game;
+    let options = serde_json::to_string(&game.options)
+        .map_err(|error| StorageError::Integrity(format!("invalid game options: {error}")))?;
+    let initial_state = serialize_optional_json(game.initial_state.as_ref())?;
+    let final_state = serialize_optional_json(game.final_state.as_ref())?;
+    let imported_running = game.status == "running";
+    let status = if imported_running {
+        "interrupted"
+    } else {
+        game.status.as_str()
+    };
+    let result_type = if imported_running {
+        ""
+    } else {
+        game.result_type.as_str()
+    };
+    let finish_reason = if imported_running {
+        "portable_archive_import"
+    } else {
+        game.finish_reason.as_str()
+    };
+    let ended_at = if imported_running {
+        Some(exported_at)
+    } else {
+        game.ended_at.as_deref()
+    };
+    transaction.execute(
+        "INSERT INTO games(
+            id, session_id, game_type, status, options_json, winner_id,
+            result_type, finish_reason, ruleset_version, app_version, environment,
+            initial_state_json, final_state_json, started_at, ended_at
+         ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
+        params![
+            game.id,
+            game.session_id,
+            game.game_type,
+            status,
+            options,
+            game.winner_ids.first(),
+            result_type,
+            finish_reason,
+            archive_sql_i64(game.ruleset_version, "ruleset version")?,
+            game.app_version,
+            game.environment,
+            initial_state,
+            final_state,
+            game.started_at,
+            ended_at
+        ],
+    )?;
+    for player in &game.players {
+        transaction.execute(
+            "INSERT INTO game_players(game_id, player_id, position, final_score)
+             VALUES(?1, ?2, ?3, ?4)",
+            params![
+                game.id,
+                player.id,
+                archive_sql_i64(player.position, "game player position")?,
+                player.final_score
+            ],
+        )?;
+    }
+    for winner in &game.winner_ids {
+        transaction.execute(
+            "INSERT INTO game_winners(game_id, player_id) VALUES(?1, ?2)",
+            params![game.id, winner],
+        )?;
+    }
+    let mut event_ids = HashMap::<u64, i64>::new();
+    for event in &detail.events {
+        let payload = serde_json::to_string(&event.payload)
+            .map_err(|error| StorageError::Integrity(format!("invalid event payload: {error}")))?;
+        let task = serialize_optional_json(event.task.as_ref())?;
+        let frame = serialize_optional_json(event.frame.as_ref())?;
+        let corrects = event
+            .corrects_event_id
+            .map(|id| {
+                event_ids.get(&id).copied().ok_or_else(|| {
+                    StorageError::Integrity("corrected event is not available".into())
+                })
+            })
+            .transpose()?;
+        transaction.execute(
+            "INSERT INTO game_events(
+                game_id, ordinal, event_type, player_id, source, payload_json,
+                task_json, frame_json, effective, corrects_event_id, created_at
+             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
+            params![
+                game.id,
+                archive_sql_i64(event.ordinal, "event ordinal")?,
+                event.event_type,
+                event.player_id,
+                event.source,
+                payload,
+                task,
+                frame,
+                event.effective,
+                corrects,
+                event.created_at
+            ],
+        )?;
+        event_ids.insert(event.id, transaction.last_insert_rowid());
+        summary.events_added += 1;
+    }
+    for throw in &detail.throws {
+        let event = serde_json::to_string(&throw.event)
+            .map_err(|error| StorageError::Integrity(format!("invalid dart event: {error}")))?;
+        let task = serialize_optional_json(throw.task.as_ref())?;
+        let event_id = throw
+            .event_id
+            .map(|id| {
+                event_ids
+                    .get(&id)
+                    .copied()
+                    .ok_or_else(|| StorageError::Integrity("throw event is not available".into()))
+            })
+            .transpose()?;
+        transaction.execute(
+            "INSERT INTO throws(
+                game_id, action_id, seq, player_id, event_json, score_after,
+                round_number, dart_in_turn, field, ring, multiplier, dart_score,
+                mode_points, outcome, source, task_json, event_id, created_at
+             ) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)",
+            params![
+                game.id,
+                throw
+                    .action_id
+                    .map(|value| archive_sql_i64(value, "dart action ID"))
+                    .transpose()?,
+                archive_sql_i64(throw.seq, "dart sequence")?,
+                throw.player_id,
+                event,
+                throw.score_after,
+                archive_sql_i64(throw.round_number, "dart round")?,
+                archive_sql_i64(throw.dart_in_turn, "dart in turn")?,
+                throw.field.map(|value| archive_sql_i64(value, "dart field")).transpose()?,
+                throw.ring,
+                throw.multiplier.map(|value| archive_sql_i64(value, "dart multiplier")).transpose()?,
+                throw.dart_score,
+                throw.mode_points,
+                throw.outcome,
+                throw.source,
+                task,
+                event_id,
+                throw.created_at
+            ],
+        )?;
+        summary.throws_added += 1;
+    }
+    summary.games_added += 1;
+    summary.interrupted_games += u64::from(imported_running);
+    Ok(())
+}
+
+fn serialize_optional_json(
+    value: Option<&serde_json::Value>,
+) -> Result<Option<String>, StorageError> {
+    value
+        .map(|value| {
+            serde_json::to_string(value)
+                .map_err(|error| StorageError::Integrity(format!("invalid archive JSON: {error}")))
+        })
+        .transpose()
+}
+
+fn archive_sql_i64(value: u64, label: &str) -> Result<i64, StorageError> {
+    to_sql_i64(value, label).map_err(StorageError::Integrity)
+}
+
+fn valid_archive_id(value: &str) -> bool {
+    valid_archive_text(value, 128)
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b':' | b'.'))
+}
+
+fn valid_archive_text(value: &str, maximum: usize) -> bool {
+    !value.trim().is_empty() && value.len() <= maximum && !value.chars().any(char::is_control)
+}
+
+fn valid_archive_optional_text(value: &str, maximum: usize) -> bool {
+    value.len() <= maximum && !value.chars().any(char::is_control)
 }
 
 fn load_session_history(
@@ -3111,6 +3842,168 @@ mod tests {
     use sdb_game_core::{GameStatus, seed_from_id};
     use sdb_runtime::{Runtime, RuntimeAction};
     use sdb_session_core::Screen;
+
+    fn portable_x01_archive(finish_game: bool) -> serde_json::Value {
+        let repository = SqliteRepository::in_memory().expect("source repository");
+        let mut runtime = Runtime::restore("portable-source", repository).expect("runtime");
+        for (command_id, action) in [
+            (
+                "session",
+                RuntimeAction::StartSession {
+                    session_id: "portable-session".into(),
+                    players: vec![PlayerRef {
+                        id: "portable-ada".into(),
+                        name: "Ada".into(),
+                        avatar: "🦊".into(),
+                        color: "#ff00aa".into(),
+                        team_id: None,
+                    }],
+                    teams: Vec::new(),
+                },
+            ),
+            (
+                "prepare",
+                RuntimeAction::PrepareGame {
+                    game_type: "x01".into(),
+                    options: serde_json::json!({"start_score": 40, "out_rule": "double"}),
+                },
+            ),
+            (
+                "start",
+                RuntimeAction::StartPreparedGame {
+                    game_id: "portable-game".into(),
+                },
+            ),
+            ("playing", RuntimeAction::MarkGamePlaying),
+        ] {
+            runtime
+                .dispatch("portable-source", command_id, None, action)
+                .unwrap_or_else(|error| panic!("{command_id}: {error}"));
+        }
+        if finish_game {
+            runtime
+                .dispatch(
+                    "portable-source",
+                    "checkout",
+                    None,
+                    RuntimeAction::Dart {
+                        event: DartEvent::Hit {
+                            seq: 1,
+                            field: 20,
+                            ring: Ring::Double,
+                            multiplier: 2,
+                            label: "D20".into(),
+                            score: 40,
+                        },
+                        source: DartSource::Board,
+                    },
+                )
+                .expect("checkout");
+        }
+        runtime
+            .into_repository()
+            .export_data()
+            .expect("portable archive")
+    }
+
+    #[test]
+    fn portable_archive_import_recomputes_history_and_is_atomic_on_collision() {
+        let archive = portable_x01_archive(true);
+        let mut repository = SqliteRepository::in_memory().expect("target repository");
+        repository
+            .connection
+            .execute(
+                "INSERT INTO players(id, name, avatar, color, created_at)
+                 VALUES('portable-ada', 'Ada', '🦊', '#ff00aa', 'different-timestamp')",
+                [],
+            )
+            .expect("preexisting equivalent profile");
+
+        let summary = repository.import_data(archive.clone()).expect("import");
+        assert_eq!(summary.players_added, 0);
+        assert_eq!(summary.players_reused, 1);
+        assert_eq!(summary.sessions_added, 1);
+        assert_eq!(summary.games_added, 1);
+        assert_eq!(summary.throws_added, 1);
+        assert_eq!(summary.events_added, 1);
+        assert_eq!(summary.interrupted_sessions, 1);
+        assert_eq!(summary.interrupted_games, 0);
+        let session = repository
+            .session_detail("portable-session")
+            .expect("session")
+            .expect("imported session");
+        assert_eq!(session.session.status, "interrupted");
+        assert_eq!(session.statistics[0].wins, 1);
+        assert_eq!(session.statistics[0].darts, 1);
+        assert_eq!(session.statistics[0].total_points, 40);
+        let game = repository
+            .game_detail("portable-game")
+            .expect("game")
+            .expect("imported game");
+        assert_eq!(game.game.status, "finished");
+        assert_eq!(game.game.winner_ids, ["portable-ada"]);
+        assert_eq!(game.throws[0].event_id, Some(game.events[0].id));
+
+        let mut colliding_archive = archive;
+        colliding_archive["players"]
+            .as_array_mut()
+            .expect("players")
+            .push(serde_json::json!({
+                "id": "must-roll-back",
+                "name": "Rollback",
+                "avatar": "🎯",
+                "color": "#00ffaa",
+                "created_at": "2026-08-02T12:00:00Z"
+            }));
+        let error = repository
+            .import_data(colliding_archive)
+            .expect_err("session collision must reject archive");
+        assert!(error.to_string().contains("already exists"));
+        assert!(
+            repository
+                .players()
+                .expect("players after rollback")
+                .iter()
+                .all(|player| player.id != "must-roll-back")
+        );
+    }
+
+    #[test]
+    fn portable_archive_import_interrupts_unresumable_running_games() {
+        let archive = portable_x01_archive(false);
+        let mut repository = SqliteRepository::in_memory().expect("target repository");
+        let summary = repository
+            .import_data(archive)
+            .expect("import running archive");
+        assert_eq!(summary.interrupted_sessions, 1);
+        assert_eq!(summary.interrupted_games, 1);
+        let game = repository
+            .game_detail("portable-game")
+            .expect("game")
+            .expect("imported game");
+        assert_eq!(game.game.status, "interrupted");
+        assert_eq!(game.game.finish_reason, "portable_archive_import");
+        assert!(game.game.ended_at.is_some());
+    }
+
+    #[test]
+    fn portable_archive_import_rejects_unknown_or_inconsistent_data() {
+        let mut future = portable_x01_archive(true);
+        future["schema_version"] = serde_json::json!(99);
+        let mut repository = SqliteRepository::in_memory().expect("repository");
+        assert!(repository.import_data(future).is_err());
+        assert!(repository.players().expect("unchanged players").is_empty());
+
+        let mut unknown = portable_x01_archive(true);
+        unknown["players"][0]["unexpected"] = serde_json::json!(true);
+        assert!(repository.import_data(unknown).is_err());
+        assert!(repository.players().expect("unknown fields rejected").is_empty());
+
+        let mut inconsistent = portable_x01_archive(true);
+        inconsistent["games"][0]["detail"]["game"]["darts"] = serde_json::json!(2);
+        assert!(repository.import_data(inconsistent).is_err());
+        assert!(repository.players().expect("still unchanged").is_empty());
+    }
 
     #[test]
     fn sqlite_restores_committed_runtime_and_deduplicates() {

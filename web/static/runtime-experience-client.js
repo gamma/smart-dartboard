@@ -401,6 +401,18 @@
       throw new Error(`Unsupported Rust UI query: ${path}`);
     }
 
+    async importData(archive){
+      const summary=await this.core.importData(archive);
+      const [profiles,statistics]=await Promise.all([
+        this.core.query('/api/v2/players'),
+        this.core.query('/api/v2/statistics/players'),
+      ]);
+      this.profiles=profiles;
+      this.statistics=statistics;
+      this.publish(null);
+      return summary;
+    }
+
     subscribe(listener){
       this.listener=listener;
       this.unsubscribe=this.core.subscribe({
@@ -464,6 +476,7 @@
       }
     }
     query(path){ return this.delegate.query(path); }
+    importData(archive){ return this.delegate.importData(archive); }
     dispatch(path,payload={}){ return this.delegate.dispatch(path,payload); }
     subscribe(listener){
       if(this.delegate) return this.delegate.subscribe(listener);

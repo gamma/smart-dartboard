@@ -90,6 +90,12 @@
       return this.request(path);
     }
 
+    importData(archive){
+      return this.request('/api/v2/data/import',{
+        method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(archive),
+      });
+    }
+
     acknowledgeEffect(effectId){
       return this.request(`/api/v2/runtime/effects/${viewTarget()}/${encodeURIComponent(effectId)}/ack`,{
         method:'POST',headers:{'content-type':'application/json'},body:'{}',
@@ -192,6 +198,7 @@
     async bootstrap(){ return this.acceptEnvelope(await this.invoke('runtime_v2_bootstrap')); }
     async request_snapshot(){ return this.acceptEnvelope(await this.invoke('runtime_v2_snapshot')); }
     query(path){ return this.invoke('runtime_v2_query',{path}); }
+    importData(archive){ return this.invoke('runtime_v2_import_data',{archive}); }
     acknowledgeEffect(effectId){ return this.invoke('runtime_v2_ack_effect',{effectId}); }
     async dispatch(command,{commandId:stableId=commandId(),expectedRevision=this.revision}={}){
       if(!this.runtimeInstanceId || this.revision===null){
@@ -272,6 +279,11 @@
     async bootstrap(){ return this.acceptEnvelope(await this.bridge.bootstrap()); }
     async request_snapshot(){ return this.acceptEnvelope(await this.bridge.bootstrap()); }
     query(path){ return this.bridge.query(path); }
+    importData(){
+      return Promise.reject(new RuntimeClientError('History import is controller-only',{
+        code:'forbidden',status:403,
+      }));
+    }
     acknowledgeEffect(effectId){ return this.bridge.acknowledgeEffect(effectId); }
     async dispatch(command,{commandId:stableId=commandId(),expectedRevision=this.revision}={}){
       if(!this.runtimeInstanceId || this.revision===null){
@@ -342,6 +354,11 @@
     }
     async request_snapshot(){ return this.bootstrap(); }
     query(path){ return this.invoke('companion_projector_v2_query',{path}); }
+    importData(){
+      return Promise.reject(new RuntimeClientError('History import is controller-only',{
+        code:'forbidden',status:403,
+      }));
+    }
     acknowledgeEffect(effectId){
       return this.invoke('companion_projector_v2_ack_effect',{effectId});
     }
@@ -388,10 +405,11 @@
   }
 
   class TestRuntimeClient {
-    constructor({envelope,dispatch,queries={},acknowledgeEffect=()=>Promise.resolve(true)}){
+    constructor({envelope,dispatch,queries={},importData,acknowledgeEffect=()=>Promise.resolve(true)}){
       this.envelope=envelope;
       this.dispatchHandler=dispatch;
       this.queries=queries;
+      this.importDataHandler=importData;
       this.acknowledgeEffectHandler=acknowledgeEffect;
       this.listeners=new Set();
     }
@@ -401,6 +419,7 @@
       return this.dispatchHandler?.(command,options,this) ?? null;
     }
     async query(path){ return this.queries[path]; }
+    async importData(archive){ return this.importDataHandler?.(archive,this); }
     acknowledgeEffect(effectId){ return this.acknowledgeEffectHandler(effectId); }
     subscribe(listener){
       this.listeners.add(listener);
@@ -429,6 +448,11 @@
     }
     bootstrap(){ return this.request('/api/bootstrap'); }
     query(path){ return this.request(path); }
+    importData(){
+      return Promise.reject(new RuntimeClientError('History import requires runtime API v2',{
+        code:'incompatible_protocol',status:426,
+      }));
+    }
     dispatch(path,payload={}){
       return this.request(path,{
         method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),

@@ -107,6 +107,17 @@ Der Export behält für Kompatibilität das portable Archivformat
 separat als `database_schema_version`. Runtime-Einstellungen, Boarddaten,
 Companion-Tokens und andere Secrets werden nicht exportiert.
 
+Dasselbe Archiv kann unter **Einstellungen → JSON importieren** auf Linux,
+macOS und iOS wieder eingelesen werden. Der Import ist auf 16 MiB begrenzt,
+validiert Schema, IDs, Projektionen, Referenzen und Collection-Größen vor dem
+Schreiben und läuft in einer einzigen SQLite-Transaktion mit anschließender
+Integritätsprüfung. Vorhandene identische Profile werden wiederverwendet;
+Profilkonflikte sowie Session- oder Spiel-ID-Kollisionen brechen den gesamten
+Import ohne Teiländerung ab. Statistiken werden aus den importierten Rohdaten
+neu berechnet und nicht aus dem Archiv übernommen. Da ein Historienarchiv
+keinen fortsetzbaren Runtime-Snapshot enthält, werden darin noch aktive
+Sessions und laufende Spiele als `interrupted` archiviert.
+
 Dieser personenbezogene Datenexport ist absichtlich vom Diagnoseexport
 getrennt. **Einstellungen → Diagnose exportieren** erzeugt nur einen
 Health-Snapshot, Versionen, redigierte Konfiguration und rotierende Logs und
@@ -124,6 +135,8 @@ die lokale Datenbank löscht oder ersetzt. Vor Wartung oder Löschung kann die
 vollständige Historie in der Statistikansicht als JSON exportiert werden. Das
 Exportarchiv enthält Spieler- und Spieldaten, jedoch keine
 Projektorkalibrierung, Hardwareadresse oder sonstigen Runtime-Einstellungen.
+Der sichtbare Import verlangt eine Dateiauswahl und eine anschließende
+Bestätigung; weder Server noch Native-App importieren automatisch.
 
 Da Spielernamen personenbezogen sein können, gehört der Server in ein
 isoliertes Dartboard-Netz. Die History- und Export-API sollte nicht über das

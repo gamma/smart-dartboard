@@ -264,12 +264,13 @@ async function action(path, body = {}){
   try { return await api(path, body); }
   catch(error){ showToast(error.message); throw error; }
 }
-function showToast(message){
+function showToast(message,success=false){
   const toast = $('toast');
   if(!toast) return;
   toast.textContent = message;
+  toast.classList.toggle('success',success);
   toast.classList.add('show');
-  setTimeout(() => toast.classList.remove('show'), 2600);
+  setTimeout(() => toast.classList.remove('show','success'), 2600);
 }
 function scheduleRematchExpiryCheck(){
   const checkExpiry=()=>{
@@ -1268,6 +1269,13 @@ function controlSettings(){
         <div><span>${t('diagnostics')}</span><h2>${t('diagnostic_export_title')}</h2><p>${t('diagnostic_export_copy')}</p></div>
         ${actionButton(t('diagnostic_export'),'diagnostic-export','secondary')}
       </section>
+      <section class="settings-link-card data-import-card">
+        <div><span>${t('data_archive')}</span><h2>${t('data_import_title')}</h2><p>${t('data_import_copy')}</p></div>
+        <div class="data-import-actions">
+          ${actionButton(t('import_data'),'history-import-select','secondary')}
+          <input id="historyImportFile" type="file" accept="application/json,.json" hidden>
+        </div>
+      </section>
       ${window.__TAURI__?`<section class="settings-link-card">
         <div><span>NATIVE HOST</span><h2>${language()==='en'?'Devices & Companion':'Geräte & Companion'}</h2><p>${language()==='en'?'Bluetooth, AirPlay / HDMI, device role and Companion pairing.':'Bluetooth, AirPlay / HDMI, Geräterolle und Companion-Kopplung.'}</p></div>
         ${actionButton(language()==='en'?'Open device setup':'Geräte-Setup öffnen','native-setup','secondary')}
@@ -2014,6 +2022,10 @@ document.addEventListener('click',async event=>{
     finally{ target.disabled=false; }
     return;
   }
+  if(name==='history-import-select'){
+    $('historyImportFile')?.click();
+    return;
+  }
   if(name==='diagnostic-export'){
     target.disabled=true;
     try{
@@ -2302,7 +2314,25 @@ document.addEventListener('input',event=>{
   appState.experience.calibration.corners[corner][axis]=Number(event.target.value);
   event.target.nextElementSibling.textContent=`${Math.round(Number(event.target.value)*100)}%`;
 });
-document.addEventListener('change',event=>{
+document.addEventListener('change',async event=>{
+  if(event.target.id==='historyImportFile'){
+    const file=event.target.files?.[0];
+    event.target.value='';
+    if(!file) return;
+    if(file.size>16*1024*1024){ showToast(t('import_too_large')); return; }
+    if(!window.confirm(t('import_confirm'))) return;
+    try{
+      const archive=JSON.parse(await file.text());
+      const summary=await runtimeClient.importData(archive);
+      showToast(t('import_success',{
+        players:summary.players_added,
+        sessions:summary.sessions_added,
+        games:summary.games_added,
+      }),true);
+      render();
+    }catch(error){ showToast(error.message); }
+    return;
+  }
   if(event.target.matches('[data-action="history-test"]')){
     appState.history.includeTest=event.target.checked;
     appState.history.recommendations=null;

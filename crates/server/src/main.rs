@@ -1,6 +1,6 @@
 use axum::{
     Json, Router,
-    extract::{Path, State, WebSocketUpgrade, ws::Message},
+    extract::{DefaultBodyLimit, Path, State, WebSocketUpgrade, ws::Message},
     http::{HeaderMap, HeaderValue, StatusCode, header},
     response::{IntoResponse, Response},
     routing::{delete, get, post},
@@ -22,7 +22,7 @@ use sdb_diagnostics::{
 };
 use sdb_game_core::{GameMetadata, registered_game_metadata};
 use sdb_runtime::{CommandResult, Runtime, RuntimePublicSnapshot};
-use sdb_storage::{CURRENT_SCHEMA_VERSION, SqliteRepository};
+use sdb_storage::{CURRENT_SCHEMA_VERSION, SqliteRepository, StorageError};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
@@ -369,6 +369,10 @@ fn router(state: AppState) -> Router {
             get(training_recommendations),
         )
         .route("/api/v2/data/export", get(export_data))
+        .route(
+            "/api/v2/data/import",
+            post(import_data).layer(DefaultBodyLimit::max(16 * 1024 * 1024)),
+        )
         .route("/api/v2/diagnostics/export", post(export_diagnostics))
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,
@@ -853,6 +857,53 @@ async fn export_data(
     Ok((headers, Json(export)))
 }
 
+async fn import_data(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(archive): Json<serde_json::Value>,
+) -> Result<Json<sdb_storage::ImportSummary>, ApiError> {
+    validate_same_origin(&headers)?;
+    let mut runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let summary = runtime
+        .repository_mut()
+        .import_data(archive)
+        .map_err(|error| import_error(&error))?;
+    let _ = state.diagnostics.record(
+        DiagnosticLevel::Info,
+        "storage",
+        "portable_archive_imported",
+        DiagnosticScope {
+            runtime_instance_id: Some(runtime.instance_id()),
+            revision: Some(runtime.snapshot().revision),
+            ..DiagnosticScope::default()
+        },
+        serde_json::json!({
+            "schema_version": summary.schema_version,
+            "players_added": summary.players_added,
+            "players_reused": summary.players_reused,
+            "sessions_added": summary.sessions_added,
+            "games_added": summary.games_added,
+            "throws_added": summary.throws_added,
+            "events_added": summary.events_added,
+            "interrupted_sessions": summary.interrupted_sessions,
+            "interrupted_games": summary.interrupted_games,
+        }),
+    );
+    Ok(Json(summary))
+}
+
+fn import_error(error: &StorageError) -> ContractError {
+    match error {
+        StorageError::Integrity(_) | StorageError::UnsupportedSchema { .. } => {
+            invalid_command(&error.to_string())
+        }
+        _ => internal_error("history import failed"),
+    }
+}
+
 async fn export_diagnostics(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -1237,9 +1288,9 @@ fn validate_same_origin(headers: &HeaderMap) -> Result<(), ContractError> {
     let origin_host = origin
         .strip_prefix("http://")
         .or_else(|| origin.strip_prefix("https://"))
-        .ok_or_else(|| forbidden("invalid WebSocket origin"))?;
+        .ok_or_else(|| forbidden("invalid request origin"))?;
     if origin_host != host {
-        return Err(forbidden("cross-origin WebSocket denied"));
+        return Err(forbidden("cross-origin request denied"));
     }
     Ok(())
 }
@@ -1628,6 +1679,73 @@ mod tests {
         .expect("diagnostic JSON");
         assert_eq!(value["database_included"], false);
         assert_eq!(value["versions"]["schema"], CURRENT_SCHEMA_VERSION);
+    }
+
+    #[tokio::test]
+    async fn portable_archive_import_is_validated_and_same_origin_only() {
+        let archive = serde_json::json!({
+            "schema_version": 2,
+            "database_schema_version": CURRENT_SCHEMA_VERSION,
+            "exported_at": "2026-08-02T12:00:00Z",
+            "players": [{
+                "id": "imported-player",
+                "name": "Import",
+                "avatar": "🎯",
+                "color": "#28e7ff",
+                "created_at": "2026-08-02T12:00:00Z"
+            }],
+            "sessions": [],
+            "games": []
+        });
+        let app = test_app();
+        let response = app
+            .clone()
+            .oneshot(
+                Request::post("/api/v2/data/import")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(archive.to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(response.status(), StatusCode::OK);
+        let summary: Value = serde_json::from_slice(
+            &to_bytes(response.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("summary");
+        assert_eq!(summary["players_added"], 1);
+
+        let players = app
+            .clone()
+            .oneshot(
+                Request::get("/api/v2/players")
+                    .body(Body::empty())
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        let players: Value = serde_json::from_slice(
+            &to_bytes(players.into_body(), usize::MAX)
+                .await
+                .expect("body"),
+        )
+        .expect("players");
+        assert_eq!(players[0]["id"], "imported-player");
+
+        let cross_origin = app
+            .oneshot(
+                Request::post("/api/v2/data/import")
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .header(header::HOST, "arcade.local")
+                    .header(header::ORIGIN, "https://attacker.invalid")
+                    .body(Body::from(archive.to_string()))
+                    .expect("request"),
+            )
+            .await
+            .expect("response");
+        assert_eq!(cross_origin.status(), StatusCode::FORBIDDEN);
     }
 
     #[tokio::test]

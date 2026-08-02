@@ -28,6 +28,7 @@ fn main() {
             "runtime_bootstrap",
             "runtime_dispatch",
             "runtime_query",
+            "runtime_v2_import_data",
             "companion_pairing_open",
             "companion_devices",
             "companion_revoke",

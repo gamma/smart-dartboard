@@ -2888,6 +2888,59 @@ fn runtime_v2_query(
     runtime_v2_query_value(&state, &path)
 }
 
+#[tauri::command]
+fn runtime_v2_import_data(
+    window: tauri::WebviewWindow,
+    state: State<'_, SharedNativeState>,
+    archive: serde_json::Value,
+) -> Result<sdb_storage::ImportSummary, String> {
+    if window.label() != "control" {
+        return Err("history import is unavailable for this window".into());
+    }
+    let mut state = state.lock().map_err(|error| error.to_string())?;
+    runtime_v2_import_data_value(&mut state, archive)
+}
+
+fn runtime_v2_import_data_value(
+    state: &mut NativeState,
+    archive: serde_json::Value,
+) -> Result<sdb_storage::ImportSummary, String> {
+    state.require_controller()?;
+    let archive_size = serde_json::to_vec(&archive)
+        .map_err(|_| "history archive is invalid".to_string())?
+        .len();
+    if archive_size > 16 * 1024 * 1024 {
+        return Err("history archive exceeds the 16 MiB limit".into());
+    }
+    let summary = state
+        .runtime
+        .repository_mut()
+        .import_data(archive)
+        .map_err(|error| error.to_string())?;
+    let _ = state.diagnostics.record(
+        DiagnosticLevel::Info,
+        "storage",
+        "portable_archive_imported",
+        DiagnosticScope {
+            runtime_instance_id: Some(state.runtime.instance_id()),
+            revision: Some(state.runtime.snapshot().revision),
+            ..DiagnosticScope::default()
+        },
+        serde_json::json!({
+            "schema_version": summary.schema_version,
+            "players_added": summary.players_added,
+            "players_reused": summary.players_reused,
+            "sessions_added": summary.sessions_added,
+            "games_added": summary.games_added,
+            "throws_added": summary.throws_added,
+            "events_added": summary.events_added,
+            "interrupted_sessions": summary.interrupted_sessions,
+            "interrupted_games": summary.interrupted_games,
+        }),
+    );
+    Ok(summary)
+}
+
 fn native_query_allowed(window_label: &str, path: &str) -> bool {
     window_label == "control"
         || (window_label == "projector" && matches!(path, "/api/v2/host" | "/api/v2/modes"))
@@ -4011,6 +4064,7 @@ pub fn run() {
             runtime_v2_snapshot,
             runtime_v2_ack_effect,
             runtime_v2_query,
+            runtime_v2_import_data,
             runtime_v2_dispatch,
             runtime_v2_report,
             runtime_v2_projector_test_event,
@@ -4101,6 +4155,42 @@ mod tests {
         assert!(native_query_allowed("projector", "/api/v2/modes"));
         assert!(runtime_v2_query_value(&state, "/api/v2/history/games/missing").is_err());
         assert!(runtime_v2_query_value(&state, &"x".repeat(2_049)).is_err());
+    }
+
+    #[test]
+    fn native_controller_imports_valid_portable_archives() {
+        let mut state = NativeState::restore(
+            SqliteRepository::in_memory().expect("repository"),
+            test_companion_identity(),
+        )
+        .expect("native state");
+        let summary = runtime_v2_import_data_value(
+            &mut state,
+            serde_json::json!({
+                "schema_version": 2,
+                "database_schema_version": CURRENT_SCHEMA_VERSION,
+                "exported_at": "2026-08-02T12:00:00Z",
+                "players": [{
+                    "id": "native-import",
+                    "name": "Native Import",
+                    "avatar": "🎯",
+                    "color": "#28e7ff",
+                    "created_at": "2026-08-02T12:00:00Z"
+                }],
+                "sessions": [],
+                "games": []
+            }),
+        )
+        .expect("native import");
+        assert_eq!(summary.players_added, 1);
+        assert_eq!(state.runtime.repository().players().expect("players").len(), 1);
+
+        let oversized = serde_json::json!({"padding": "x".repeat(16 * 1024 * 1024)});
+        assert!(
+            runtime_v2_import_data_value(&mut state, oversized)
+                .expect_err("oversized archive")
+                .contains("16 MiB")
+        );
     }
 
     #[test]

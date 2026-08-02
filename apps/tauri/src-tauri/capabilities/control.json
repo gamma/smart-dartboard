@@ -12,6 +12,7 @@
     "allow-runtime-v2-snapshot",
     "allow-runtime-v2-ack-effect",
     "allow-runtime-v2-query",
+    "allow-runtime-v2-import-data",
     "allow-runtime-v2-dispatch",
     "allow-runtime-v2-report",
     "allow-runtime-v2-projector-test-event",

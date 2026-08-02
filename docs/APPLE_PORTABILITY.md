@@ -444,6 +444,12 @@ Für eine spätere eigenständige App werden benötigt:
 Silent Sharks Storage-Adapter und Migration aus `localStorage` sind hierfür ein
 sinnvolles Vorbild.
 
+Der erste portable Datentransfer ist implementiert: Export und bestätigter
+Import verwenden auf Linux, macOS und iOS denselben versionierten JSON-Vertrag
+und denselben Rust/SQLite-Code. Der Import ist atomar, größenbegrenzt und nur
+für die Controller-Rolle freigegeben. Er ist bewusst noch keine bidirektionale
+Synchronisation; ID-Kollisionen werden abgelehnt statt automatisch aufgelöst.
+
 ## 9. Empfohlene Umsetzungsschritte
 
 1. Mit einem minimalen M0-Spike CoreBluetooth, zwei WebViews sowie eigenständige

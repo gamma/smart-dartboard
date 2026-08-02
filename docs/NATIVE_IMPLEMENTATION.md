@@ -260,6 +260,11 @@ Umgesetzt und lokal verifiziert:
 - rotierende, redigierte JSONL-Diagnosen im nativen App-Datenverzeichnis unter
   `logs/`. Der Diagnoseexport ist nur aus den Control-Einstellungen aufrufbar
   und enthält weder Datenbank noch Spielernamen, Tokens oder BLE-Rohpakete.
+- portabler JSON-Import über denselben Rust-Storage wie Linux/Docker. Nur das
+  Control-Fenster besitzt den Tauri-Befehl; Projector und Companion haben keine
+  Importberechtigung. Die 16-MiB-Grenze, vollständige Vorabvalidierung,
+  Kollisionserkennung, Transaktion und Integritätsprüfung gelten auf Desktop
+  und iOS identisch. Die gemeinsame Web-UI bietet Dateiauswahl und Bestätigung.
 
 Noch nicht als produktionsreif nachgewiesen:
 

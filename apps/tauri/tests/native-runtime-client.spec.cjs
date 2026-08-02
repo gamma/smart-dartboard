@@ -25,7 +25,11 @@ test('experience adapter exposes complete v2 history and analytics contracts', a
       if(path.includes('/statistics/heatmap')) return {segments:[{field:20}],total_darts:1};
       if(path.includes('/training/')) return {recommendations:[{field:20}]};
       if(path.includes('/data/export')) return {schema_version:2,database_schema_version:6};
+      if(path==='/api/v2/players' || path==='/api/v2/statistics/players') return [];
       throw new Error(`unexpected ${path}`);
+    },importData:async archive=>{
+      calls.push(`import:${archive.schema_version}`);
+      return {players_added:1,sessions_added:0,games_added:0};
     }};
     const client=new window.SDBRuntimeClient.ExperienceRuntimeClient(core);
     return {
@@ -35,7 +39,8 @@ test('experience adapter exposes complete v2 history and analytics contracts', a
       modes:await client.query('/api/statistics/modes?include_test=true'),
       heatmap:await client.query('/api/statistics/heatmap?player_id=p1'),
       training:await client.query('/api/training/p1/recommendations'),
-      archive:await client.query('/api/data/export'),calls,
+      archive:await client.query('/api/data/export'),
+      imported:await client.importData({schema_version:2}),calls,
     };
   });
 
@@ -46,6 +51,8 @@ test('experience adapter exposes complete v2 history and analytics contracts', a
   expect(result.heatmap.total_darts).toBe(1);
   expect(result.training.recommendations[0].field).toBe(20);
   expect(result.archive).toMatchObject({schema_version:2,database_schema_version:6});
+  expect(result.imported.players_added).toBe(1);
+  expect(result.calls).toContain('import:2');
   expect(result.calls).toContain('/api/v2/statistics/modes?include_test=true');
 });
 
@@ -131,6 +138,7 @@ test('native host events update independently from game revisions', async ({ pag
       event: { type: 'hit', seq: 1, field: 20, ring: 'triple', score: 60 },
     });
     await client.acknowledgeEffect('dart-1:sound:controller');
+    await client.importData({ schema_version: 2 });
     listeners['runtime-state']({
       payload: { board: { enabled: true, phase: 'ready' }, external_display_count: 1 },
     });
@@ -141,6 +149,7 @@ test('native host events update independently from game revisions', async ({ pag
       stillListening: Boolean(listeners['runtime-state']),
       dispatchCommand: invocations[0].command,
       ackCommand: invocations[1].command,
+      importCommand: invocations[2].command,
     };
   });
 
@@ -151,6 +160,7 @@ test('native host events update independently from game revisions', async ({ pag
   expect(result.stillListening).toBe(false);
   expect(result.dispatchCommand).toBe('runtime_v2_projector_test_event');
   expect(result.ackCommand).toBe('runtime_v2_ack_effect');
+  expect(result.importCommand).toBe('runtime_v2_import_data');
 });
 
 test('external projector bridge bootstraps queries streams and reports', async ({ page }) => {

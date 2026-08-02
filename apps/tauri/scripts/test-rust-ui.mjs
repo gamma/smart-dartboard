@@ -184,8 +184,25 @@ try{
   if(archive.sessions.length!==1 || archive.games.length!==2){
     throw new Error('Expected portable export with one session and two games');
   }
+  await control.locator('[data-action="close-history"]').click();
+  await control.locator('[data-action="open-settings"]').click();
+  await control.locator('[data-action="history-import-select"]').waitFor();
+  control.once('dialog',dialog=>dialog.accept());
+  await control.locator('#historyImportFile').setInputFiles({
+    name:'portable-profile.json',
+    mimeType:'application/json',
+    buffer:Buffer.from(JSON.stringify({
+      schema_version:2,database_schema_version:6,exported_at:'2026-08-02T12:00:00Z',
+      players:[{id:'imported-webkit',name:'WebKit Import',avatar:'🎯',color:'#28e7ff',
+        created_at:'2026-08-02T12:00:00Z'}],
+      sessions:[],games:[],
+    })),
+  });
+  await control.waitForFunction(()=>appState.experience?.players
+    ?.some(player=>player.id==='imported-webkit'));
+  await control.getByText(/Import fertig: 1 Spieler/).waitFor();
   if(browserErrors.length) throw new Error(`Browser errors:\n${browserErrors.join('\n')}`);
-  console.log('Rust Runtime UI: setup, team editor, 24 modes, cooperative teams, effects, synchronized play, analytics, history, replay and export passed in WebKit');
+  console.log('Rust Runtime UI: setup, teams, modes, effects, play, analytics, replay, export and confirmed portable import passed in WebKit');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');

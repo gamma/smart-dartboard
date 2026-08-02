@@ -33,7 +33,8 @@ Zum Release:
   im Controller-Header; der Projector wechselt automatisch mit
 - historische Sessions und Spiele mit segmentgenauen Heatmaps, Replay,
   Modus-Schwierigkeitswerten und persönlichen Trainingshinweisen
-- getrennte Produktions- und Klick-Testdaten sowie vollständiger JSON-Export
+- getrennte Produktions- und Klick-Testdaten sowie vollständiger,
+  plattformübergreifender JSON-Export und bestätigter atomarer Import
 - schnelle Revanche nach Spielende per doppeltem Spielerwechsel-Tastendruck
 - faire Startspieler-Rotation mit manueller Auswahl und Zufallsauslosung vor
   jedem Spiel

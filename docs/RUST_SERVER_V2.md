@@ -151,12 +151,20 @@ begrenztem Proxy-Netz.
 | `GET` | `/api/v2/statistics/heatmap` | segmentgenaue Heatmap; optional nach Spieler, Session und Modus gefiltert |
 | `GET` | `/api/v2/training/{player_id}/recommendations` | lokale Trainingshinweise aus task-bezogenen Produktionswürfen |
 | `GET` | `/api/v2/data/export` | portables JSON-Archiv ohne Runtime-Einstellungen oder Secrets |
+| `POST` | `/api/v2/data/import` | bestätigter, validierter und atomarer Import eines portablen Archivs; maximal 16 MiB |
 | `POST` | `/api/v2/diagnostics/export` | bewusst ausgelöstes, redigiertes Diagnosepaket ohne Datenbank |
 
 Browser-POSTs und WebSockets akzeptieren nur dieselbe Origin. Clients ohne
 `Origin`, etwa lokale Diagnosewerkzeuge, bleiben möglich. Unvereinbare
 Protokollversionen, falsche Runtime-IDs und veraltete Revisionen liefern stabile
 Fehlercodes und passende HTTP-Statuscodes.
+
+Der Datenimport ist wie alle Browser-Mutationen Same-Origin-geschützt. Er
+überschreibt keine Sessions oder Spiele, führt nur identische Spielerprofile
+zusammen und rollt bei jeder Kollision oder Inkonsistenz vollständig zurück.
+Abgeleitete Statistikwerte werden ignoriert und nach dem Import aus Spielen,
+Gewinnern und Würfen neu berechnet. Laufende Archivdatensätze werden als nicht
+fortsetzbare, unterbrochene Historie markiert.
 
 Der veröffentlichte Snapshot enthält nur den benötigten Spiel-, Session- und
 Setupzustand sowie noch nicht bestätigte deklarative Effekte für die jeweilige

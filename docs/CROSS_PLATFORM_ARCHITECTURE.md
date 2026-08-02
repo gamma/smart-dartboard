@@ -481,6 +481,13 @@ Jeder produktive Upgradepfad benötigt:
 - Tests mit anonymisierten Kopien realer Datenbanken,
 - dokumentierte private App- beziehungsweise `/data`-Pfade.
 
+Der portable Archivvertrag `schema_version: 2` ist inzwischen im gemeinsamen
+Rust-Repository umgesetzt: Linux/Docker nutzen einen Same-Origin-POST, Native
+einen ausschließlich dem Control-Fenster erlaubten Tauri-Befehl. Beide Grenzen
+begrenzen auf 16 MiB und führen denselben validierten, atomaren Import aus.
+Kollisionen überschreiben nie lokale Historie; nicht fortsetzbare aktive
+Archivdatensätze werden explizit als unterbrochen übernommen.
+
 Ein fehlgeschlagenes Upgrade darf die einzige Nutzerdatenbank nicht
 überschreiben. Der vorherige Stand bleibt als wiederherstellbare Kopie erhalten.
 
