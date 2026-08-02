@@ -89,14 +89,23 @@ GET /api/training/{player_id}/recommendations
 GET /api/data/export
 ```
 
-Der parallele Rust-Migrationspfad stellt die bereits portierten Leseverträge
-versioniert unter `/api/v2/history/...` und `/api/v2/statistics/players` bereit.
-Sessiondetail, Spieldetail und Replay enthalten dort auch die unveränderliche
-Korrektur- und Löschkette.
+Der Rust-Pfad stellt alle Leseverträge parallel versioniert unter
+`/api/v2/history/...`, `/api/v2/statistics/...`, `/api/v2/training/...` und
+`/api/v2/data/export` bereit. Headless-Server und native Apps verwenden dasselbe
+SQLite-Read-Model; die gemeinsame Produkt-UI normalisiert lediglich die
+versionierten Antwortumschläge. Sessiondetail, Spieldetail und Replay enthalten
+dort auch die unveränderliche Korrektur- und Löschkette.
+Bei älteren, wurfbasierten Datensätzen ohne `game_events` rekonstruiert der
+Rust-Adapter weiterhin einen bestmöglichen Replay-Frame je gespeichertem Wurf.
 
 Die Statistikendpunkte akzeptieren bei Bedarf `include_test=true`. Die Heatmap
 kann zusätzlich nach `player_id`, `session_id` und `game_type` gefiltert
 werden.
+
+Der Export behält für Kompatibilität das portable Archivformat
+`schema_version: 2` und nennt die tatsächlich verwendete Rust-Datenbankversion
+separat als `database_schema_version`. Runtime-Einstellungen, Boarddaten,
+Companion-Tokens und andere Secrets werden nicht exportiert.
 
 ## Datenschutz und Aufbewahrung
 

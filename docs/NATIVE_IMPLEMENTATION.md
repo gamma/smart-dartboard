@@ -233,10 +233,10 @@ Noch nicht als produktionsreif nachgewiesen:
 - vollständige iPhone/iPad-zu-iPad-Hardwareabnahme des implementierten
   Companion-Pfads einschließlich App-Resume, realem WLAN-Verlust, Sound und
   Projector-Animationen,
-- Heatmap, Modusstatistiken, Export und Trainingsempfehlungen im Rust-Pfad;
-  alle 24 heutigen Produktmodi sind portiert. Das adaptive Boss Fight V2 bleibt
-  eine getrennte, ausdrücklich zurückgestellte Produktänderung,
-- vollständige Historien-/Replay-Adapterparität der Produkt-UI,
+- das adaptive Boss Fight V2 als getrennte, ausdrücklich zurückgestellte
+  Produktänderung; alle 24 heutigen Produktmodi sowie Historie, Replay,
+  Heatmap, Modusstatistiken, Export und Trainingsempfehlungen sind im Rust-Pfad
+  portiert,
 - Einsatz der gemeinsamen Projector-Produkt-UI im Companion-Projector. Control,
   macOS-Projector und der separate iOS-/iPadOS-AirPlay-/HDMI-DisplayHost
   verwenden sie bereits; der Companion zeigt derzeit noch die bewusst kleine

@@ -2,6 +2,52 @@ const { test, expect } = require('@playwright/test');
 const path = require('node:path');
 
 const runtimeClient = path.resolve(__dirname, '../../../web/static/runtime-client.js');
+const experienceClient = path.resolve(__dirname, '../../../web/static/runtime-experience-client.js');
+
+test('experience adapter exposes complete v2 history and analytics contracts', async ({ page }) => {
+  await page.goto('about:blank');
+  await page.addScriptTag({ path: runtimeClient });
+  await page.addScriptTag({ path: experienceClient });
+
+  const result = await page.evaluate(async () => {
+    const calls=[];
+    const core={query:async path=>{
+      calls.push(path);
+      if(path.includes('/history/sessions/s1')) return {
+        session:{id:'s1',started_at:'now'},players:[{id:'p1'}],
+        games:[{id:'g1',darts:3}],statistics:[{id:'p1',wins:1}],
+      };
+      if(path.includes('/history/games/g1/replay')) return {game_id:'g1',events:[{id:1}]};
+      if(path.includes('/history/games/g1')) return {
+        game:{id:'g1',game_type:'x01'},throws:[{mode_points:40}],events:[{id:1}],
+      };
+      if(path.includes('/statistics/modes')) return [{game_type:'x01'}];
+      if(path.includes('/statistics/heatmap')) return {segments:[{field:20}],total_darts:1};
+      if(path.includes('/training/')) return {recommendations:[{field:20}]};
+      if(path.includes('/data/export')) return {schema_version:2,database_schema_version:6};
+      throw new Error(`unexpected ${path}`);
+    }};
+    const client=new window.SDBRuntimeClient.ExperienceRuntimeClient(core);
+    return {
+      session:await client.query('/api/history/sessions/s1'),
+      game:await client.query('/api/history/games/g1'),
+      replay:await client.query('/api/history/games/g1/replay'),
+      modes:await client.query('/api/statistics/modes?include_test=true'),
+      heatmap:await client.query('/api/statistics/heatmap?player_id=p1'),
+      training:await client.query('/api/training/p1/recommendations'),
+      archive:await client.query('/api/data/export'),calls,
+    };
+  });
+
+  expect(result.session).toMatchObject({id:'s1',games:[{id:'g1',darts:3}],statistics:[{wins:1}]});
+  expect(result.game).toMatchObject({id:'g1',throws:[{mode_points:40}]});
+  expect(result.replay.events).toHaveLength(1);
+  expect(result.modes.modes).toEqual([{game_type:'x01'}]);
+  expect(result.heatmap.total_darts).toBe(1);
+  expect(result.training.recommendations[0].field).toBe(20);
+  expect(result.archive).toMatchObject({schema_version:2,database_schema_version:6});
+  expect(result.calls).toContain('/api/v2/statistics/modes?include_test=true');
+});
 
 test('native host events update independently from game revisions', async ({ page }) => {
   await page.goto('about:blank');

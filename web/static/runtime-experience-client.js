@@ -301,22 +301,31 @@
 
     async query(path){
       if(path.startsWith('/api/history/sessions/')){
-        return this.core.query(path.replace('/api/history','/api/v2/history'));
+        const detail=await this.core.query(path.replace('/api/history','/api/v2/history'));
+        return {...detail.session,players:detail.players || [],games:detail.games || [],
+          statistics:detail.statistics || []};
       }
       if(path.startsWith('/api/history/sessions')){
         return {sessions:await this.core.query(path.replace('/api/history','/api/v2/history'))};
       }
       if(path.startsWith('/api/history/games/')){
-        return this.core.query(path.replace('/api/history','/api/v2/history'));
+        const detail=await this.core.query(path.replace('/api/history','/api/v2/history'));
+        if(path.endsWith('/replay')) return detail;
+        return {...detail.game,throws:detail.throws || [],events:detail.events || []};
       }
       if(path.startsWith('/api/statistics/players')){
-        return {players:await this.core.query('/api/v2/statistics/players')};
+        return {players:await this.core.query(path.replace('/api/statistics','/api/v2/statistics'))};
       }
-      if(path.startsWith('/api/statistics/modes')) return {modes:[]};
+      if(path.startsWith('/api/statistics/modes')){
+        return {modes:await this.core.query(path.replace('/api/statistics','/api/v2/statistics'))};
+      }
       if(path.startsWith('/api/statistics/heatmap')){
-        return {segments:[],board_hits:0,misses:0,total_darts:0};
+        return this.core.query(path.replace('/api/statistics','/api/v2/statistics'));
       }
-      if(path.startsWith('/api/training/')) return {recommendations:[]};
+      if(path.startsWith('/api/training/')){
+        return this.core.query(path.replace('/api/training','/api/v2/training'));
+      }
+      if(path==='/api/data/export') return this.core.query('/api/v2/data/export');
       throw new Error(`Unsupported Rust UI query: ${path}`);
     }
 

@@ -64,10 +64,68 @@ pub struct PlayerStatistics {
     pub wins: u64,
     pub darts: u64,
     pub total_points: u64,
+    pub total_mode_points: i64,
     pub best_dart: u64,
     pub misses: u64,
     pub three_dart_average: f64,
     pub win_rate: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ModeStatistics {
+    pub game_type: String,
+    pub ruleset_version: u64,
+    pub options: serde_json::Value,
+    pub starts: u64,
+    pub finished: u64,
+    pub aborted: u64,
+    pub interrupted: u64,
+    pub average_seconds: Option<f64>,
+    pub darts: u64,
+    pub successes: u64,
+    pub partials: u64,
+    pub dangers: u64,
+    pub misses: u64,
+    pub success_rate: f64,
+    pub completion_rate: f64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeatmapSegment {
+    pub field: u64,
+    pub ring: String,
+    pub darts: u64,
+    pub successes: u64,
+    pub dangers: u64,
+    pub neutral: u64,
+    pub dart_points: i64,
+    pub mode_points: i64,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HeatmapStatistics {
+    pub resolution: &'static str,
+    pub segments: Vec<HeatmapSegment>,
+    pub total_darts: u64,
+    pub board_hits: u64,
+    pub misses: u64,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrainingRecommendation {
+    pub field: u64,
+    pub ring: String,
+    pub attempts: u64,
+    pub successes: u64,
+    pub success_rate: f64,
+    #[serde(skip_serializing_if = "is_false")]
+    pub starter: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TrainingRecommendations {
+    pub player_id: String,
+    pub recommendations: Vec<TrainingRecommendation>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,6 +151,8 @@ pub struct GameHistory {
     pub ruleset_version: u64,
     pub app_version: String,
     pub environment: String,
+    pub darts: u64,
+    pub winner_count: u64,
     pub initial_state: Option<serde_json::Value>,
     pub final_state: Option<serde_json::Value>,
     pub started_at: String,
@@ -105,6 +165,7 @@ pub struct SessionDetail {
     pub session: SessionHistory,
     pub players: Vec<PlayerProfile>,
     pub games: Vec<GameHistory>,
+    pub statistics: Vec<PlayerStatistics>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -117,8 +178,14 @@ pub struct ThrowHistory {
     pub score_after: i64,
     pub round_number: u64,
     pub dart_in_turn: u64,
+    pub field: Option<u64>,
+    pub ring: Option<String>,
+    pub multiplier: Option<u64>,
+    pub dart_score: i64,
+    pub mode_points: i64,
     pub outcome: String,
     pub source: String,
+    pub task: Option<serde_json::Value>,
     pub event_id: Option<u64>,
     pub created_at: String,
 }
@@ -462,23 +529,62 @@ impl SqliteRepository {
     ///
     /// Returns an error for invalid projected values or a failed query.
     pub fn player_statistics(&self) -> Result<Vec<PlayerStatistics>, StorageError> {
+        self.statistics(None, false)
+    }
+
+    /// Computes lifetime player statistics and optionally includes test games.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid projected values or a failed query.
+    pub fn player_statistics_including_test(
+        &self,
+        include_test: bool,
+    ) -> Result<Vec<PlayerStatistics>, StorageError> {
+        self.statistics(None, include_test)
+    }
+
+    /// Computes the finished-game leaderboard for one session.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid projected values or a failed query.
+    pub fn session_statistics(
+        &self,
+        session_id: &str,
+    ) -> Result<Vec<PlayerStatistics>, StorageError> {
+        self.statistics(Some(session_id), true)
+    }
+
+    fn statistics(
+        &self,
+        session_id: Option<&str>,
+        include_test: bool,
+    ) -> Result<Vec<PlayerStatistics>, StorageError> {
         let mut statement = self.connection.prepare(
             "SELECT p.id, p.name, p.avatar, p.color,
                     COUNT(DISTINCT g.id) AS games,
                     COUNT(DISTINCT CASE WHEN gw.player_id IS NOT NULL THEN g.id END) AS wins,
                     COUNT(t.id) AS darts, COALESCE(SUM(t.dart_score), 0) AS total_points,
+                    COALESCE(SUM(t.mode_points), 0) AS total_mode_points,
                     COALESCE(MAX(t.dart_score), 0) AS best_dart,
                     COALESCE(SUM(CASE WHEN t.outcome='miss' THEN 1 ELSE 0 END), 0) AS misses
              FROM players p
              LEFT JOIN game_players gp ON gp.player_id=p.id
              LEFT JOIN games g ON g.id=gp.game_id
-                 AND g.status='finished' AND g.environment='production'
+                 AND g.status='finished'
+                 AND (?1 IS NULL OR g.session_id=?1)
+                 AND (?2=1 OR g.environment='production')
              LEFT JOIN throws t ON t.game_id=g.id AND t.player_id=p.id
              LEFT JOIN game_winners gw ON gw.game_id=g.id AND gw.player_id=p.id
+             WHERE ?1 IS NULL OR EXISTS (
+                 SELECT 1 FROM session_players sp
+                 WHERE sp.session_id=?1 AND sp.player_id=p.id
+             )
              GROUP BY p.id
              ORDER BY wins DESC, total_points DESC, lower(p.name), p.id",
         )?;
-        let rows = statement.query_map([], |row| {
+        let rows = statement.query_map(params![session_id, i64::from(include_test)], |row| {
             Ok((
                 row.get::<_, String>(0)?,
                 row.get::<_, String>(1)?,
@@ -490,10 +596,12 @@ impl SqliteRepository {
                 row.get::<_, i64>(7)?,
                 row.get::<_, i64>(8)?,
                 row.get::<_, i64>(9)?,
+                row.get::<_, i64>(10)?,
             ))
         })?;
         rows.map(|row| {
-            let (id, name, avatar, color, games, wins, darts, points, best, misses) = row?;
+            let (id, name, avatar, color, games, wins, darts, points, mode_points, best, misses) =
+                row?;
             let games = nonnegative(games, "statistics games")?;
             let wins = nonnegative(wins, "statistics wins")?;
             let darts = nonnegative(darts, "statistics darts")?;
@@ -529,6 +637,7 @@ impl SqliteRepository {
                 wins,
                 darts,
                 total_points,
+                total_mode_points: mode_points,
                 best_dart: nonnegative(best, "statistics best dart")?,
                 misses: nonnegative(misses, "statistics misses")?,
                 three_dart_average,
@@ -536,6 +645,330 @@ impl SqliteRepository {
             })
         })
         .collect()
+    }
+
+    /// Aggregates mode outcomes, durations and hit quality by ruleset/options.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for malformed projected values or a failed query.
+    pub fn mode_statistics(&self, include_test: bool) -> Result<Vec<ModeStatistics>, StorageError> {
+        let mut statement = self.connection.prepare(
+            "SELECT g.game_type, g.ruleset_version, g.options_json,
+                    COUNT(DISTINCT g.id),
+                    COUNT(DISTINCT CASE WHEN g.status='finished' THEN g.id END),
+                    COUNT(DISTINCT CASE WHEN g.status='aborted' THEN g.id END),
+                    COUNT(DISTINCT CASE WHEN g.status='interrupted' THEN g.id END),
+                    ROUND(AVG(CASE WHEN g.ended_at IS NOT NULL
+                        THEN (julianday(g.ended_at)-julianday(g.started_at))*86400 END), 1),
+                    COALESCE(SUM((SELECT COUNT(*) FROM throws t WHERE t.game_id=g.id)), 0),
+                    COALESCE(SUM((SELECT COUNT(*) FROM throws t
+                        WHERE t.game_id=g.id AND t.outcome='success')), 0),
+                    COALESCE(SUM((SELECT COUNT(*) FROM throws t
+                        WHERE t.game_id=g.id AND t.outcome='partial')), 0),
+                    COALESCE(SUM((SELECT COUNT(*) FROM throws t
+                        WHERE t.game_id=g.id AND t.outcome='danger')), 0),
+                    COALESCE(SUM((SELECT COUNT(*) FROM throws t
+                        WHERE t.game_id=g.id AND t.outcome='miss')), 0)
+             FROM games g
+             WHERE ?1=1 OR g.environment='production'
+             GROUP BY g.game_type, g.ruleset_version, g.options_json
+             ORDER BY g.game_type, g.ruleset_version, g.options_json",
+        )?;
+        let rows = statement.query_map([i64::from(include_test)], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i64>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, Option<f64>>(7)?,
+                row.get::<_, i64>(8)?,
+                row.get::<_, i64>(9)?,
+                row.get::<_, i64>(10)?,
+                row.get::<_, i64>(11)?,
+                row.get::<_, i64>(12)?,
+            ))
+        })?;
+        rows.map(|row| {
+            let (
+                game_type,
+                ruleset,
+                options,
+                starts,
+                finished,
+                aborted,
+                interrupted,
+                average_seconds,
+                darts,
+                successes,
+                partials,
+                dangers,
+                misses,
+            ) = row?;
+            let starts = nonnegative(starts, "mode starts")?;
+            let finished = nonnegative(finished, "mode finishes")?;
+            let darts = nonnegative(darts, "mode darts")?;
+            let successes = nonnegative(successes, "mode successes")?;
+            Ok(ModeStatistics {
+                game_type,
+                ruleset_version: nonnegative(ruleset, "mode ruleset version")?,
+                options: parse_json(&options, "mode options")?,
+                starts,
+                finished,
+                aborted: nonnegative(aborted, "mode aborts")?,
+                interrupted: nonnegative(interrupted, "mode interruptions")?,
+                average_seconds,
+                darts,
+                successes,
+                partials: nonnegative(partials, "mode partials")?,
+                dangers: nonnegative(dangers, "mode dangers")?,
+                misses: nonnegative(misses, "mode misses")?,
+                success_rate: percentage(successes, darts, 1)?,
+                completion_rate: percentage(finished, starts, 1)?,
+            })
+        })
+        .collect()
+    }
+
+    /// Builds a dartboard-segment heatmap from completed games.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for invalid projected values or a failed query.
+    pub fn heatmap(
+        &self,
+        player_id: Option<&str>,
+        session_id: Option<&str>,
+        game_type: Option<&str>,
+        include_test: bool,
+    ) -> Result<HeatmapStatistics, StorageError> {
+        let mut statement = self.connection.prepare(
+            "SELECT t.field, t.ring, COUNT(*),
+                    COALESCE(SUM(CASE WHEN t.outcome='success' THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN t.outcome='danger' THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN t.outcome='neutral' THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(t.dart_score), 0), COALESCE(SUM(t.mode_points), 0)
+             FROM throws t JOIN games g ON g.id=t.game_id
+             WHERE t.field IS NOT NULL AND g.status='finished'
+               AND (?1=1 OR g.environment='production')
+               AND (?2 IS NULL OR t.player_id=?2)
+               AND (?3 IS NULL OR g.session_id=?3)
+               AND (?4 IS NULL OR g.game_type=?4)
+             GROUP BY t.field, t.ring ORDER BY t.field, t.ring",
+        )?;
+        let query_params = params![i64::from(include_test), player_id, session_id, game_type];
+        let rows = statement.query_map(query_params, |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)?,
+                row.get::<_, i64>(3)?,
+                row.get::<_, i64>(4)?,
+                row.get::<_, i64>(5)?,
+                row.get::<_, i64>(6)?,
+                row.get::<_, i64>(7)?,
+            ))
+        })?;
+        let segments = rows
+            .map(|row| {
+                let (field, ring, darts, successes, dangers, neutral, dart_points, mode_points) =
+                    row?;
+                Ok(HeatmapSegment {
+                    field: nonnegative(field, "heatmap field")?,
+                    ring,
+                    darts: nonnegative(darts, "heatmap darts")?,
+                    successes: nonnegative(successes, "heatmap successes")?,
+                    dangers: nonnegative(dangers, "heatmap dangers")?,
+                    neutral: nonnegative(neutral, "heatmap neutral hits")?,
+                    dart_points,
+                    mode_points,
+                })
+            })
+            .collect::<Result<Vec<_>, StorageError>>()?;
+        let (total_darts, board_hits, misses) = self.connection.query_row(
+            "SELECT COUNT(*),
+                    COALESCE(SUM(CASE WHEN t.field IS NOT NULL THEN 1 ELSE 0 END), 0),
+                    COALESCE(SUM(CASE WHEN t.outcome='miss' THEN 1 ELSE 0 END), 0)
+             FROM throws t JOIN games g ON g.id=t.game_id
+             WHERE g.status='finished'
+               AND (?1=1 OR g.environment='production')
+               AND (?2 IS NULL OR t.player_id=?2)
+               AND (?3 IS NULL OR g.session_id=?3)
+               AND (?4 IS NULL OR g.game_type=?4)",
+            params![i64::from(include_test), player_id, session_id, game_type],
+            |row| {
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, i64>(2)?,
+                ))
+            },
+        )?;
+        Ok(HeatmapStatistics {
+            resolution: "dartboard_segment",
+            segments,
+            total_darts: nonnegative(total_darts, "heatmap total darts")?,
+            board_hits: nonnegative(board_hits, "heatmap board hits")?,
+            misses: nonnegative(misses, "heatmap misses")?,
+        })
+    }
+
+    /// Suggests weak target zones from the latest task-aware production throws.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error for malformed task telemetry or a failed query.
+    #[allow(clippy::too_many_lines)] // Parsing flexible legacy task targets is kept beside aggregation.
+    pub fn training_recommendations(
+        &self,
+        player_id: &str,
+    ) -> Result<Option<TrainingRecommendations>, StorageError> {
+        if !self.connection.query_row(
+            "SELECT EXISTS(SELECT 1 FROM players WHERE id=?1)",
+            [player_id],
+            |row| row.get::<_, bool>(0),
+        )? {
+            return Ok(None);
+        }
+        let mut statement = self.connection.prepare(
+            "SELECT t.field, t.ring, t.outcome, t.task_json
+             FROM throws t JOIN games g ON g.id=t.game_id
+             WHERE t.player_id=?1 AND g.status='finished'
+               AND g.environment='production' AND t.task_json IS NOT NULL
+             ORDER BY t.id DESC LIMIT 2000",
+        )?;
+        let rows = statement.query_map([player_id], |row| {
+            Ok((
+                row.get::<_, Option<i64>>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, String>(3)?,
+            ))
+        })?;
+        let mut zones: HashMap<(u64, String), (u64, u64)> = HashMap::new();
+        for row in rows {
+            let (actual_field, actual_ring, outcome, task_json) = row?;
+            let task = parse_json(&task_json, "training task")?;
+            let Some(targets) = task.get("targets").and_then(serde_json::Value::as_array) else {
+                continue;
+            };
+            for target in targets {
+                let Some(field) = target.get("field").and_then(serde_json::Value::as_u64) else {
+                    continue;
+                };
+                let rings: Vec<&str> = target
+                    .get("rings")
+                    .and_then(serde_json::Value::as_array)
+                    .map(|items| items.iter().filter_map(serde_json::Value::as_str).collect())
+                    .or_else(|| {
+                        target
+                            .get("ring")
+                            .and_then(serde_json::Value::as_str)
+                            .map(|ring| vec![ring])
+                    })
+                    .unwrap_or_default();
+                for ring in rings {
+                    let entry = zones.entry((field, ring.to_owned())).or_default();
+                    entry.0 = entry.0.saturating_add(1);
+                    if outcome == "success"
+                        && actual_field.and_then(|value| u64::try_from(value).ok()) == Some(field)
+                        && actual_ring.as_deref() == Some(ring)
+                    {
+                        entry.1 = entry.1.saturating_add(1);
+                    }
+                }
+            }
+        }
+        let mut recommendations = zones
+            .into_iter()
+            .filter_map(|((field, ring), (attempts, successes))| {
+                (attempts >= 3).then(|| TrainingRecommendation {
+                    field,
+                    ring,
+                    attempts,
+                    successes,
+                    success_rate: percentage(successes, attempts, 1).unwrap_or(0.0),
+                    starter: false,
+                })
+            })
+            .collect::<Vec<_>>();
+        recommendations.sort_by(|left, right| {
+            left.success_rate
+                .total_cmp(&right.success_rate)
+                .then_with(|| right.attempts.cmp(&left.attempts))
+                .then_with(|| left.field.cmp(&right.field))
+                .then_with(|| left.ring.cmp(&right.ring))
+        });
+        if recommendations.is_empty() {
+            recommendations = vec![
+                TrainingRecommendation {
+                    field: 20,
+                    ring: "double".into(),
+                    attempts: 0,
+                    successes: 0,
+                    success_rate: 0.0,
+                    starter: true,
+                },
+                TrainingRecommendation {
+                    field: 25,
+                    ring: "single_bull".into(),
+                    attempts: 0,
+                    successes: 0,
+                    success_rate: 0.0,
+                    starter: true,
+                },
+            ];
+        }
+        recommendations.truncate(8);
+        Ok(Some(TrainingRecommendations {
+            player_id: player_id.into(),
+            recommendations,
+        }))
+    }
+
+    /// Returns the portable, runtime-secret-free history archive.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when any projected record cannot be loaded.
+    pub fn export_data(&self) -> Result<serde_json::Value, StorageError> {
+        let players = self.players()?;
+        let session_ids = self.ids("SELECT id FROM sessions ORDER BY started_at, id")?;
+        let game_ids = self.ids("SELECT id FROM games ORDER BY started_at, id")?;
+        let sessions = session_ids
+            .iter()
+            .map(|id| self.session_detail(id))
+            .collect::<Result<Vec<_>, _>>()?;
+        let games = game_ids
+            .iter()
+            .map(|id| {
+                Ok(serde_json::json!({
+                    "detail": self.game_detail(id)?, "replay": self.game_replay(id)?,
+                }))
+            })
+            .collect::<Result<Vec<_>, StorageError>>()?;
+        let exported_at: String =
+            self.connection
+                .query_row("SELECT CURRENT_TIMESTAMP", [], |row| row.get(0))?;
+        Ok(serde_json::json!({
+            "schema_version": 2,
+            "database_schema_version": CURRENT_SCHEMA_VERSION,
+            "exported_at": exported_at,
+            "players": players,
+            "sessions": sessions,
+            "games": games,
+        }))
+    }
+
+    fn ids(&self, query: &str) -> Result<Vec<String>, StorageError> {
+        let mut statement = self.connection.prepare(query)?;
+        statement
+            .query_map([], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(StorageError::from)
     }
 
     /// Loads one session with its ordered profiles and games.
@@ -551,6 +984,7 @@ impl SqliteRepository {
             session,
             players: load_session_players(&self.connection, session_id)?,
             games: load_session_games(&self.connection, session_id)?,
+            statistics: self.session_statistics(session_id)?,
         }))
     }
 
@@ -579,11 +1013,15 @@ impl SqliteRepository {
         let Some(game) = load_game_history(&self.connection, game_id)? else {
             return Ok(None);
         };
+        let mut events = load_game_events(&self.connection, game_id)?;
+        if events.is_empty() {
+            events = legacy_replay_events(&game, load_throws(&self.connection, game_id)?)?;
+        }
         Ok(Some(GameReplay {
             game_id: game.id,
             initial_state: game.initial_state,
             final_state: game.final_state,
-            events: load_game_events(&self.connection, game_id)?,
+            events,
         }))
     }
 }
@@ -683,7 +1121,9 @@ fn load_game_history(
         .query_row(
             "SELECT id, session_id, game_type, status, options_json, result_type,
                     finish_reason, ruleset_version, app_version, environment,
-                    initial_state_json, final_state_json, started_at, ended_at
+                    initial_state_json, final_state_json, started_at, ended_at,
+                    (SELECT COUNT(*) FROM throws WHERE game_id=games.id),
+                    (SELECT COUNT(*) FROM game_winners WHERE game_id=games.id)
              FROM games WHERE id=?1",
             [game_id],
             |row| {
@@ -702,6 +1142,8 @@ fn load_game_history(
                     row.get::<_, Option<String>>(11)?,
                     row.get::<_, String>(12)?,
                     row.get::<_, Option<String>>(13)?,
+                    row.get::<_, i64>(14)?,
+                    row.get::<_, i64>(15)?,
                 ))
             },
         )
@@ -721,6 +1163,8 @@ fn load_game_history(
         final_state,
         started_at,
         ended_at,
+        darts,
+        winner_count,
     )) = row
     else {
         return Ok(None);
@@ -738,6 +1182,8 @@ fn load_game_history(
         ruleset_version: nonnegative(ruleset_version, "ruleset version")?,
         app_version,
         environment,
+        darts: nonnegative(darts, "game dart count")?,
+        winner_count: nonnegative(winner_count, "game winner count")?,
         initial_state: parse_optional_json(initial_state, "initial game state")?,
         final_state: parse_optional_json(final_state, "final game state")?,
         started_at,
@@ -791,7 +1237,8 @@ fn load_game_players(
 fn load_throws(connection: &Connection, game_id: &str) -> Result<Vec<ThrowHistory>, StorageError> {
     let mut statement = connection.prepare(
         "SELECT id, action_id, seq, player_id, event_json, score_after,
-                round_number, dart_in_turn, outcome, source, event_id, created_at
+                round_number, dart_in_turn, field, ring, multiplier, dart_score,
+                mode_points, outcome, source, task_json, event_id, created_at
          FROM throws WHERE game_id=?1 ORDER BY id",
     )?;
     let rows = statement.query_map([game_id], |row| {
@@ -804,10 +1251,16 @@ fn load_throws(connection: &Connection, game_id: &str) -> Result<Vec<ThrowHistor
             row.get::<_, i64>(5)?,
             row.get::<_, i64>(6)?,
             row.get::<_, i64>(7)?,
-            row.get::<_, String>(8)?,
-            row.get::<_, String>(9)?,
+            row.get::<_, Option<i64>>(8)?,
+            row.get::<_, Option<String>>(9)?,
             row.get::<_, Option<i64>>(10)?,
-            row.get::<_, String>(11)?,
+            row.get::<_, i64>(11)?,
+            row.get::<_, i64>(12)?,
+            row.get::<_, String>(13)?,
+            row.get::<_, String>(14)?,
+            row.get::<_, Option<String>>(15)?,
+            row.get::<_, Option<i64>>(16)?,
+            row.get::<_, String>(17)?,
         ))
     })?;
     rows.map(|row| {
@@ -820,8 +1273,14 @@ fn load_throws(connection: &Connection, game_id: &str) -> Result<Vec<ThrowHistor
             score,
             round,
             dart,
+            field,
+            ring,
+            multiplier,
+            dart_score,
+            mode_points,
             outcome,
             source,
+            task,
             event_id,
             created_at,
         ) = row?;
@@ -834,8 +1293,14 @@ fn load_throws(connection: &Connection, game_id: &str) -> Result<Vec<ThrowHistor
             score_after: score,
             round_number: nonnegative(round, "dart round")?,
             dart_in_turn: nonnegative(dart, "dart in turn")?,
+            field: optional_nonnegative(field, "dart field")?,
+            ring,
+            multiplier: optional_nonnegative(multiplier, "dart multiplier")?,
+            dart_score,
+            mode_points,
             outcome,
             source,
+            task: parse_optional_json(task, "dart task")?,
             event_id: optional_nonnegative(event_id, "throw event ID")?,
             created_at,
         })
@@ -904,6 +1369,71 @@ fn load_game_events(
     .collect()
 }
 
+fn legacy_replay_events(
+    game: &GameHistory,
+    throws: Vec<ThrowHistory>,
+) -> Result<Vec<GameEventHistory>, StorageError> {
+    let initial_score = if game.game_type == "x01" {
+        game.options
+            .get("start_score")
+            .and_then(serde_json::Value::as_i64)
+            .unwrap_or(501)
+    } else {
+        0
+    };
+    let mut players = game
+        .players
+        .iter()
+        .map(|player| {
+            (
+                player.id.clone(),
+                serde_json::json!({
+                    "id": player.id,
+                    "name": player.name,
+                    "avatar": player.avatar,
+                    "color": player.color,
+                    "score": initial_score,
+                }),
+            )
+        })
+        .collect::<Vec<_>>();
+    throws
+        .into_iter()
+        .enumerate()
+        .map(|(index, throw)| {
+            if let Some(player_id) = throw.player_id.as_deref()
+                && let Some((_, player)) = players.iter_mut().find(|(id, _)| id == player_id)
+            {
+                player["score"] = serde_json::Value::from(throw.score_after);
+            }
+            let ordinal = u64::try_from(index + 1)
+                .map_err(|_| StorageError::Integrity("replay ordinal is out of range".into()))?;
+            Ok(GameEventHistory {
+                id: throw.event_id.unwrap_or(throw.id),
+                ordinal,
+                event_type: "throw".into(),
+                player_id: throw.player_id.clone(),
+                source: throw.source.clone(),
+                payload: throw.event.clone(),
+                task: throw.task.clone(),
+                frame: Some(serde_json::json!({
+                    "game_type": game.game_type,
+                    "players": players.iter().map(|(_, player)| player).collect::<Vec<_>>(),
+                    "current_player_id": throw.player_id,
+                    "round_number": throw.round_number,
+                    "darts_in_turn": throw.dart_in_turn,
+                    "status": "running",
+                    "last_event": throw.event,
+                    "overlay": {},
+                })),
+                effective: true,
+                corrects_event_id: None,
+                created_at: throw.created_at,
+            })
+        })
+        .collect()
+}
+
 fn parse_json(value: &str, label: &str) -> Result<serde_json::Value, StorageError> {
     serde_json::from_str(value)
         .map_err(|error| StorageError::Integrity(format!("invalid {label}: {error}")))
@@ -927,6 +1457,24 @@ fn nonnegative(value: i64, label: &str) -> Result<u64, StorageError> {
 fn round_to(value: f64, places: i32) -> f64 {
     let factor = 10_f64.powi(places);
     (value * factor).round() / factor
+}
+
+fn percentage(numerator: u64, denominator: u64, places: i32) -> Result<f64, StorageError> {
+    if denominator == 0 {
+        return Ok(0.0);
+    }
+    let numerator = f64::from(u32::try_from(numerator).map_err(|_| {
+        StorageError::Integrity("percentage numerator exceeds supported range".into())
+    })?);
+    let denominator = f64::from(u32::try_from(denominator).map_err(|_| {
+        StorageError::Integrity("percentage denominator exceeds supported range".into())
+    })?);
+    Ok(round_to(numerator / denominator * 100.0, places))
+}
+
+#[allow(clippy::trivially_copy_pass_by_ref)] // Serde skip predicates receive a reference.
+const fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 #[allow(clippy::too_many_lines)] // Sequential SQL is kept readable beside its schema version.
@@ -2619,6 +3167,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::too_many_lines)] // One end-to-end projection proves all derived read models.
     fn finished_game_projects_profiles_history_and_statistics_atomically() {
         let repository = SqliteRepository::in_memory().expect("repository");
         let mut runtime = Runtime::restore("runtime", repository).expect("runtime");
@@ -2705,6 +3254,46 @@ mod tests {
         assert_eq!(statistics[0].best_dart, 40);
         assert!((statistics[0].three_dart_average - 120.0).abs() < f64::EPSILON);
         assert!((statistics[0].win_rate - 100.0).abs() < f64::EPSILON);
+        let session = repository
+            .session_detail("session-1")
+            .expect("session detail")
+            .expect("stored session");
+        assert_eq!(session.statistics[0].wins, 1);
+        assert_eq!(session.games[0].darts, 1);
+        assert_eq!(session.games[0].winner_count, 1);
+        let game = repository
+            .game_detail("game-1")
+            .expect("game detail")
+            .expect("stored game");
+        assert_eq!(game.throws[0].field, Some(20));
+        assert_eq!(game.throws[0].ring.as_deref(), Some("double"));
+        assert_eq!(game.throws[0].dart_score, 40);
+        let heatmap = repository
+            .heatmap(Some("ada"), None, Some("x01"), false)
+            .expect("heatmap");
+        assert_eq!(heatmap.total_darts, 1);
+        assert_eq!(heatmap.board_hits, 1);
+        assert_eq!(heatmap.segments[0].successes, 1);
+        let modes = repository.mode_statistics(false).expect("mode statistics");
+        assert_eq!(modes[0].starts, 1);
+        assert!((modes[0].completion_rate - 100.0).abs() < f64::EPSILON);
+        let training = repository
+            .training_recommendations("ada")
+            .expect("training")
+            .expect("known player");
+        assert_eq!(training.recommendations.len(), 2);
+        assert!(training.recommendations.iter().all(|item| item.starter));
+        assert!(
+            repository
+                .training_recommendations("missing")
+                .expect("unknown player query")
+                .is_none()
+        );
+        let export = repository.export_data().expect("history export");
+        assert_eq!(export["schema_version"], 2);
+        assert_eq!(export["database_schema_version"], CURRENT_SCHEMA_VERSION);
+        assert_eq!(export["sessions"].as_array().map(Vec::len), Some(1));
+        assert_eq!(export["games"].as_array().map(Vec::len), Some(1));
         let effective_events: i64 = repository
             .connection
             .query_row(
@@ -2714,6 +3303,23 @@ mod tests {
             )
             .expect("events");
         assert_eq!(effective_events, 1);
+        repository
+            .connection
+            .execute("UPDATE throws SET event_id=NULL WHERE game_id='game-1'", [])
+            .expect("detach legacy throws from event journal");
+        repository
+            .connection
+            .execute("DELETE FROM game_events WHERE game_id='game-1'", [])
+            .expect("simulate legacy throw-only history");
+        let legacy_replay = repository
+            .game_replay("game-1")
+            .expect("legacy replay")
+            .expect("stored game");
+        assert_eq!(legacy_replay.events.len(), 1);
+        assert_eq!(
+            legacy_replay.events[0].frame.as_ref().expect("frame")["players"][0]["score"],
+            0
+        );
     }
 
     #[test]
@@ -3416,6 +4022,35 @@ mod tests {
         assert_eq!(statistics[0].games, 0);
         assert_eq!(statistics[0].darts, 0);
         assert_eq!(statistics[0].wins, 0);
+        let with_test = repository
+            .player_statistics_including_test(true)
+            .expect("statistics with test games");
+        assert_eq!(with_test[0].games, 1);
+        assert_eq!(with_test[0].darts, 1);
+        assert_eq!(
+            repository
+                .heatmap(None, None, None, false)
+                .expect("production heatmap")
+                .total_darts,
+            0
+        );
+        assert_eq!(
+            repository
+                .heatmap(None, None, None, true)
+                .expect("test heatmap")
+                .total_darts,
+            1
+        );
+        assert!(
+            repository
+                .mode_statistics(false)
+                .expect("production modes")
+                .is_empty()
+        );
+        assert_eq!(
+            repository.mode_statistics(true).expect("test modes")[0].finished,
+            1
+        );
     }
 
     #[test]

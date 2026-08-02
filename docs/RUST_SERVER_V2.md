@@ -103,6 +103,10 @@ begrenztem Proxy-Netz.
 | `GET` | `/api/v2/history/games/{game_id}` | Spiel, kanonische Würfe und vollständige Auditkette |
 | `GET` | `/api/v2/history/games/{game_id}/replay` | Initial-/Finalzustand und alle Replay-Frames einschließlich Korrekturen |
 | `GET` | `/api/v2/statistics/players` | Langzeitstatistik aus gewerteten Produktionsspielen |
+| `GET` | `/api/v2/statistics/modes` | Starts, Abschlüsse, Dauer und Trefferqualität je Modus/Ruleset/Optionssatz |
+| `GET` | `/api/v2/statistics/heatmap` | segmentgenaue Heatmap; optional nach Spieler, Session und Modus gefiltert |
+| `GET` | `/api/v2/training/{player_id}/recommendations` | lokale Trainingshinweise aus task-bezogenen Produktionswürfen |
+| `GET` | `/api/v2/data/export` | portables JSON-Archiv ohne Runtime-Einstellungen oder Secrets |
 
 Browser-POSTs und WebSockets akzeptieren nur dieselbe Origin. Clients ohne
 `Origin`, etwa lokale Diagnosewerkzeuge, bleiben möglich. Unvereinbare
@@ -215,11 +219,15 @@ zusätzlich durch ihren eigenen Healthcheck überwacht werden.
 - Projector-Companions per kurzlebigem Einmalcode koppeln, Grants ausschließlich
   als Hash persistieren, authentisierte Snapshots und Folgerevisionen streamen
   sowie aktive Verbindungen beim Widerruf schließen.
+- Historie, Replay, Spieler- und Modusstatistik, gefilterte Segment-Heatmap,
+  lokale Trainingshinweise und einen portablen JSON-Export über denselben
+  Storage-Vertrag im Headless-Server und im nativen IPC bereitstellen. Die
+  gemeinsame Produkt-UI normalisiert die versionierten Detailantworten und ist
+  dafür in WebKit einschließlich Replay und Export getestet.
 
 Noch offen und daher ausdrücklich kein Produktionsersatz:
 
-- Teammodell sowie Heatmap-, Modusstatistik-, Export- und Trainingsabfragen,
-- vollständige Anpassung der Historien-/Replay-Ansichten an die v2-Antworten,
+- Teammodell,
 - Umschalten des Companion-Projectors von der Diagnoseansicht auf die
   gemeinsame Projector-Produkt-UI; natives Control, der macOS-Projector und der
   separate iOS-/iPadOS-AirPlay-/HDMI-DisplayHost verwenden sie bereits,

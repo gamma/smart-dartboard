@@ -19,6 +19,7 @@ use sdb_runtime::{CommandResult, Runtime, RuntimeAction, RuntimeGameState, Runti
 use sdb_storage::SqliteRepository;
 use serde::{Deserialize, Serialize};
 use std::{
+    collections::HashMap,
     sync::{Arc, Mutex},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -2403,21 +2404,74 @@ fn runtime_v2_query(
     state: State<'_, SharedNativeState>,
     path: String,
 ) -> Result<serde_json::Value, String> {
-    if path == "/api/v2/modes" {
+    let state = state.lock().map_err(|error| error.to_string())?;
+    runtime_v2_query_value(&state, &path)
+}
+
+fn runtime_v2_query_value(state: &NativeState, path: &str) -> Result<serde_json::Value, String> {
+    if path.len() > 2_048 {
+        return Err("native runtime query is too long".into());
+    }
+    let url = url::Url::parse(&format!("sdb://localhost{path}"))
+        .map_err(|_| "invalid native runtime query".to_string())?;
+    let route = url.path();
+    if route == "/api/v2/modes" {
         return serde_json::to_value(registered_game_metadata()).map_err(|error| error.to_string());
     }
-    let state = state.lock().map_err(|error| error.to_string())?;
+    let parameters = url.query_pairs().collect::<HashMap<_, _>>();
+    let include_test = parameters.get("include_test").is_some_and(|value| value == "true");
     let repository = state.runtime.repository();
-    let value = match path.as_str() {
+    let value = match route {
         "/api/v2/host" => serde_json::to_value(state.public()),
         "/api/v2/players" => {
             serde_json::to_value(repository.players().map_err(|error| error.to_string())?)
         }
         "/api/v2/statistics/players" => serde_json::to_value(
             repository
-                .player_statistics()
+                .player_statistics_including_test(include_test)
                 .map_err(|error| error.to_string())?,
         ),
+        "/api/v2/statistics/modes" => serde_json::to_value(
+            repository.mode_statistics(include_test).map_err(|error| error.to_string())?,
+        ),
+        "/api/v2/statistics/heatmap" => serde_json::to_value(
+            repository.heatmap(
+                parameters.get("player_id").map(AsRef::as_ref),
+                parameters.get("session_id").map(AsRef::as_ref),
+                parameters.get("game_type").map(AsRef::as_ref),
+                include_test,
+            ).map_err(|error| error.to_string())?,
+        ),
+        "/api/v2/history/sessions" => {
+            let limit = parameters.get("limit").and_then(|value| value.parse().ok()).unwrap_or(50);
+            serde_json::to_value(repository.sessions(limit).map_err(|error| error.to_string())?)
+        }
+        "/api/v2/data/export" => serde_json::to_value(
+            repository.export_data().map_err(|error| error.to_string())?,
+        ),
+        _ if route.starts_with("/api/v2/history/sessions/") => {
+            let id = route.trim_start_matches("/api/v2/history/sessions/");
+            serde_json::to_value(repository.session_detail(id).map_err(|error| error.to_string())?
+                .ok_or_else(|| "session not found".to_string())?)
+        }
+        _ if route.starts_with("/api/v2/history/games/") && route.ends_with("/replay") => {
+            let id = route.trim_start_matches("/api/v2/history/games/")
+                .trim_end_matches("/replay").trim_end_matches('/');
+            serde_json::to_value(repository.game_replay(id).map_err(|error| error.to_string())?
+                .ok_or_else(|| "game not found".to_string())?)
+        }
+        _ if route.starts_with("/api/v2/history/games/") => {
+            let id = route.trim_start_matches("/api/v2/history/games/");
+            serde_json::to_value(repository.game_detail(id).map_err(|error| error.to_string())?
+                .ok_or_else(|| "game not found".to_string())?)
+        }
+        _ if route.starts_with("/api/v2/training/") && route.ends_with("/recommendations") => {
+            let id = route.trim_start_matches("/api/v2/training/")
+                .trim_end_matches("/recommendations").trim_end_matches('/');
+            serde_json::to_value(repository.training_recommendations(id)
+                .map_err(|error| error.to_string())?
+                .ok_or_else(|| "player not found".to_string())?)
+        }
         _ => return Err("unsupported native runtime query".into()),
     };
     value.map_err(|error| error.to_string())
@@ -3218,6 +3272,28 @@ mod tests {
         assert!(!is_valid_mdns_hostname("https://arcade.local"));
         assert!(!is_valid_mdns_hostname("-arcade.local"));
         assert!(!is_valid_mdns_hostname("arcade..local"));
+    }
+
+    #[test]
+    fn native_runtime_query_exposes_the_complete_read_model() {
+        let state = NativeState::restore(
+            SqliteRepository::in_memory().expect("repository"),
+            test_companion_identity(),
+        )
+        .expect("native state");
+        for path in [
+            "/api/v2/history/sessions?limit=100",
+            "/api/v2/statistics/players?include_test=true",
+            "/api/v2/statistics/modes",
+            "/api/v2/statistics/heatmap?player_id=test-player&include_test=true",
+            "/api/v2/data/export",
+        ] {
+            assert!(runtime_v2_query_value(&state, path).is_ok(), "{path}");
+        }
+        let export = runtime_v2_query_value(&state, "/api/v2/data/export").expect("export");
+        assert_eq!(export["schema_version"], 2);
+        assert!(runtime_v2_query_value(&state, "/api/v2/history/games/missing").is_err());
+        assert!(runtime_v2_query_value(&state, &"x".repeat(2_049)).is_err());
     }
 
     #[test]

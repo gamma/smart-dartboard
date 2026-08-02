@@ -86,6 +86,21 @@ struct HistoryQuery {
     limit: Option<usize>,
 }
 
+#[derive(Debug, Default, Deserialize)]
+struct StatisticsQuery {
+    #[serde(default)]
+    include_test: bool,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct HeatmapQuery {
+    player_id: Option<String>,
+    session_id: Option<String>,
+    game_type: Option<String>,
+    #[serde(default)]
+    include_test: bool,
+}
+
 #[derive(Debug, Deserialize)]
 struct BoardStatusRequest {
     phase: BoardPhase,
@@ -261,6 +276,13 @@ fn router(state: AppState) -> Router {
             get(game_replay),
         )
         .route("/api/v2/statistics/players", get(player_statistics))
+        .route("/api/v2/statistics/modes", get(mode_statistics))
+        .route("/api/v2/statistics/heatmap", get(heatmap_statistics))
+        .route(
+            "/api/v2/training/{player_id}/recommendations",
+            get(training_recommendations),
+        )
+        .route("/api/v2/data/export", get(export_data))
         .layer(SetResponseHeaderLayer::if_not_present(
             header::X_CONTENT_TYPE_OPTIONS,
             HeaderValue::from_static("nosniff"),
@@ -593,6 +615,7 @@ async fn session_history(
 
 async fn player_statistics(
     State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<StatisticsQuery>,
 ) -> Result<Json<Vec<sdb_storage::PlayerStatistics>>, ApiError> {
     let runtime = state
         .runtime
@@ -600,9 +623,81 @@ async fn player_statistics(
         .map_err(|_| internal_error("runtime lock poisoned"))?;
     let statistics = runtime
         .repository()
-        .player_statistics()
+        .player_statistics_including_test(query.include_test)
         .map_err(|_| internal_error("player statistics query failed"))?;
     Ok(Json(statistics))
+}
+
+async fn mode_statistics(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<StatisticsQuery>,
+) -> Result<Json<Vec<sdb_storage::ModeStatistics>>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    Ok(Json(
+        runtime
+            .repository()
+            .mode_statistics(query.include_test)
+            .map_err(|_| internal_error("mode statistics query failed"))?,
+    ))
+}
+
+async fn heatmap_statistics(
+    State(state): State<AppState>,
+    axum::extract::Query(query): axum::extract::Query<HeatmapQuery>,
+) -> Result<Json<sdb_storage::HeatmapStatistics>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    Ok(Json(
+        runtime
+            .repository()
+            .heatmap(
+                query.player_id.as_deref(),
+                query.session_id.as_deref(),
+                query.game_type.as_deref(),
+                query.include_test,
+            )
+            .map_err(|_| internal_error("heatmap query failed"))?,
+    ))
+}
+
+async fn training_recommendations(
+    State(state): State<AppState>,
+    Path(player_id): Path<String>,
+) -> Result<Json<sdb_storage::TrainingRecommendations>, ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let recommendations = runtime
+        .repository()
+        .training_recommendations(&player_id)
+        .map_err(|_| internal_error("training recommendation query failed"))?
+        .ok_or_else(|| not_found("player not found"))?;
+    Ok(Json(recommendations))
+}
+
+async fn export_data(
+    State(state): State<AppState>,
+) -> Result<(HeaderMap, Json<serde_json::Value>), ApiError> {
+    let runtime = state
+        .runtime
+        .lock()
+        .map_err(|_| internal_error("runtime lock poisoned"))?;
+    let export = runtime
+        .repository()
+        .export_data()
+        .map_err(|_| internal_error("history export failed"))?;
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        header::CONTENT_DISPOSITION,
+        HeaderValue::from_static("attachment; filename=\"smart-dartboard-history.json\""),
+    );
+    Ok((headers, Json(export)))
 }
 
 async fn session_detail(
@@ -1182,6 +1277,10 @@ mod tests {
             "/api/v2/players",
             "/api/v2/history/sessions?limit=10",
             "/api/v2/statistics/players",
+            "/api/v2/statistics/players?include_test=true",
+            "/api/v2/statistics/modes",
+            "/api/v2/statistics/heatmap?game_type=x01",
+            "/api/v2/data/export",
         ] {
             let response = test_app()
                 .oneshot(Request::get(path).body(Body::empty()).expect("request"))

@@ -88,8 +88,41 @@ try{
   await projector.waitForSelector('.projection-game',{timeout:8000});
   await projector.locator('#seg-triple-20').click({force:true});
   await control.waitForFunction(()=>document.querySelector('.score-row strong')?.textContent==='60');
+  await control.evaluate(async()=>{
+    await action('/api/game/abort');
+    await action('/api/game/prepare',{
+      game_type:'x01',options:{start_score:40,out_rule:'double'},
+    });
+    const playerId=appState.experience.session.players[0].id;
+    await action('/api/game/starter',{mode:'manual',player_id:playerId});
+    await action('/api/game/start');
+    await action('/api/game/live');
+    await action('/api/throw/manual',{
+      type:'hit',seq:2,field:20,ring:'double',multiplier:2,label:'D20',score:40,
+    });
+  });
+  await control.waitForSelector('.result-control');
+  await control.locator('[data-action="next-game"]').click();
+  await control.waitForSelector('.mode-grid');
+  await control.locator('[data-action="open-history"]').click();
+  await control.waitForSelector('.history-dashboard');
+  await control.waitForFunction(()=>{
+    const history=appState.history;
+    return history.players.length===1 && history.sessions.length===1
+      && history.modes.some(mode=>mode.game_type==='x01' && mode.finished===1)
+      && history.heatmap?.total_darts===1;
+  });
+  await control.locator('[data-action="history-session"]').click();
+  await control.waitForSelector('.history-detail');
+  await control.locator('[data-action="history-game"]').last().click();
+  await control.waitForSelector('.replay-view');
+  await control.waitForFunction(()=>appState.history.game?.throws?.[0]?.mode_points!==undefined);
+  const archive=await (await fetch(`${origin}/api/v2/data/export`)).json();
+  if(archive.sessions.length!==1 || archive.games.length!==2){
+    throw new Error('Expected portable export with one session and two games');
+  }
   if(browserErrors.length) throw new Error(`Browser errors:\n${browserErrors.join('\n')}`);
-  console.log('Rust Runtime UI: persistent setup, 24 modes, synchronized Control/Projector and T20 test hit passed in WebKit');
+  console.log('Rust Runtime UI: setup, 24 modes, synchronized play, analytics, history, replay and export passed in WebKit');
 }finally{
   await browser?.close();
   server.kill('SIGTERM');

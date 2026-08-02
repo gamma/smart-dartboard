@@ -1093,7 +1093,7 @@ function controlHistory(){
       <div><div class="kicker">${t('statistics')}</div><h1>${t('stats_title')}</h1><p>${t('stats_copy')}</p></div>
       <div class="history-toolbar-actions">
         <label class="test-data-toggle"><input type="checkbox" data-action="history-test" ${h.includeTest?'checked':''}><span>${t('test_data')}</span></label>
-        <a class="action-button secondary history-export" href="/api/data/export" download>${t('export_data')}</a>
+        <button type="button" class="action-button secondary history-export" data-action="history-export">${t('export_data')}</button>
         ${actionButton(t('close'),'close-history','ghost')}
       </div>
     </header>
@@ -1917,6 +1917,22 @@ document.addEventListener('click',async event=>{
   if(name==='close-history'){
     appState.localView=null;
     renderControl();
+    return;
+  }
+  if(name==='history-export'){
+    target.disabled=true;
+    try{
+      const archive=await getJson('/api/data/export');
+      const url=URL.createObjectURL(new Blob([JSON.stringify(archive,null,2)],{type:'application/json'}));
+      const link=document.createElement('a');
+      link.href=url;
+      link.download='smart-dartboard-history.json';
+      document.body.append(link);
+      link.click();
+      link.remove();
+      setTimeout(()=>URL.revokeObjectURL(url),1000);
+    }catch(error){ showToast(error.message); }
+    finally{ target.disabled=false; }
     return;
   }
   if(name==='history-overview'){
