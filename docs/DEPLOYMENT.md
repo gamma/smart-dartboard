@@ -26,6 +26,14 @@ Direkte Pushes auf `main` können zusätzlich gesperrt werden. Für ein kleines
 Projekt ist alternativ weiterhin ein direkter Push möglich; die Workflows
 melden dann Probleme, verhindern den Push aber nicht rückwirkend.
 
+Der Apple-Job erzeugt außerdem ein unsigniertes `Smart Dartboard.app`, packt
+es mit `ditto` als ressourcen- und rechteerhaltendes ZIP und hängt es für sieben
+Tage als Workflow-Artefakt an. Dieses Artefakt dient ausschließlich Build- und
+Starttests. Für eine Verteilung außerhalb des Entwicklungs-Macs fehlen noch
+Developer-ID-Signatur, Apple-Notarisierung und Stapling; dafür dürfen
+Zertifikate und Notarisierungszugänge nur als geschützte Repository-Secrets in
+einem separaten Release-Workflow hinterlegt werden.
+
 ## GitHub Pages
 
 Die Projektwebsite wird bei relevanten Änderungen auf `main` automatisch

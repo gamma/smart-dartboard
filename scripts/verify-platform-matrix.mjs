@@ -35,6 +35,8 @@ expect(packageJson.engines.npm===`${matrix.toolchains.node.npm_major}.x`,'npm en
 expect(packageLock.packages[''].engines.node===packageJson.engines.node,'npm lock Node engine drift');
 expect(packageJson.devDependencies['@tauri-apps/cli']===matrix.toolchains.tauri.cli,'Tauri CLI drift');
 expect(packageJson.devDependencies['@playwright/test']===matrix.toolchains.playwright,'Playwright drift');
+expect(packageJson.scripts['build:macos:app']==='tauri build --bundles app --no-sign --ci',
+  'macOS app bundle command drift');
 expect(inlineVersion(nativeCargo,'tauri')===matrix.toolchains.tauri.rust_runtime,
   'Tauri Rust runtime drift');
 expect(packageVersion(rootLock,'rusqlite')===matrix.toolchains.sqlite.rusqlite,'rusqlite drift');
@@ -54,9 +56,13 @@ expect(ci.includes(`xcode-version: "${matrix.toolchains.apple_build_baseline.xco
   'CI Xcode selection drift');
 expect(ci.includes('playwright install chromium webkit'),'CI browser installation drift');
 expect(ci.includes('run test:chromium') && ci.includes('run test:webkit'),'CI browser coverage drift');
+expect(ci.includes('run build:macos:app') && ci.includes('Smart-Dartboard-macOS-unsigned.zip'),
+  'CI macOS app bundle drift');
 expect(release.includes('platforms: linux/amd64,linux/arm64'),'container architecture drift');
 expect(tauriJson.bundle.macOS.minimumSystemVersion===matrix.platforms.macos.minimum,
   'macOS deployment target drift');
+expect(tauriJson.identifier==='de.gammaproduction.smart-dartboard',
+  'product bundle identifier drift');
 const iosTargets=[...xcodeProject.matchAll(/IPHONEOS_DEPLOYMENT_TARGET = ([^;]+);/g)]
   .map(match=>match[1]);
 expect(iosTargets.length>0 && iosTargets.every(value=>value===matrix.platforms.ios_ipados.minimum),

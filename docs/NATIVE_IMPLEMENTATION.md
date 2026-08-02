@@ -311,7 +311,17 @@ macOS-App:
 ```bash
 npm --prefix apps/tauri ci
 npm --prefix apps/tauri run build
+npm --prefix apps/tauri run build:macos:app
 ```
+
+`build` erzeugt weiterhin schnell nur das lokale Release-Binary.
+`build:macos:app` erzeugt reproduzierbar ein bewusst unsigniertes
+`Smart Dartboard.app`. CI archiviert dieses Bundle als kurzlebige Vorschau.
+Es ist kein öffentlich verteilbares Release, solange Developer-ID-Signatur,
+Notarisierung und Stapling fehlen.
+macOS und iOS verwenden dabei bereits die dauerhafte Produktkennung
+`de.gammaproduction.smart-dartboard`; die frühere Spike-Kennung mit `.m0`
+wird nicht in künftige Installationen oder Store-Einträge übernommen.
 
 iOS-Simulator-Build:
 

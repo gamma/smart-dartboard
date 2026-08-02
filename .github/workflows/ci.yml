@@ -167,8 +167,22 @@ jobs:
           npm --prefix apps/tauri run test:webkit
           npm --prefix apps/tauri run test:rust-ui
 
-      - name: Build macOS shell
-        run: npm --prefix apps/tauri run build
+      - name: Build unsigned macOS app bundle
+        run: npm --prefix apps/tauri run build:macos:app
+
+      - name: Archive unsigned macOS app bundle
+        run: >-
+          ditto -c -k --sequesterRsrc --keepParent
+          "apps/tauri/src-tauri/target/release/bundle/macos/Smart Dartboard.app"
+          /tmp/Smart-Dartboard-macOS-unsigned.zip
+
+      - name: Upload unsigned macOS preview
+        uses: actions/upload-artifact@v7
+        with:
+          name: Smart-Dartboard-macOS-unsigned
+          path: /tmp/Smart-Dartboard-macOS-unsigned.zip
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Build unsigned iOS simulator app
         run: npm --prefix apps/tauri run ios:build:sim

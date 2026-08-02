@@ -1,6 +1,6 @@
 name: sdb-native-m0
 options:
-  bundleIdPrefix: de.gammaproduction.smart-dartboard.m0
+  bundleIdPrefix: de.gammaproduction.smart-dartboard
   deploymentTarget:
     iOS: 14.0
 fileGroups: [../../src]
@@ -11,7 +11,7 @@ settingGroups:
   app:
     base:
       PRODUCT_NAME: Smart Dartboard
-      PRODUCT_BUNDLE_IDENTIFIER: de.gammaproduction.smart-dartboard.m0
+      PRODUCT_BUNDLE_IDENTIFIER: de.gammaproduction.smart-dartboard
 targetTemplates:
   app:
     type: application

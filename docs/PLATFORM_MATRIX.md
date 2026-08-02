@@ -33,10 +33,15 @@ mit `--locked`, npm-Abhängigkeiten in CI mit `npm ci` gebaut.
 | Reihenfolge | Ziel | Mindeststand | Nachweis | Hardware |
 | --- | --- | --- | --- | --- |
 | 1 | Linux/Docker, AMD64 + ARM64 | Debian 12 Bookworm im Container | Build und Start ohne BLE | offen |
-| 2 | macOS ARM64 | macOS 13 | lokaler Tauri-Build | offen |
+| 2 | macOS ARM64 | macOS 13 | unsigniertes `.app`-Bundle in CI und lokaler Bundle-Start | offen |
 | 3 | iOS/iPadOS | iOS/iPadOS 14 | ARM64-Simulatorbundle | offen |
 | 4 | Android ARM64 | minSdk 31, targetSdk 36 | noch nicht implementiert | offen |
 | 5 | Windows x64/ARM64 | Windows 10 1809 | noch nicht implementiert | offen |
+
+Das macOS-`.app` wird reproduzierbar ohne Signatur gebaut, lokal direkt
+gestartet und in CI sieben Tage als ZIP-Artefakt bereitgestellt. Das beweist
+Packaging und Start, aber noch keine Verteilung: Developer-ID-Signatur,
+Notarisierung, Stapling und Installation auf einem zweiten Mac bleiben offen.
 
 Die Linux-BLE-Freigabe verlangt einen Host mit BlueZ und erreichbarem
 System-D-Bus. Docker Desktop auf macOS oder Windows qualifiziert diesen Pfad

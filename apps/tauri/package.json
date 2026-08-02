@@ -11,6 +11,7 @@
     "tauri": "tauri",
     "dev": "tauri dev",
     "build": "tauri build --no-bundle",
+    "build:macos:app": "tauri build --bundles app --no-sign --ci",
     "ios:init": "tauri ios init",
     "ios:build:sim": "node scripts/clean-ios-simulator-output.mjs && tauri ios build --debug --target aarch64-sim --no-sign --ci",
     "ios:dev": "tauri ios dev",

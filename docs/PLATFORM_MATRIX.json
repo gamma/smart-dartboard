@@ -50,8 +50,8 @@
       "support_level": "development_preview",
       "minimum": "13.0",
       "architectures": ["arm64"],
-      "build": "verified",
-      "installation": "not_packaged",
+      "build": "unsigned_app_bundle_verified",
+      "installation": "local_bundle_launch_verified",
       "hardware": "not_qualified",
       "requirements": ["CoreBluetooth permission", "WebKit", "AirPlay or HDMI for direct projector output"]
     },
