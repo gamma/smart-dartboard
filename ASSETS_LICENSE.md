@@ -1,30 +1,20 @@
-# Visual Asset License
+# Visual Asset Rights and Provenance
 
-## Intended license
+## Proprietary rights reservation
 
-Project-owned visual assets that have a cleared provenance entry are licensed
-under the
-[Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International
-License](https://creativecommons.org/licenses/by-nc-sa/4.0/).
+Project-owned visual assets and screenshots are proprietary. All rights
+reserved, to the extent held by Gerry Weißbach (gamma / gamma production).
+See [LICENSE](LICENSE). Neither private nor commercial reuse is granted by
+this file. A separate written agreement is required, subject to applicable law.
+Viewing screenshots on the public website does not grant reuse rights.
+Third-party materials retain their own terms; provenance records do not
+establish rights beyond those actually held.
 
-Required attribution:
+## Provenance clearance
 
-```text
-Smart Dartboard visual assets © 2026 Gerry Weißbach
-(gamma / gamma production) — CC BY-NC-SA 4.0
-https://github.com/gamma/smart-dartboard
-```
-
-This license permits sharing and adaptations for non-commercial purposes when
-attribution is retained and adaptations use the same license. Commercial use,
-including use in a revenue-generating arcade installation, requires a separate
-written license from the applicable rights holder.
-
-## Activation requires cleared provenance
-
-An asset is covered by CC BY-NC-SA 4.0 only when its path is explicitly listed
-in the **Cleared assets** table below. An absent entry grants no permission.
-This prevents the repository from offering rights it may not own.
+The table below records provenance clearance only. An entry does not grant a
+public license or authorize publication, distribution, or commercial use.
+Assets without a cleared entry still require provenance review.
 
 ### Cleared assets
 
@@ -62,11 +52,12 @@ provenance notes are maintained in `docs/ARTWORK_PROMPTS.md`.
 
 ## Excluded brand assets
 
-The project name, word marks, logos, favicon, and distinctive brand identifiers
-are not licensed under CC BY-NC-SA 4.0. See `TRADEMARKS.md`.
+Names, logos, favicon and distinctive brand identifiers remain reserved.
+See [TRADEMARKS.md](TRADEMARKS.md).
 
-## Commercial licensing
+## Separate licensing
 
-Gerry Weißbach (gamma / gamma production) may offer the same cleared assets
-under separate commercial terms. The non-commercial Creative Commons grant
-remains in force for copies already distributed under it.
+Customer use of cleared assets may be authorized by a separate written
+agreement with the applicable rights holder. Valid rights in any previously
+distributed copies are unaffected; this file makes no claim that such a
+prior distribution occurred.

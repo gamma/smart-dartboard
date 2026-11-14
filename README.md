@@ -204,19 +204,10 @@ erzeugen versionierte AMD64-/ARM64-Images in der GitHub Container Registry.
 
 ## Lizenzierung
 
-Der Softwarecode, die Konfiguration und die Dokumentation stehen unter der
-[Apache License 2.0](LICENSE). Visuelle Assets verwenden einen getrennten,
-provenienzbasierten Freigabeprozess in [ASSETS_LICENSE.md](ASSETS_LICENSE.md)
-und sind, soweit dort ausdrücklich aufgeführt, unter CC BY-NC-SA 4.0
-freigegeben.
-Name und Markenauftritt bleiben gemäß [TRADEMARKS.md](TRADEMARKS.md)
-vorbehalten. Hinweise zu Abhängigkeiten enthält
+Ab 14.11.2026 sind eigene Software und Inhalte proprietär; alle Rechte
+vorbehalten. Siehe [LICENSE](LICENSE), [ASSETS_LICENSE.md](ASSETS_LICENSE.md)
+und [TRADEMARKS.md](TRADEMARKS.md). Nutzung benötigt eine separate Vereinbarung.
+Bereits wirksam unter früheren Lizenzen verteilte Kopien behalten ihre Rechte.
+Dieser öffentliche Python-Stand ist historisch; der aktuelle Rust-Produktstand
+bleibt privat. Fremde Bestandteile behalten ihre jeweiligen Lizenzen, siehe
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-## Datenfluss
-
-```text
-SDB-BT → BLE FFF1 → Decoder → Interpreter → Event Queue
-       → Game Plugin → Session Controller → SQLite
-       → REST/WebSocket → Control + Projector
-```
