@@ -1,6 +1,6 @@
 # Trademark Policy
 
-The Apache-2.0 software license and any Creative Commons asset license do not
+The project license and any separate content license do not
 grant rights to use the Smart Dartboard or Smart Darts names, logos, favicon,
 trade dress, or other source identifiers as a brand.
 

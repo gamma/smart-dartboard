@@ -1,10 +1,7 @@
 Smart Dartboard
 Copyright 2026 Gerry Weißbach (gamma / gamma production)
+All rights reserved. Proprietary software and project-owned content.
 
-The software source, configuration, tests, and documentation in this
-repository are licensed under the Apache License, Version 2.0, unless a file
-or directory is explicitly marked otherwise.
-
-The Apache License does not grant rights to the visual assets, screenshots,
-project name, logo, or other brand identifiers. See ASSETS_LICENSE.md and
-TRADEMARKS.md.
+See LICENSE for the project rights reservation, ASSETS_LICENSE.md for visual
+asset provenance, and TRADEMARKS.md for brand identifiers.
+Third-party components retain their own licenses; see THIRD_PARTY_NOTICES.md.

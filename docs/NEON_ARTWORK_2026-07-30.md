@@ -1,3 +1,7 @@
+> Lizenzstand ab 14.11.2026: Eigene Inhalte sind proprietär, alle Rechte vorbehalten.
+> Frühere Lizenzangaben unten sind historisch; bereits gültig erteilte Rechte bleiben bestehen.
+> Siehe `LICENSE` und `ASSETS_LICENSE.md`.
+
 # Classic-Neon-Erweiterung vom 30.07.2026
 
 Diese elf Cover ergänzen das historische Classic-Neon-Pack um alle Modi, die

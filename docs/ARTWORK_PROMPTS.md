@@ -1,3 +1,7 @@
+> Lizenzstand ab 14.11.2026: Eigene Inhalte sind proprietär, alle Rechte vorbehalten.
+> Frühere Lizenzangaben unten sind historisch; bereits gültig erteilte Rechte bleiben bestehen.
+> Siehe `LICENSE` und `ASSETS_LICENSE.md`.
+
 # Reproduzierbare Spielmodus-Artworks
 
 Die Cover unter `web/static/assets/modes/<slug>.webp` verwenden eine gemeinsame
